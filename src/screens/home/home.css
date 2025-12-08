@@ -1,0 +1,305 @@
+/* ===== PREMIUM DARK GLASS THEME ===== */
+@import url('https://fonts.googleapis.com/css2?family=Inter:wght@300;400;500;600;700&display=swap');
+
+:root {
+    /* Core Palette */
+    --glass-border: rgba(255, 255, 255, 0.1);
+    --glass-bg: rgba(255, 255, 255, 0.05);
+    --glass-highlight: rgba(255, 255, 255, 0.15);
+    --text-primary: #ffffff;
+    --text-secondary: rgba(255, 255, 255, 0.7);
+    --accent-glow: rgba(50, 100, 255, 0.3);
+    --bg-dark: #000000;
+
+    /* Animations */
+    --transition-smooth: all 0.4s cubic-bezier(0.25, 0.8, 0.25, 1);
+}
+
+* {
+    box-sizing: border-box;
+}
+
+body,
+html {
+    margin: 0;
+    padding: 0;
+    font-family: 'Inter', -apple-system, BlinkMacSystemFont, sans-serif;
+    background: var(--bg-dark);
+    color: var(--text-primary);
+    overflow: hidden;
+    /* Prevent body scroll, handle in main-content */
+}
+
+/* ===== HOME CONTAINER ===== */
+.home-container {
+    position: relative;
+    width: 100vw;
+    height: 100vh;
+    display: flex;
+    flex-direction: column;
+    overflow: hidden;
+    z-index: 1;
+}
+
+/* ===== BACKGROUND VIDEO & OVERLAY ===== */
+.video-background {
+    position: absolute;
+    top: 0;
+    left: 0;
+    width: 100%;
+    height: 100%;
+    z-index: 0;
+    overflow: hidden;
+    pointer-events: none;
+}
+
+.video-background video {
+    width: 100%;
+    height: 100%;
+    object-fit: cover;
+    transform: scale(1.02);
+    filter: contrast(1.1) brightness(0.8);
+    position: absolute;
+    top: 0;
+    left: 0;
+}
+
+.overlay {
+    position: absolute;
+    top: 0;
+    left: 0;
+    width: 100%;
+    height: 100%;
+    z-index: 1;
+    background: radial-gradient(circle at 50% 50%,
+            rgba(10, 20, 60, 0.3) 0%,
+            rgba(2, 4, 10, 0.7) 60%,
+            rgba(0, 0, 0, 0.95) 100%);
+    backdrop-filter: blur(3px);
+    animation: breathe 10s ease-in-out infinite alternate;
+}
+
+@keyframes breathe {
+    0% {
+        background-size: 100% 100%;
+        opacity: 0.9;
+    }
+
+    100% {
+        background-size: 110% 110%;
+        opacity: 0.8;
+    }
+}
+
+/* ===== GLASS NAVBAR ===== */
+.glass-navbar {
+    position: relative;
+    z-index: 100;
+    display: flex;
+    justify-content: space-between;
+    align-items: center;
+    padding: 1.5rem 3rem;
+    width: 100%;
+    background: rgba(255, 255, 255, 0.02);
+    backdrop-filter: blur(10px);
+    border-bottom: 1px solid var(--glass-border);
+    animation: fadeInDown 0.8s ease-out forwards;
+}
+
+.nav-logo {
+    font-size: 1.25rem;
+    font-weight: 600;
+    letter-spacing: -0.02em;
+    display: flex;
+    align-items: center;
+    gap: 0.75rem;
+    color: var(--text-primary);
+    text-transform: uppercase;
+}
+
+.nav-logo-icon {
+    width: 24px;
+    height: 24px;
+    border: 2px solid white;
+    border-radius: 50%;
+    display: block;
+}
+
+.nav-profile {
+    width: 40px;
+    height: 40px;
+    border-radius: 50%;
+    background: var(--glass-bg);
+    border: 1px solid var(--glass-border);
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    cursor: pointer;
+    transition: var(--transition-smooth);
+}
+
+.nav-profile:hover {
+    background: var(--glass-highlight);
+    transform: scale(1.05);
+    box-shadow: 0 0 15px var(--accent-glow);
+}
+
+/* ===== MAIN CONTENT AREA ===== */
+/* ===== OPTIMIZACIÓN DE ESPACIO PARA FEED (MOBILE) ===== */
+
+/* 1. Ajuste del contenedor principal */
+.main-content {
+    /* Aseguramos que ocupe todo el ancho disponible */
+    width: 100%;
+    /* Eliminamos padding lateral excesivo en móviles */
+    padding: 0 !important; 
+    /* Si tenías márgenes, los quitamos */
+    margin: 0 !important;
+    /* Evita desbordamientos horizontales */
+    overflow-x: hidden;
+}
+
+/* 2. Ajuste del contenedor del feed específico */
+.feed-container {
+    width: 100%;
+    padding: 0 8px; /* Dejamos un borde mínimo de 8px para que no se pegue al marco del cel */
+    box-sizing: border-box; /* Asegura que el padding no aumente el ancho total */
+}
+
+/* 3. Media Query específica para móviles (celulares) */
+@media (max-width: 768px) {
+    .main-content {
+        /* En móvil, queremos aprovechar cada pixel */
+        padding-top: 0 !important; 
+        padding-left: 0 !important;
+        padding-right: 0 !important;
+    }
+
+    .feed-container {
+        /* Un padding muy sutil para que respire, pero mínimo */
+        padding: 0 4px !important; 
+    }
+}
+
+/* ===== MOBILE OPTIMIZATIONS ===== */
+@media (max-width: 768px) {
+    /* Use dynamic viewport height to avoid browser chrome affecting layout */
+    .home-container {
+        height: 100dvh;
+    }
+    /* Reduce padding on main content for better breathing room on small screens */
+    .main-content {
+        padding: 1rem 1rem;
+        /* Allow extra space at bottom so floating players/dock don’t obscure final content */
+        padding-bottom: 180px;
+    }
+    /* Compress navbar padding on mobile to free horizontal space */
+    .glass-navbar {
+        padding: 1rem 1.5rem;
+    }
+}
+
+.main-content::-webkit-scrollbar {
+    width: 6px;
+}
+
+.main-content::-webkit-scrollbar-track {
+    background: transparent;
+}
+
+.main-content::-webkit-scrollbar-thumb {
+    background: rgba(255, 255, 255, 0.2);
+    border-radius: 3px;
+}
+
+.main-content::-webkit-scrollbar-thumb:hover {
+    background: rgba(255, 255, 255, 0.4);
+}
+
+/* ===== ANIMATIONS ===== */
+@keyframes fadeInDown {
+    from {
+        opacity: 0;
+        transform: translateY(-20px);
+    }
+
+    to {
+        opacity: 1;
+        transform: translateY(0);
+    }
+}
+
+@keyframes fadeInUp {
+    from {
+        opacity: 0;
+        transform: translateY(30px);
+    }
+
+    to {
+        opacity: 1;
+        transform: translateY(0);
+    }
+}
+
+/* ===== LOADING SCREEN ===== */
+.loading-screen {
+    position: fixed;
+    top: 0;
+    left: 0;
+    right: 0;
+    bottom: 0;
+    background: #000;
+    display: flex;
+    flex-direction: column;
+    align-items: center;
+    justify-content: center;
+    gap: 20px;
+    z-index: 9999;
+}
+
+.loading-spinner-large {
+    width: 50px;
+    height: 50px;
+    border: 2px solid rgba(255, 255, 255, 0.1);
+    border-top: 2px solid white;
+    border-radius: 50%;
+    animation: spin 1s linear infinite;
+}
+
+.loading-text {
+    color: var(--text-secondary);
+    font-size: 0.9rem;
+    letter-spacing: 0.1em;
+    text-transform: uppercase;
+}
+
+@keyframes spin {
+    to {
+        transform: rotate(360deg);
+    }
+}
+
+/* ===== RESPONSIVE ===== */
+@media (max-width: 768px) {
+    .glass-navbar {
+        padding: 1rem 1.5rem;
+    }
+
+    .main-content {
+        padding: 1rem 1.5rem;
+        padding-bottom: 100px;
+        /* Espacio para MiniPlayer (se ajusta en feed.css) */
+    }
+}
+
+/* ===== MOBILE FIX: Remove ghost lines on primary containers ===== */
+@media (max-width: 900px) {
+
+    /* Algunos contenedores heredan bordes y sombras que crean líneas pálidas. Los anulamos aquí. */
+    .home-container,
+    .main-content,
+    .glass-navbar {
+        border: none !important;
+        box-shadow: none !important;
+    }
+}

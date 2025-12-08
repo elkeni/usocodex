@@ -1,0 +1,444 @@
+@import url('https://fonts.googleapis.com/css2?family=Inter:wght@300;400;500;600&display=swap');
+
+:root {
+    --text-primary: #ffffff;
+    --text-secondary: rgba(255, 255, 255, 0.7);
+}
+
+* {
+    box-sizing: border-box;
+}
+
+body,
+html {
+    margin: 0;
+    padding: 0;
+    height: 100%;
+    font-family: 'Inter', -apple-system, BlinkMacSystemFont, sans-serif;
+    background: #000;
+    overflow: hidden;
+}
+
+.login-container {
+    position: relative;
+    width: 100vw;
+    height: 100vh;
+    display: flex;
+    flex-direction: column;
+    justify-content: space-between;
+    align-items: center;
+    z-index: 10;
+}
+
+/* --- Background Video & Overlay --- */
+.video-background {
+    position: absolute;
+    top: 0;
+    left: 0;
+    width: 100%;
+    height: 100%;
+    z-index: 0;
+    overflow: hidden;
+}
+
+.video-background video {
+    width: 100%;
+    height: 100%;
+    object-fit: cover;
+    transform: scale(1.02);
+    filter: contrast(1.1) brightness(0.8);
+    position: absolute;
+    top: 0;
+    left: 0;
+    z-index: 0;
+}
+
+.overlay {
+    position: absolute;
+    top: 0;
+    left: 0;
+    width: 100%;
+    height: 100%;
+    z-index: 1;
+    background: radial-gradient(circle at 50% 50%,
+            rgba(10, 20, 60, 0.3) 0%,
+            rgba(2, 4, 10, 0.7) 60%,
+            rgba(0, 0, 0, 0.95) 100%);
+    backdrop-filter: blur(3px);
+    animation: breathe 10s ease-in-out infinite alternate;
+}
+
+/* --- Navbar --- */
+.navbar {
+    display: flex;
+    justify-content: space-between;
+    align-items: center;
+    padding: 2rem 3rem;
+    width: 100%;
+    z-index: 10;
+    opacity: 0;
+    animation: fadeInDown 1s ease-out 0.2s forwards;
+}
+
+.logo {
+    font-size: 1.25rem;
+    font-weight: 600;
+    letter-spacing: -0.02em;
+    display: flex;
+    align-items: center;
+    gap: 0.75rem;
+    color: var(--text-primary);
+}
+
+.logo-icon {
+    width: 24px;
+    height: 24px;
+    border: 2px solid white;
+    border-radius: 50%;
+    display: block;
+    box-shadow: 0 0 10px rgba(255, 255, 255, 0.5);
+}
+
+/* --- Hero Section --- */
+.hero-content {
+    flex: 1;
+    display: flex;
+    flex-direction: column;
+    justify-content: center;
+    align-items: center;
+    text-align: center;
+    z-index: 5;
+    padding-bottom: 10vh;
+    width: 100%;
+}
+
+.subtitle {
+    font-size: 0.75rem;
+    text-transform: uppercase;
+    letter-spacing: 0.25em;
+    color: var(--text-secondary);
+    margin-bottom: 1.5rem;
+    font-weight: 500;
+    text-shadow: 0 2px 10px rgba(0, 0, 0, 0.5);
+    opacity: 0;
+    transform: translateY(20px);
+    animation: fadeInUp 1s cubic-bezier(0.2, 0.8, 0.2, 1) 0.4s forwards;
+}
+
+.title {
+    font-size: 4.5rem;
+    font-weight: 500;
+    letter-spacing: 0.02em;
+    margin: 0 0 3.5rem 0;
+    line-height: 1.1;
+    color: #ffffff;
+    text-shadow: 0 0 20px rgba(255, 255, 255, 0.3);
+    opacity: 0;
+    transform: translateY(30px);
+    animation: fadeInUp 1s cubic-bezier(0.2, 0.8, 0.2, 1) 0.6s forwards;
+}
+
+/* --- ELEGANT LIQUID GLASS BUTTON --- */
+.login-capsule {
+    position: relative;
+    display: flex;
+    align-items: center;
+    justify-content: space-between;
+    padding: 8px 8px 8px 28px;
+
+    /* Forma y Tipografía */
+    border-radius: 100px;
+    color: white;
+    font-family: 'Inter', sans-serif;
+    font-size: 0.95rem;
+    font-weight: 500;
+    letter-spacing: 0.5px;
+    cursor: pointer;
+    min-width: 340px;
+    overflow: hidden;
+    outline: none;
+
+    /* Base de Cristal Puro */
+    background: rgba(255, 255, 255, 0.03);
+
+    /* Efecto Frosted Glass de alta calidad */
+    backdrop-filter: blur(20px) saturate(100%);
+    -webkit-backdrop-filter: blur(20px) saturate(100%);
+
+    /* Bordes y Volumen estilo Apple */
+    border: 1px solid rgba(255, 255, 255, 0.15);
+    border-top: 1px solid rgba(255, 255, 255, 0.4);
+    /* Luz superior más fuerte */
+    border-bottom: 1px solid rgba(255, 255, 255, 0.05);
+    /* Sombra inferior */
+
+    box-shadow:
+        /* Brillo especular superior (Efecto mojado) */
+        inset 0 1px 0 rgba(255, 255, 255, 0.2),
+        /* Volumen suave interno */
+        inset 0 0 20px rgba(255, 255, 255, 0.02),
+        /* Sombra de caída suave y elegante */
+        0 10px 20px rgba(0, 0, 0, 0.2);
+
+    /* Animación de entrada */
+    opacity: 0;
+    transform: translateY(40px);
+    animation: fadeInUp 1s cubic-bezier(0.2, 0.8, 0.2, 1) 0.8s forwards;
+    transition: all 0.5s cubic-bezier(0.23, 1, 0.32, 1);
+}
+
+/* --- CAPA PRISMÁTICA SUTIL (Iridescencia) --- */
+.login-capsule::before {
+    content: '';
+    position: absolute;
+    top: 0;
+    left: -100%;
+    width: 200%;
+    height: 100%;
+
+    /* Arcoíris muy pálido y elegante (Pearl effect) */
+    background: linear-gradient(115deg,
+            transparent 0%,
+            rgba(255, 255, 255, 0.0) 30%,
+            rgba(0, 255, 255, 0.15) 45%,
+            /* Cian muy suave */
+            rgba(255, 255, 255, 0.4) 50%,
+            /* Luz blanca central */
+            rgba(255, 0, 221, 0.15) 55%,
+            /* Magenta muy suave */
+            rgba(255, 255, 255, 0.0) 70%,
+            transparent 100%);
+
+    transform: skewX(-20deg);
+    pointer-events: none;
+    animation: pearlescentSheen 8s ease-in-out infinite;
+}
+
+/* --- Estados Interactivos --- */
+
+/* Hover */
+.login-capsule:hover {
+    background: rgba(255, 255, 255, 0.08);
+    transform: translateY(-2px) scale(1.01);
+    border-color: rgba(255, 255, 255, 0.3);
+
+    box-shadow:
+        inset 0 1px 0 rgba(255, 255, 255, 0.3),
+        inset 0 0 20px rgba(255, 255, 255, 0.05),
+        0 15px 30px rgba(0, 0, 0, 0.3),
+        0 0 20px rgba(255, 255, 255, 0.1);
+}
+
+.login-capsule:hover .login-text {
+    text-shadow: 0 0 10px rgba(255, 255, 255, 0.5);
+}
+
+.login-capsule:hover::before {
+    animation: pearlescentSheen 3s ease-in-out infinite;
+    opacity: 1;
+}
+
+/* Active */
+.login-capsule:active {
+    transform: scale(0.99) translateY(0);
+    box-shadow: inset 0 2px 10px rgba(0, 0, 0, 0.1);
+}
+
+/* Elementos internos del botón */
+.login-text {
+    margin-right: 1rem;
+    letter-spacing: 0.1em;
+    text-transform: uppercase;
+    text-shadow: 0 1px 2px rgba(0, 0, 0, 0.2);
+    z-index: 2;
+}
+
+.icon-circle {
+    width: 44px;
+    height: 44px;
+    background: rgba(255, 255, 255, 0.2);
+    border-radius: 50%;
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    transition: all 0.4s ease;
+    border: 1px solid rgba(255, 255, 255, 0.4);
+    box-shadow: 0 2px 5px rgba(0, 0, 0, 0.1);
+}
+
+.login-capsule:hover .icon-circle {
+    background: rgba(255, 255, 255, 0.4);
+    transform: rotate(15deg) scale(1.1);
+}
+
+/* Loading Spinner */
+.loading-spinner {
+    width: 18px;
+    height: 18px;
+    border: 2px solid rgba(255, 255, 255, 0.3);
+    border-top: 2px solid white;
+    border-radius: 50%;
+    animation: spin 1s linear infinite;
+}
+
+/* --- Keyframes --- */
+@keyframes pearlescentSheen {
+    0% {
+        transform: translateX(-50%) skewX(-20deg);
+        opacity: 0.5;
+    }
+
+    50% {
+        opacity: 0.8;
+    }
+
+    100% {
+        transform: translateX(50%) skewX(-20deg);
+        opacity: 0.5;
+    }
+}
+
+@keyframes holoGradient {
+    0% {
+        background-position: 0% 50%;
+    }
+
+    50% {
+        background-position: 100% 50%;
+    }
+
+    100% {
+        background-position: 0% 50%;
+    }
+}
+
+@keyframes fadeInUp {
+    0% {
+        opacity: 0;
+        transform: translateY(40px);
+    }
+
+    100% {
+        opacity: 1;
+        transform: translateY(0);
+    }
+}
+
+@keyframes fadeInDown {
+    0% {
+        opacity: 0;
+        transform: translateY(-20px);
+    }
+
+    100% {
+        opacity: 1;
+        transform: translateY(0);
+    }
+}
+
+@keyframes breathe {
+    0% {
+        opacity: 0.9;
+    }
+
+    100% {
+        opacity: 0.8;
+    }
+}
+
+@keyframes spin {
+    0% {
+        transform: rotate(0deg);
+    }
+
+    100% {
+        transform: rotate(360deg);
+    }
+}
+
+/* --- Responsive --- */
+@media (max-width: 768px) {
+    .title {
+        font-size: 2.5rem;
+        margin-bottom: 2.5rem;
+        padding: 0 1rem;
+    }
+
+    .login-capsule {
+        min-width: 280px;
+        font-size: 0.85rem;
+        padding: 6px 6px 6px 20px;
+    }
+
+    .navbar {
+        padding: 1.5rem;
+    }
+}
+
+/* --- INPUTS & FORMS (GLASS STYLE) --- */
+.auth-form {
+    width: 100%;
+    max-width: 400px;
+    display: flex;
+    flex-direction: column;
+    gap: 20px;
+    margin-bottom: 2rem;
+    animation: fadeInUp 0.8s ease-out 0.4s forwards;
+    opacity: 0;
+}
+
+.glass-input-group {
+    position: relative;
+    width: 100%;
+}
+
+.glass-input {
+    width: 100%;
+    background: rgba(255, 255, 255, 0.05);
+    border: 1px solid rgba(255, 255, 255, 0.1);
+    border-radius: 12px;
+    padding: 16px 20px;
+    color: white;
+    font-family: 'Inter', sans-serif;
+    font-size: 1rem;
+    outline: none;
+    transition: all 0.3s ease;
+    backdrop-filter: blur(10px);
+}
+
+.glass-input::placeholder {
+    color: rgba(255, 255, 255, 0.4);
+}
+
+.glass-input:focus {
+    background: rgba(255, 255, 255, 0.1);
+    border-color: rgba(255, 255, 255, 0.5);
+    box-shadow: 0 0 20px rgba(255, 255, 255, 0.1);
+}
+
+/* Error Message */
+.auth-error {
+    color: #ff4b4b;
+    background: rgba(255, 75, 75, 0.1);
+    border: 1px solid rgba(255, 75, 75, 0.2);
+    padding: 10px;
+    border-radius: 8px;
+    font-size: 0.85rem;
+    text-align: center;
+    margin-bottom: 10px;
+}
+
+/* Switcher (Login <-> Register) */
+.auth-switch {
+    margin-top: 20px;
+    color: rgba(255, 255, 255, 0.6);
+    font-size: 0.9rem;
+    cursor: pointer;
+    transition: color 0.3s;
+    text-decoration: underline;
+    text-underline-offset: 4px;
+}
+
+.auth-switch:hover {
+    color: white;
+}

@@ -1,0 +1,386 @@
+/* ===== WIDGETS PREMIUM LIQUID GLASS THEME ===== */
+@import url('https://fonts.googleapis.com/css2?family=Inter:wght@300;400;500;600;700&family=Outfit:wght@500;600;700&display=swap');
+
+:root {
+    --widget-glass-bg: rgba(255, 255, 255, 0.03);
+    --widget-border: rgba(255, 255, 255, 0.15);
+    --widget-highlight: rgba(255, 255, 255, 0.4);
+    --neon-cyan: #00f2ff;
+}
+
+.right-sidebar {
+    width: 320px;
+    height: 100vh;
+    background: transparent;
+    padding: 24px;
+    overflow-y: auto;
+    display: flex;
+    flex-direction: column;
+    gap: 32px;
+    flex-shrink: 0;
+    scrollbar-width: none;
+    /* Ocultar scrollbar para limpieza */
+}
+
+.right-sidebar::-webkit-scrollbar {
+    display: none;
+}
+
+/* Titles - Con brillo de cristal */
+.widget-title {
+    font-family: 'Outfit', sans-serif;
+    font-size: 0.8rem;
+    font-weight: 700;
+    color: rgba(255, 255, 255, 0.8);
+    text-transform: uppercase;
+    letter-spacing: 0.15em;
+    margin-bottom: 20px;
+    text-shadow: 0 1px 2px rgba(0, 0, 0, 0.2);
+    display: flex;
+    align-items: center;
+    gap: 10px;
+}
+
+.widget-title::before {
+    content: '';
+    display: block;
+    width: 6px;
+    height: 6px;
+    background: var(--neon-cyan);
+    border-radius: 50%;
+    box-shadow: 0 0 8px var(--neon-cyan);
+}
+
+/* --- 1. NOW PLAYING CARD (LIQUID GLASS) --- */
+.np-card {
+    position: relative;
+    /* Base Liquid Glass */
+    background: var(--widget-glass-bg);
+    backdrop-filter: blur(25px) saturate(120%);
+    -webkit-backdrop-filter: blur(25px) saturate(120%);
+
+    /* Bordes Estructurales */
+    border-radius: 24px;
+    border: 1px solid var(--widget-border);
+    border-top: 1px solid var(--widget-highlight);
+    border-bottom: 1px solid rgba(255, 255, 255, 0.05);
+
+    /* Sombras y Volumen */
+    box-shadow:
+        inset 0 1px 0 rgba(255, 255, 255, 0.15),
+        0 15px 40px rgba(0, 0, 0, 0.2);
+
+    overflow: hidden;
+    transition: all 0.4s cubic-bezier(0.23, 1, 0.32, 1);
+}
+
+/* Efecto Perlado Sutil en Fondo */
+.np-card::before {
+    content: '';
+    position: absolute;
+    top: -50%;
+    left: -50%;
+    width: 200%;
+    height: 200%;
+    background: radial-gradient(circle at 50% 50%,
+            rgba(255, 255, 255, 0.05),
+            transparent 70%);
+    opacity: 0.5;
+    pointer-events: none;
+}
+
+.np-card:hover {
+    transform: translateY(-4px);
+    background: rgba(255, 255, 255, 0.06);
+    border-color: rgba(255, 255, 255, 0.3);
+    box-shadow:
+        inset 0 1px 0 rgba(255, 255, 255, 0.3),
+        0 25px 50px rgba(0, 0, 0, 0.4);
+}
+
+.np-img-container {
+    position: relative;
+    width: 100%;
+    aspect-ratio: 1;
+    overflow: hidden;
+    border-bottom: 1px solid rgba(255, 255, 255, 0.1);
+}
+
+.np-img {
+    width: 100%;
+    height: 100%;
+    object-fit: cover;
+    transition: transform 0.6s cubic-bezier(0.2, 0.8, 0.2, 1);
+}
+
+.np-card:hover .np-img {
+    transform: scale(1.08);
+}
+
+.np-info {
+    padding: 24px;
+    position: relative;
+    z-index: 2;
+}
+
+.np-track-name {
+    font-family: 'Outfit', sans-serif;
+    font-size: 1.1rem;
+    font-weight: 700;
+    color: #fff;
+    margin-bottom: 6px;
+    white-space: nowrap;
+    overflow: hidden;
+    text-overflow: ellipsis;
+    text-shadow: 0 2px 4px rgba(0, 0, 0, 0.3);
+}
+
+.np-artist-name {
+    font-family: 'Inter', sans-serif;
+    font-size: 0.9rem;
+    color: rgba(255, 255, 255, 0.6);
+    font-weight: 500;
+}
+
+/* --- 2. ARTIST BIO WIDGET (LIQUID GLASS) --- */
+.artist-bio-widget {
+    position: relative;
+    background: var(--widget-glass-bg);
+    backdrop-filter: blur(25px) saturate(120%);
+    -webkit-backdrop-filter: blur(25px) saturate(120%);
+
+    border-radius: 24px;
+    border: 1px solid var(--widget-border);
+    border-top: 1px solid var(--widget-highlight);
+    border-bottom: 1px solid rgba(255, 255, 255, 0.05);
+
+    padding: 24px;
+    cursor: pointer;
+    transition: all 0.4s ease;
+    overflow: hidden;
+}
+
+.artist-bio-widget:hover {
+    transform: translateY(-4px);
+    background: rgba(255, 255, 255, 0.06);
+    border-color: rgba(255, 255, 255, 0.3);
+    box-shadow:
+        0 20px 40px rgba(0, 0, 0, 0.3),
+        inset 0 1px 0 rgba(255, 255, 255, 0.2);
+}
+
+.bio-header {
+    display: flex;
+    align-items: center;
+    gap: 16px;
+    margin-bottom: 20px;
+}
+
+.bio-avatar {
+    width: 64px;
+    height: 64px;
+    border-radius: 20px;
+    /* Squircle */
+    object-fit: cover;
+    border: 1px solid rgba(255, 255, 255, 0.2);
+    box-shadow: 0 4px 15px rgba(0, 0, 0, 0.3);
+}
+
+.bio-stats {
+    display: flex;
+    flex-direction: column;
+    gap: 4px;
+}
+
+.stat-num {
+    font-family: 'Outfit', sans-serif;
+    color: #fff;
+    font-weight: 700;
+    font-size: 1.1rem;
+    text-shadow: 0 2px 4px rgba(0, 0, 0, 0.2);
+}
+
+.stat-label {
+    font-family: 'Inter', sans-serif;
+    color: rgba(255, 255, 255, 0.5);
+    font-size: 0.75rem;
+    text-transform: uppercase;
+    letter-spacing: 0.05em;
+    font-weight: 600;
+}
+
+.bio-summary {
+    color: rgba(255, 255, 255, 0.7);
+    font-size: 0.9rem;
+    line-height: 1.6;
+    margin-bottom: 20px;
+    font-family: 'Inter', sans-serif;
+    font-weight: 400;
+}
+
+/* BOTÓN "VIEW ARTIST" - ESTILO EXACTO DEL LOGIN */
+.view-artist-btn {
+    position: relative;
+    width: 100%;
+    padding: 12px;
+
+    /* Base Cristal */
+    background: rgba(255, 255, 255, 0.05);
+    backdrop-filter: blur(10px);
+
+    border-radius: 100px;
+    border: 1px solid rgba(255, 255, 255, 0.15);
+    border-top: 1px solid rgba(255, 255, 255, 0.4);
+
+    color: #fff;
+    font-size: 0.8rem;
+    font-weight: 600;
+    text-transform: uppercase;
+    letter-spacing: 0.1em;
+    cursor: pointer;
+    overflow: hidden;
+    transition: all 0.3s ease;
+
+    box-shadow: inset 0 1px 0 rgba(255, 255, 255, 0.2);
+}
+
+/* Efecto perlado en hover para el botón */
+.view-artist-btn::before {
+    content: '';
+    position: absolute;
+    top: 0;
+    left: -100%;
+    width: 200%;
+    height: 100%;
+    background: linear-gradient(115deg, transparent, rgba(0, 242, 255, 0.2), rgba(255, 255, 255, 0.4), rgba(255, 0, 221, 0.2), transparent);
+    transform: skewX(-20deg);
+    transition: all 0.5s;
+    opacity: 0;
+}
+
+.view-artist-btn:hover {
+    background: rgba(255, 255, 255, 0.1);
+    border-color: rgba(255, 255, 255, 0.5);
+    transform: translateY(-2px);
+    box-shadow: 0 5px 15px rgba(0, 0, 0, 0.2);
+}
+
+.view-artist-btn:hover::before {
+    animation: pearlescentSheen 2s ease-in-out infinite;
+    opacity: 1;
+}
+
+/* --- 3. POPULAR TRACKS LIST (GLASS STRIPS) --- */
+.widget-list {
+    display: flex;
+    flex-direction: column;
+    gap: 12px;
+}
+
+.widget-row {
+    position: relative;
+    display: flex;
+    align-items: center;
+    padding: 12px;
+    border-radius: 16px;
+    cursor: pointer;
+    transition: all 0.3s ease;
+    overflow: hidden;
+
+    /* Glass Strip Style */
+    background: rgba(255, 255, 255, 0.02);
+    border: 1px solid rgba(255, 255, 255, 0.05);
+}
+
+.widget-row:hover {
+    background: rgba(255, 255, 255, 0.06);
+    border-color: rgba(255, 255, 255, 0.2);
+    border-top-color: rgba(255, 255, 255, 0.4);
+    transform: scale(1.02);
+    box-shadow: 0 4px 12px rgba(0, 0, 0, 0.1);
+}
+
+.widget-row-img {
+    width: 48px;
+    height: 48px;
+    border-radius: 10px;
+    margin-right: 14px;
+    object-fit: cover;
+    box-shadow: 0 2px 8px rgba(0, 0, 0, 0.3);
+}
+
+.widget-row-info {
+    flex: 1;
+    overflow: hidden;
+}
+
+.w-title {
+    color: #fff;
+    font-size: 0.95rem;
+    font-weight: 500;
+    white-space: nowrap;
+    overflow: hidden;
+    text-overflow: ellipsis;
+    font-family: 'Inter', sans-serif;
+}
+
+.w-plays {
+    color: rgba(255, 255, 255, 0.5);
+    font-size: 0.8rem;
+    font-family: 'Inter', sans-serif;
+    margin-top: 2px;
+}
+
+.w-play-btn {
+    background: rgba(255, 255, 255, 0.1);
+    backdrop-filter: blur(5px);
+    border: 1px solid rgba(255, 255, 255, 0.2);
+    color: #fff;
+    opacity: 0;
+    width: 32px;
+    height: 32px;
+    border-radius: 50%;
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    font-size: 12px;
+    transition: all 0.3s cubic-bezier(0.23, 1, 0.32, 1);
+    transform: scale(0.8);
+}
+
+.widget-row:hover .w-play-btn {
+    opacity: 1;
+    transform: scale(1);
+}
+
+.w-play-btn:hover {
+    background: #fff;
+    color: #000;
+    border-color: #fff;
+    transform: scale(1.1);
+    box-shadow: 0 0 10px rgba(255, 255, 255, 0.4);
+}
+
+/* Animations */
+@keyframes pearlescentSheen {
+    0% {
+        transform: translateX(-50%) skewX(-20deg);
+        opacity: 0.3;
+    }
+
+    50% {
+        opacity: 0.6;
+    }
+
+    100% {
+        transform: translateX(50%) skewX(-20deg);
+        opacity: 0.3;
+    }
+}
+
+/* Responsive Hide */
+@media (max-width: 1200px) {
+    .right-sidebar {
+        display: none;
+    }
+}

@@ -1,0 +1,216 @@
+/* ===== FAVORITES PREMIUM GLASS THEME ===== */
+@import url('https://fonts.googleapis.com/css2?family=Inter:wght@300;400;500;600;700;800&display=swap');
+
+:root {
+  --glass-bg: rgba(255, 255, 255, 0.03);
+  --glass-border: rgba(255, 255, 255, 0.1);
+  --glass-highlight: rgba(255, 255, 255, 0.08);
+  --text-primary: #ffffff;
+  --text-secondary: rgba(255, 255, 255, 0.6);
+  --accent-color: #ff0055;
+}
+
+.favorites-container {
+  height: 100%; width: 100%; background: transparent;
+  overflow: hidden; font-family: 'Inter', sans-serif; color: var(--text-primary);
+}
+
+.favorites-main {
+  padding: 24px; overflow-y: auto; height: 100%; scrollbar-width: thin;
+}
+
+/* Scrollbar */
+.favorites-main::-webkit-scrollbar { width: 6px; }
+.favorites-main::-webkit-scrollbar-track { background: transparent; }
+.favorites-main::-webkit-scrollbar-thumb { background: rgba(255,255,255,0.2); border-radius: 3px; }
+
+/* ===== HERO SECTION ===== */
+.favorites-hero {
+  background: var(--glass-bg);
+  backdrop-filter: blur(30px) saturate(120%);
+  border: 1px solid var(--glass-border);
+  border-top: 1px solid rgba(255, 255, 255, 0.2);
+  border-radius: 24px; padding: 40px; margin-bottom: 32px;
+  position: relative; overflow: hidden; display: flex; align-items: center; gap: 32px;
+  min-height: 200px; box-shadow: 0 20px 50px rgba(0,0,0,0.3);
+  animation: fadeInUp 0.6s ease-out forwards;
+}
+
+.favorites-hero::before {
+  content: ''; position: absolute; top: -50%; left: -50%; width: 200%; height: 200%;
+  background: radial-gradient(circle at 50% 50%, rgba(255, 255, 255, 0.04), transparent 60%);
+  pointer-events: none;
+}
+
+.favorites-hero-icon {
+  width: 80px; height: 80px;
+  background: linear-gradient(135deg, rgba(255,255,255,0.1), rgba(255,255,255,0.05));
+  backdrop-filter: blur(10px); border: 1px solid rgba(255, 255, 255, 0.2);
+  border-radius: 20px; display: flex; align-items: center; justify-content: center;
+  font-size: 32px; color: white; box-shadow: 0 10px 30px rgba(0,0,0,0.2);
+  flex-shrink: 0; z-index: 2;
+}
+
+.favorites-hero-content { flex: 1; z-index: 2; display: flex; flex-direction: column; justify-content: center; align-items: flex-start; text-align: left; }
+.favorites-hero-label { font-size: 0.75rem; letter-spacing: 2px; font-weight: 700; color: var(--text-secondary); margin-bottom: 8px; text-transform: uppercase; }
+.favorites-hero-title { font-size: clamp(2.5rem, 4vw, 3.5rem); font-weight: 800; margin: 0 0 8px 0; text-shadow: 0 5px 15px rgba(0,0,0,0.3); line-height: 1.1; }
+.favorites-hero-stats { color: var(--text-secondary); font-size: 1rem; }
+
+.favorites-play-all-btn {
+  position: relative; z-index: 2; border-radius: 30px; padding: 14px 28px;
+  background: #fff; color: #000; border: none; font-weight: 700;
+  display: flex; align-items: center; gap: 8px; cursor: pointer;
+  transition: transform 0.2s, box-shadow 0.2s;
+  box-shadow: 0 5px 20px rgba(255,255,255,0.2);
+}
+.favorites-play-all-btn:hover { transform: scale(1.05); box-shadow: 0 0 30px rgba(255,255,255,0.4); }
+
+/* ===== GRID SYSTEM (FIXED LAYOUT) ===== */
+.favorites-section { display: flex; flex-direction: column; padding-bottom: 40px; }
+.favorites-list-container { display: flex; flex-direction: column; }
+
+/* Definición de Columnas */
+.favorites-list-header, .favorites-track-row {
+  display: grid;
+  /* Columns: # | Title | Artist | Album | Time | Actions */
+  grid-template-columns: 48px minmax(300px, 4fr) 3fr 2fr 80px 60px;
+  align-items: center;
+  gap: 16px;
+  padding: 0 16px;
+}
+
+/* Header */
+.favorites-list-header {
+  position: sticky; top: 0; z-index: 10;
+  background: rgba(10, 10, 10, 0.9); backdrop-filter: blur(20px);
+  border-bottom: 1px solid var(--glass-border);
+  padding-top: 12px; padding-bottom: 12px; margin-bottom: 4px;
+  color: var(--text-secondary); font-size: 0.75rem; font-weight: 600;
+  text-transform: uppercase; letter-spacing: 1px;
+  text-align: left; /* Asegura alineación izquierda en cabeceras */
+}
+
+/* Rows */
+.favorites-track-row {
+  height: 64px; border-radius: 12px; border-bottom: 1px solid transparent;
+  transition: background 0.2s ease; cursor: default;
+}
+.favorites-track-row:hover {
+  background: var(--glass-highlight);
+  border-bottom: 1px solid rgba(255,255,255,0.05);
+}
+
+/* --- COLUMNS --- */
+
+/* 1. Index (Solo Número, Centrado) */
+.col-index { display: flex; justify-content: center; align-items: center; }
+.row-number { color: var(--text-secondary); font-variant-numeric: tabular-nums; font-size: 0.9rem; }
+
+/* 2. Title & Image (ALINEACIÓN IZQUIERDA FORZADA) */
+.col-title {
+  display: flex;
+  flex-direction: row !important; /* Imagen a la izquierda, texto a la derecha */
+  align-items: center;
+  justify-content: flex-start !important; /* IMPORTANTE: Pega el contenido a la izquierda */
+  text-align: left !important;
+  gap: 16px;
+  overflow: hidden;
+  width: 100%;
+}
+
+/* Asegurar que el header de título también esté a la izquierda */
+.favorites-list-header .col-title {
+  justify-content: flex-start;
+  text-align: left;
+}
+
+.row-img-wrapper {
+  width: 44px; height: 44px; flex-shrink: 0;
+  border-radius: 6px; overflow: hidden;
+  box-shadow: 0 4px 8px rgba(0,0,0,0.3);
+}
+.row-img-wrapper img { width: 100%; height: 100%; object-fit: cover; }
+.row-img-placeholder {
+  width: 100%; height: 100%; background: rgba(255,255,255,0.1);
+  display: flex; align-items: center; justify-content: center; color: rgba(255,255,255,0.2);
+}
+
+.row-title-text {
+  font-weight: 500; font-size: 0.95rem; color: #fff;
+  white-space: nowrap; overflow: hidden; text-overflow: ellipsis;
+  min-width: 0;
+  text-align: left;
+}
+
+/* 3. Artist */
+.col-artist {
+  display: flex; justify-content: flex-start; /* Alineación izquierda */
+  overflow: hidden; white-space: nowrap; text-overflow: ellipsis;
+  min-width: 0;
+  text-align: left;
+}
+.row-artist-link {
+  color: var(--text-secondary); font-size: 0.9rem; cursor: pointer;
+  transition: color 0.2s;
+}
+.row-artist-link:hover { color: #fff; text-decoration: underline; }
+
+/* 4. Album */
+.col-album {
+  display: flex; justify-content: flex-start; /* Alineación izquierda */
+  color: rgba(255, 255, 255, 0.4); font-size: 0.85rem;
+  overflow: hidden; white-space: nowrap; text-overflow: ellipsis;
+  min-width: 0;
+  text-align: left;
+}
+
+/* 5. Time (Derecha) */
+.col-time { 
+  display: flex; justify-content: flex-end;
+  color: rgba(255, 255, 255, 0.4); font-size: 0.85rem; 
+  text-align: right; 
+}
+
+/* 6. Actions (Derecha) */
+.col-actions { display: flex; justify-content: flex-end; }
+.row-like-active {
+  background: transparent; border: none; color: var(--accent-color);
+  font-size: 16px; cursor: pointer; opacity: 0.9;
+}
+.row-like-active:hover { transform: scale(1.2); opacity: 1; }
+
+/* ===== LOADING & EMPTY ===== */
+.favorites-loading-container, .favorites-empty {
+  display: flex; flex-direction: column; align-items: center; justify-content: center;
+  height: 50vh; color: var(--text-secondary); text-align: center;
+}
+.glass-spinner {
+  width: 40px; height: 40px; border: 3px solid rgba(255, 255, 255, 0.1);
+  border-top-color: #fff; border-radius: 50%; animation: spin 1s linear infinite; margin-bottom: 20px;
+}
+@keyframes spin { to { transform: rotate(360deg); } }
+@keyframes fadeInUp { from { opacity: 0; transform: translateY(20px); } to { opacity: 1; transform: translateY(0); } }
+
+/* ===== RESPONSIVE ===== */
+@media (max-width: 900px) {
+  .favorites-list-header, .favorites-track-row {
+    grid-template-columns: 40px minmax(200px, 4fr) 3fr 60px 50px;
+  }
+  .col-album { display: none; }
+}
+
+@media (max-width: 600px) {
+  .favorites-hero { padding: 24px; flex-direction: column; align-items: flex-start; }
+  .favorites-play-all-btn { width: 100%; justify-content: center; }
+  .favorites-list-header { display: none; }
+
+  .favorites-track-row {
+    display: flex; 
+    gap: 12px; height: auto; padding: 12px 0;
+  }
+
+  .col-index, .col-album, .col-time { display: none; }
+  
+  .col-title { flex: 1; justify-content: flex-start !important; }
+  .col-artist { display: none; } 
+}

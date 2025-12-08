@@ -1,0 +1,339 @@
+/* ===== LIQUID GLASS SIDEBAR BUTTONS ===== */
+
+/* Button base structure */
+.btn-body {
+	display: flex;
+	align-items: center;
+	gap: 16px;
+	padding: 12px 16px;
+	margin: 0;
+
+	/* Forma y Tipografía */
+	border-radius: 16px;
+	color: rgba(255, 255, 255, 0.7);
+	text-decoration: none;
+	font-weight: 500;
+	position: relative;
+	overflow: hidden;
+	font-family: 'Inter', sans-serif;
+	letter-spacing: 0.03em;
+	font-size: 0.9rem;
+
+	/* Base Glass Sutil */
+	background: transparent;
+	border: 1px solid transparent;
+	transition: all 0. 4s cubic-bezier(0.23, 1, 0.32, 1);
+}
+
+/* --- HOVER STATE (Liquid Pearl Effect) --- */
+.btn-body:hover {
+	color: #ffffff;
+	background: rgba(255, 255, 255, 0.05);
+
+	/* Bordes brillantes sutiles */
+	border-color: rgba(255, 255, 255, 0.15);
+	border-top-color: rgba(255, 255, 255, 0. 3);
+
+	/* Volumen suave */
+	box-shadow:
+		inset 0 1px 0 rgba(255, 255, 255, 0.2),
+		0 4px 15px rgba(0, 0, 0, 0.1);
+
+	transform: translateX(4px);
+}
+
+/* Efecto perlado en hover */
+.btn-body::before {
+	content: '';
+	position: absolute;
+	top: 0;
+	left: -100%;
+	width: 200%;
+	height: 100%;
+	background: linear-gradient(115deg,
+			transparent 0%,
+			rgba(255, 255, 255, 0. 0) 30%,
+			rgba(0, 242, 255, 0.1) 45%,
+			rgba(255, 255, 255, 0. 2) 50%,
+			rgba(255, 0, 221, 0.05) 55%,
+			transparent 100%);
+	transform: skewX(-20deg);
+	pointer-events: none;
+	opacity: 0;
+	transition: opacity 0.3s;
+}
+
+.btn-body:hover::before {
+	animation: pearlescentSheen 2s ease-in-out infinite;
+	opacity: 1;
+}
+
+/* --- ACTIVE STATE (Activated Glass) --- */
+.btn-body.active {
+	color: #ffffff;
+	font-weight: 600;
+
+	/* Fondo cristalino activo */
+	background: rgba(255, 255, 255, 0.08);
+	backdrop-filter: blur(10px);
+
+	/* Bordes definidos */
+	border: 1px solid rgba(255, 255, 255, 0.2);
+	border-top: 1px solid rgba(255, 255, 255, 0.5);
+	border-bottom: 1px solid rgba(255, 255, 255, 0.05);
+
+	/* Sombra interna cian sutil */
+	box-shadow:
+		inset 0 1px 0 rgba(255, 255, 255, 0.3),
+		inset 4px 0 15px rgba(0, 242, 255, 0.15),
+		0 8px 20px rgba(0, 0, 0, 0.2);
+}
+
+/* Indicador de luz "Pill" */
+.btn-body.active::after {
+	content: '';
+	position: absolute;
+	left: 8px;
+	top: 50%;
+	transform: translateY(-50%);
+	width: 4px;
+	height: 40%;
+	background: #00f2ff;
+	border-radius: 10px;
+	box-shadow: 0 0 10px rgba(0, 242, 255, 0.6);
+	filter: blur(1px);
+}
+
+.btn-icon {
+	display: inline-flex;
+	font-size: 20px;
+	min-width: 20px;
+	transition: all 0. 3s ease;
+	color: rgba(255, 255, 255, 0.5);
+	filter: drop-shadow(0 2px 4px rgba(0, 0, 0, 0.2));
+}
+
+/* El icono brilla en estado activo */
+.btn-body.active .btn-icon {
+	color: #ffffff;
+	filter: drop-shadow(0 0 8px rgba(255, 255, 255, 0. 6));
+	transform: scale(1.05);
+}
+
+.btn-text {
+	white-space: nowrap;
+	transition: color 0.3s ease;
+	text-shadow: 0 1px 2px rgba(0, 0, 0, 0.1);
+}
+
+.btn-body.active .btn-text {
+	text-shadow: 0 0 12px rgba(255, 255, 255, 0. 4);
+}
+
+/* Keyframes */
+@keyframes pearlescentSheen {
+	0% {
+		transform: translateX(-50%) skewX(-20deg);
+		opacity: 0. 4;
+	}
+
+	50% {
+		opacity: 0.8;
+	}
+
+	100% {
+		transform: translateX(50%) skewX(-20deg);
+		opacity: 0.4;
+	}
+}
+
+/*
+ * =============================================================
+ *   MOBILE DOCK BUTTONS - ERGONOMIC OVERHAUL
+ *   Botones perfectamente centrados y escalados para touch
+ * =============================================================
+ */
+@media (max-width: 900px) {
+	.btn-body {
+		/* === TAMAÑO ESCALADO (Touch Target Óptimo) === */
+		width: 52px ! important;
+		height: 52px ! important;
+		min-width: 52px !important;
+		min-height: 52px !important;
+		
+		/* === CENTRADO PERFECTO === */
+		display: flex ! important;
+		justify-content: center ! important;
+		align-items: center ! important;
+		
+		/* === RESET DE MÁRGENES Y PADDING === */
+		margin: 0 !important;
+		padding: 0 !important;
+		
+		/* === FORMA CIRCULAR ESTILO DOCK === */
+		border-radius: 50% !important;
+		
+		/* === ESTILOS BASE === */
+		background: transparent;
+		border: 1px solid transparent;
+		position: relative;
+		
+		/* === TRANSICIÓN SUAVE === */
+		transition: all 0.3s cubic-bezier(0.23, 1, 0.32, 1);
+	}
+
+	/* === OCULTAR TEXTO === */
+	.btn-text {
+		display: none !important;
+		visibility: hidden !important;
+		width: 0 !important;
+		height: 0 !important;
+		overflow: hidden ! important;
+	}
+
+	/* === ICONOS ESCALADOS Y CENTRADOS === */
+	.btn-icon {
+		font-size: 20px !important;
+		min-width: 20px !important;
+		width: 20px ! important;
+		height: 20px ! important;
+		
+		/* Centrado dentro del botón */
+		display: flex !important;
+		justify-content: center !important;
+		align-items: center !important;
+		
+		/* Estilo visual */
+		color: rgba(255, 255, 255, 0.6);
+		filter: drop-shadow(0 2px 5px rgba(0, 0, 0, 0.3));
+		
+		/* Reset de transformaciones */
+		transform: none !important;
+		margin: 0 ! important;
+		padding: 0 ! important;
+	}
+
+	/* === HOVER STATE MÓVIL === */
+	.btn-body:hover {
+		background: rgba(255, 255, 255, 0.08);
+		border-color: rgba(255, 255, 255, 0. 15);
+		transform: none !important; /* Sin desplazamiento lateral */
+		box-shadow: 0 0 20px rgba(255, 255, 255, 0. 05);
+	}
+
+	.btn-body:hover .btn-icon {
+		color: rgba(255, 255, 255, 0.9);
+		transform: scale(1. 05) !important;
+	}
+
+	/* === ACTIVE STATE MÓVIL (Neon Glow) === */
+	.btn-body.active {
+		background: rgba(255, 255, 255, 0. 12) !important;
+		border: 1px solid rgba(255, 255, 255, 0.25) !important;
+		backdrop-filter: blur(10px);
+		
+		/* Glow Effect */
+		box-shadow:
+			0 0 20px rgba(0, 242, 255, 0. 25),
+			0 0 40px rgba(0, 242, 255, 0.1),
+			inset 0 0 15px rgba(255, 255, 255, 0. 08) !important;
+	}
+
+	.btn-body.active .btn-icon {
+		color: #ffffff !important;
+		font-size: 26px !important;
+		transform: scale(1. 1) !important;
+		filter: drop-shadow(0 0 8px rgba(0, 242, 255, 0. 8)) !important;
+	}
+
+	/* === ELIMINAR INDICADOR PILL DE ESCRITORIO === */
+	.btn-body.active::after {
+		display: none ! important;
+		content: none !important;
+	}
+
+	/* === ELIMINAR EFECTO PERLADO EN MÓVIL (Rendimiento) === */
+	.btn-body::before {
+		display: none !important;
+		content: none !important;
+	}
+
+	.btn-body:hover::before {
+		display: none !important;
+		animation: none !important;
+	}
+
+	/* === ACTIVE INDICATOR ALTERNATIVO (Punto inferior) === */
+	.btn-body.active::before {
+		content: '' !important;
+		display: block !important;
+		position: absolute !important;
+		bottom: -8px !important;
+		left: 50% !important;
+		transform: translateX(-50%) !important;
+		width: 6px !important;
+		height: 6px !important;
+		background: #00f2ff !important;
+		border-radius: 50% !important;
+		box-shadow: 0 0 10px rgba(0, 242, 255, 0.8) !important;
+		animation: none !important;
+		opacity: 1 !important;
+	}
+
+	/* === ESTADO PRESSED/TOUCH === */
+	.btn-body:active {
+		transform: scale(0.92) !important;
+		background: rgba(255, 255, 255, 0.15) !important;
+	}
+
+	.btn-body.active:active {
+		transform: scale(0.92) !important;
+		box-shadow:
+			0 0 25px rgba(0, 242, 255, 0.35),
+			inset 0 0 20px rgba(255, 255, 255, 0.1) !important;
+	}
+}
+
+/* === PANTALLAS MUY PEQUEÑAS === */
+@media (max-width: 380px) {
+	.btn-body {
+		width: 48px !important;
+		height: 48px !important;
+		min-width: 48px !important;
+		min-height: 48px !important;
+	}
+
+	.btn-icon {
+		font-size: 24px !important;
+		min-width: 24px !important;
+		width: 24px ! important;
+		height: 24px ! important;
+	}
+
+	.btn-body.active::before {
+		bottom: -6px !important;
+		width: 5px !important;
+		height: 5px !important;
+	}
+}
+
+/* === LANDSCAPE MÓVIL === */
+@media (max-width: 900px) and (orientation: landscape) {
+	.btn-body {
+		width: 46px !important;
+		height: 46px !important;
+		min-width: 46px !important;
+		min-height: 46px !important;
+	}
+
+	.btn-icon {
+		font-size: 22px !important;
+		min-width: 22px !important;
+	}
+
+	.btn-body.active::before {
+		bottom: -5px !important;
+		width: 5px !important;
+		height: 5px !important;
+	}
+}

@@ -1,0 +1,187 @@
+.genre-container {
+    width: 100%;
+    height: 100%;
+    overflow-y: auto;
+    background: #000;
+    position: relative;
+    padding-bottom: 100px;
+}
+
+/* --- HERO SECTION --- */
+.genre-hero {
+    height: 45vh;
+    min-height: 350px;
+    background-size: cover;
+    background-position: center;
+    position: relative;
+    display: flex;
+    flex-direction: column;
+    justify-content: flex-end;
+    padding: 40px;
+}
+
+.genre-header-nav {
+    position: absolute;
+    top: 30px;
+    left: 30px;
+}
+
+.back-btn {
+    background: rgba(0, 0, 0, 0.4);
+    backdrop-filter: blur(10px);
+    border: 1px solid rgba(255, 255, 255, 0.2);
+    color: white;
+    padding: 10px 20px;
+    border-radius: 30px;
+    cursor: pointer;
+    display: flex;
+    align-items: center;
+    gap: 8px;
+    font-weight: 600;
+    transition: 0.3s;
+}
+
+.back-btn:hover {
+    background: white;
+    color: black;
+}
+
+.genre-hero-content {
+    z-index: 2;
+    max-width: 800px;
+    animation: fadeInUp 0.8s ease-out;
+}
+
+.genre-tag-badge {
+    background: #00d4ff;
+    color: black;
+    font-size: 0.7rem;
+    font-weight: 800;
+    padding: 4px 10px;
+    border-radius: 4px;
+    display: inline-block;
+    margin-bottom: 16px;
+    letter-spacing: 1px;
+}
+
+.genre-title {
+    font-size: 4rem;
+    font-weight: 800;
+    margin: 0 0 10px 0;
+    color: white;
+    text-shadow: 0 10px 30px rgba(0, 0, 0, 0.5);
+    text-transform: uppercase;
+}
+
+.genre-subtitle {
+    font-size: 1.1rem;
+    color: rgba(255, 255, 255, 0.8);
+    margin-bottom: 24px;
+}
+
+.genre-play-btn {
+    background: white;
+    color: black;
+    border: none;
+    padding: 14px 32px;
+    border-radius: 50px;
+    font-weight: 700;
+    font-size: 1rem;
+    cursor: pointer;
+    display: flex;
+    align-items: center;
+    gap: 10px;
+    transition: transform 0.2s;
+    box-shadow: 0 0 20px rgba(255, 255, 255, 0.3);
+}
+
+.genre-play-btn:hover {
+    transform: scale(1.05);
+}
+
+/* --- CONTENT --- */
+.genre-content {
+    padding: 40px;
+    background: linear-gradient(to bottom, #000, #111);
+}
+
+.section-title-row {
+    font-size: 1.5rem;
+    font-weight: 700;
+    color: white;
+    margin-bottom: 30px;
+    display: flex;
+    align-items: center;
+    gap: 12px;
+}
+
+.genre-track-grid {
+    display: grid;
+    grid-template-columns: repeat(auto-fill, minmax(200px, 1fr));
+    gap: 24px;
+}
+
+.genre-track-card {
+    cursor: pointer;
+    transition: 0.3s;
+}
+
+.genre-track-card:hover .genre-img-wrapper {
+    transform: translateY(-5px);
+    box-shadow: 0 10px 20px rgba(0, 0, 0, 0.5);
+    border-color: rgba(255, 255, 255, 0.4);
+}
+
+.genre-track-card:hover .genre-overlay {
+    opacity: 1;
+}
+
+.genre-img-wrapper {
+    width: 100%;
+    aspect-ratio: 1;
+    border-radius: 12px;
+    overflow: hidden;
+    margin-bottom: 12px;
+    position: relative;
+    border: 1px solid rgba(255, 255, 255, 0.1);
+    transition: 0.3s;
+}
+
+.genre-img-wrapper img {
+    width: 100%;
+    height: 100%;
+    object-fit: cover;
+}
+
+.genre-overlay {
+    position: absolute;
+    inset: 0;
+    background: rgba(0, 0, 0, 0.4);
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    opacity: 0;
+    transition: 0.3s;
+    color: white;
+    font-size: 2rem;
+}
+
+.genre-track-info .track-name {
+    color: white;
+    font-weight: 600;
+    margin-bottom: 4px;
+    white-space: nowrap;
+    overflow: hidden;
+    text-overflow: ellipsis;
+}
+
+.genre-track-info .track-artist {
+    color: #888;
+    font-size: 0.9rem;
+}
+
+.loading-spinner-container {
+    display: flex;
+    justify-content: center;
+    padding: 50px;
+}

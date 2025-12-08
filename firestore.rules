@@ -1,0 +1,8 @@
+service cloud.firestore {
+  match /databases/{database}/documents {
+    // Permite el acceso a todos los documentos en la base de datos
+    match /{document=**} {
+      allow read, write: if true;  // Permite todo el acceso a los documentos
+    }
+  }
+}

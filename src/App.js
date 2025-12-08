@@ -1,25 +1,30 @@
-import logo from './logo.svg';
-import './App.css';
+import React from 'react';
+import { BrowserRouter as Router, Routes, Route } from 'react-router-dom';
+import Home from './screens/home/index.js';
+import Login from './screens/auth/login.js';       // Verifica que la ruta sea correcta
+import Register from './screens/auth/register.js'; // Verifica que la ruta sea correcta
+import Callback from './screens/auth/callback.js'; // Si usas callback
+import { ProtectedRoute } from './screens/auth/ProtectedRoute';
+import './screens/home/home.css';
 
-function App() {
+
+export default function App() {
   return (
-    <div className="App">
-      <header className="App-header">
-        <img src={logo} className="App-logo" alt="logo" />
-        <p>
-          Edit <code>src/App.js</code> and save to reload.
-        </p>
-        <a
-          className="App-link"
-          href="https://reactjs.org"
-          target="_blank"
-          rel="noopener noreferrer"
-        >
-          Learn React
-        </a>
-      </header>
-    </div>
+    <Router>
+      <Routes>
+        {/* === RUTAS PÚBLICAS === */}
+        <Route path="/login" element={<Login />} />
+        <Route path="/register" element={<Register />} />
+        <Route path="/callback" element={<Callback />} />
+
+        {/* === RUTAS PRIVADAS === */}
+        {/* Cualquier ruta que no sea login/register irá a Home, protegido por Firebase */}
+        <Route path="/*" element={
+          <ProtectedRoute>
+            <Home />
+          </ProtectedRoute>
+        } />
+      </Routes>
+    </Router>
   );
 }
-
-export default App;
