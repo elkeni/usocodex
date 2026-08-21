@@ -123,12 +123,18 @@ const SEARCH_CATEGORIES = [
     }
 ];
 const DEFAULT_IMAGE = 'https://images.unsplash.com/photo-1470225620780-dba8ba36b745?auto=format&fit=crop&w=500&q=60';
+const SEARCH_TYPES = ['track', 'artist', 'album', 'playlist'];
+const SEARCH_LIMITS = {
+    all: { track: 12, artist: 10, album: 10, playlist: 10 },
+    focused: { track: 30, artist: 24, album: 24, playlist: 24 }
+};
+const createEmptyResults = () => ({ tracks: [], artists: [], albums: [], playlists: [] });
 
 // =============================================================================
 // UTILIDADES
 // =============================================================================
 
-const getImageUrl = (item) => {
+const getImageUrl = (item, highResolution = false) => {
     let finalImage = null;
 
     if (!item) finalImage = null;
@@ -144,12 +150,12 @@ const getImageUrl = (item) => {
         }
     }
 
-    // ⭐ TURBO OPTIMIZER: Enforce 250x250 for lists (replacing 1000x1000 or similar)
+    // Tarjetas ligeras durante el scroll; portada nítida cuando pasa al reproductor.
     if (typeof finalImage === 'string' && finalImage.includes('dzcdn.net')) {
+        const size = highResolution ? '1000x1000' : '250x250';
         return finalImage
-            .replace(/\/1000x1000/, '/250x250')
-            .replace(/\/500x500/, '/250x250')
-            .replace(/\/[\dx]+(-000000-80-0-0\.jpg)/, '/250x250$1');
+            .replace(/\/(?:1000x1000|500x500|250x250)/, `/${size}`)
+            .replace(/\/[\dx]+(-000000-80-0-0\.jpg)/, `/${size}$1`);
     }
 
     return finalImage;
@@ -167,6 +173,49 @@ const sortByRank = (items) => {
         const rankB = b.rank || b.popularity || b.nb_fan || 0;
         return rankB - rankA;
     });
+};
+
+const normalizeSearchText = (value) => String(value || '')
+    .normalize('NFD')
+    .replace(/[\u0300-\u036f]/g, '')
+    .toLocaleLowerCase('es')
+    .replace(/[^a-z0-9]+/g, ' ')
+    .trim();
+
+const getSearchCacheKey = (query, filter) => `${normalizeSearchText(query)}::${filter}`;
+
+const rankAndDedupeResults = (items, query, getPrimary, getSecondary = () => '') => {
+    const normalizedQuery = normalizeSearchText(query);
+    const unique = new Map();
+
+    for (const item of items || []) {
+        if (!item) continue;
+        const primary = normalizeSearchText(getPrimary(item));
+        const secondary = normalizeSearchText(getSecondary(item));
+        if (!primary) continue;
+        const identity = String(item.id || `${primary}::${secondary}`);
+        if (!unique.has(identity)) unique.set(identity, item);
+    }
+
+    const score = (item) => {
+        const primary = normalizeSearchText(getPrimary(item));
+        const secondary = normalizeSearchText(getSecondary(item));
+        const popularity = Number(item.rank || item.fans || item.popularity || 0);
+        let relevance = 0;
+
+        if (primary === normalizedQuery) relevance += 4_000_000_000;
+        else if (primary.startsWith(normalizedQuery)) relevance += 3_000_000_000;
+        else if (primary.split(' ').includes(normalizedQuery)) relevance += 2_000_000_000;
+        else if (primary.includes(normalizedQuery)) relevance += 1_000_000_000;
+
+        if (secondary === normalizedQuery) relevance += 800_000_000;
+        else if (secondary.startsWith(normalizedQuery)) relevance += 500_000_000;
+        else if (secondary.includes(normalizedQuery)) relevance += 250_000_000;
+
+        return relevance + popularity;
+    };
+
+    return [...unique.values()].sort((a, b) => score(b) - score(a));
 };
 
 /**
@@ -630,36 +679,6 @@ const TrackRow = ({ track, isLoading, onPlay, showRank = false, index = 0, onLon
 // =============================================================================
 // COMPONENTE PRINCIPAL
 // =============================================================================
-
-// =============================================================================
-// ✅ VALIDACIONES FINALES - COHERENCIA DE BÚSQUEDA
-// =============================================================================
-// TEST CASES PARA VERIFICAR:
-// 1. Buscar "salsa":
-//    - intent: genre
-//    - Top Result: NO puede ser artista llamado "Salsa"
-//    - Playlists aparecen ANTES que artistas
-//    - Subtítulo coherente: "Playlist · Género salsa"
-//
-// 2. Buscar "rock":
-//    - intent: genre
-//    - Top Result: playlist o track, nunca artist
-//    - Orden: Playlists → Canciones → Artistas → Álbumes
-//
-// 3. Buscar "bad bunny":
-//    - intent: artist
-//    - Top Result: artist
-//    - Orden: Artistas → Canciones → Álbumes → Playlists
-//
-// 4. Buscar "love":
-//    - intent: mood/general
-//    - Top Result: razonable (playlist, track, etc.)
-//
-// 5. Sin resultados:
-//    - No Top Result, muestra "no results" correctamente
-//
-// 6. Cache funciona:
-//    - Misma búsqueda es instantánea
 export default function Search() {
     const navigate = useNavigate();
     const { playTrack } = usePlayerActions();
@@ -667,8 +686,8 @@ export default function Search() {
     // Referencias
     const inputRef = useRef(null);
     const searchContainerRef = useRef(null);
-    const headerRef = useRef(null);
     const searchCacheRef = useRef({});
+    const searchRequestRef = useRef(0);
 
     // Use persistence scroll
     useScrollPersistence('search', searchContainerRef);
@@ -676,12 +695,9 @@ export default function Search() {
     // Estados
     const [query, setQuery] = useState('');
     const [filter, setFilter] = useState('all'); // all, artist, album, track, playlist
-    const [results, setResults] = useState(() => {
-        // Restaurar resultados si existen en caché para la query actual (si la hubiera)
-        // Pero como query inicia vacío, esto suele ser vacío.
-        return { tracks: [], artists: [], albums: [], playlists: [] };
-    });
+    const [results, setResults] = useState(createEmptyResults);
     const [isLoading, setIsLoading] = useState(false);
+    const [searchNotice, setSearchNotice] = useState(null);
     const [showRecents, setShowRecents] = useState(false);
     const [hasSearched, setHasSearched] = useState(false);
     const [playingTrackId, setPlayingTrackId] = useState(null);
@@ -728,6 +744,10 @@ export default function Search() {
             if (cachedState.results) setResults(cachedState.results);
             if (cachedState.hasSearched) setHasSearched(cachedState.hasSearched);
             if (cachedState.filter) setFilter(cachedState.filter);
+            if (cachedState.query && cachedState.results) {
+                const restoredFilter = cachedState.filter || 'all';
+                searchCacheRef.current[getSearchCacheKey(cachedState.query, restoredFilter)] = cachedState.results;
+            }
         }
     }, []);
 
@@ -746,46 +766,50 @@ export default function Search() {
     // ========================================
     const performSearch = useCallback(async (searchQuery) => {
         if (!searchQuery || searchQuery.trim().length < 2) {
-            setResults({ tracks: [], artists: [], albums: [], playlists: [] });
+            searchRequestRef.current += 1;
+            setResults(createEmptyResults());
             setHasSearched(false);
+            setIsLoading(false);
+            setSearchNotice(null);
             return;
         }
 
-        const normalizedQuery = searchQuery.trim().toLowerCase();
+        const cleanQuery = searchQuery.trim().replace(/\s+/g, ' ');
+        const cacheKey = getSearchCacheKey(cleanQuery, filter);
+        const requestId = ++searchRequestRef.current;
 
-        // 1. Revisar caché local de resultados
-        if (searchCacheRef.current[normalizedQuery]) {
-            setResults(searchCacheRef.current[normalizedQuery]);
+        if (searchCacheRef.current[cacheKey]) {
+            setResults(searchCacheRef.current[cacheKey]);
             setHasSearched(true);
+            setIsLoading(false);
+            setSearchNotice(null);
             return;
         }
 
         setIsLoading(true);
         setHasSearched(true);
+        setSearchNotice(null);
+        setResults(createEmptyResults());
 
         try {
-            const limit = 10;
-            const trackLimit = 12;
+            const requestedTypes = filter === 'all' ? SEARCH_TYPES : [filter];
+            const limits = filter === 'all' ? SEARCH_LIMITS.all : SEARCH_LIMITS.focused;
+            const settled = await Promise.allSettled(
+                requestedTypes.map((type) => searchGlobal(cleanQuery, type, limits[type]))
+            );
 
-            const shouldSearchTracks = filter === 'all' || filter === 'track';
-            const shouldSearchArtists = filter === 'all' || filter === 'artist';
-            const shouldSearchAlbums = filter === 'all' || filter === 'album';
-            const shouldSearchPlaylists = filter === 'all' || filter === 'playlist';
+            if (requestId !== searchRequestRef.current) return;
 
-            // Ejecutar búsquedas en paralelo usando searchGlobal
-            const promises = {
-                tracks: shouldSearchTracks ? searchGlobal(searchQuery, 'track', trackLimit) : Promise.resolve([]),
-                artists: shouldSearchArtists ? searchGlobal(searchQuery, 'artist', limit) : Promise.resolve([]),
-                albums: shouldSearchAlbums ? searchGlobal(searchQuery, 'album', limit) : Promise.resolve([]),
-                playlists: shouldSearchPlaylists ? searchGlobal(searchQuery, 'playlist', limit) : Promise.resolve([])
-            };
-
-            const [rawTracks, rawArtists, rawAlbums, rawPlaylists] = await Promise.all([
-                promises.tracks,
-                promises.artists,
-                promises.albums,
-                promises.playlists
-            ]);
+            const rawByType = { track: [], artist: [], album: [], playlist: [] };
+            let failedRequests = 0;
+            settled.forEach((result, index) => {
+                const type = requestedTypes[index];
+                if (result.status === 'fulfilled' && Array.isArray(result.value)) {
+                    rawByType[type] = result.value;
+                } else {
+                    failedRequests += 1;
+                }
+            });
 
             // Mappers locales para estandarizar resultados (Unified UI Contract)
             // ⭐ MODIFIED: NOW STORES LOW-RES 'image' AND HIGH-RES 'image_xl'
@@ -806,7 +830,8 @@ export default function Search() {
                 name: a.name,
                 image: getImageUrl({ image: a.picture_xl }, false),
                 image_xl: getImageUrl({ image: a.picture_xl }, true),
-                fans: a.nb_fan
+                fans: a.nb_fan,
+                rank: a.rank || a.nb_fan
             });
 
             const mapAlbum = a => ({
@@ -815,7 +840,8 @@ export default function Search() {
                 artist: a.artist?.name,
                 image: getImageUrl({ image: a.cover_xl }, false),
                 image_xl: getImageUrl({ image: a.cover_xl }, true),
-                fans: a.fans
+                fans: a.fans,
+                rank: a.rank || a.fans
             });
 
             const mapPlaylist = p => ({
@@ -824,7 +850,8 @@ export default function Search() {
                 creator: p.user?.name,
                 image: getImageUrl({ image: p.picture_xl }, false),
                 image_xl: getImageUrl({ image: p.picture_xl }, true),
-                trackCount: p.nb_tracks
+                trackCount: p.nb_tracks,
+                rank: p.rank || p.nb_tracks
             });
 
             // Procesar y limpiar resultados
@@ -835,25 +862,41 @@ export default function Search() {
                     .map(mapper);
             };
 
-            // Ordenar por RANK (base de Deezer)
+            const mappedTracks = cleanAndMap(rawByType.track, mapTrack);
+            const mappedArtists = cleanAndMap(rawByType.artist, mapArtist);
+            const mappedAlbums = cleanAndMap(rawByType.album, mapAlbum);
+            const mappedPlaylists = cleanAndMap(rawByType.playlist, mapPlaylist);
+
+            // La coincidencia textual manda; la popularidad resuelve empates razonables.
             const resultsData = {
-                tracks: sortByRank(cleanAndMap(rawTracks, mapTrack)),
-                artists: sortByRank(cleanAndMap(rawArtists, mapArtist)),
-                albums: sortByRank(cleanAndMap(rawAlbums, mapAlbum)),
-                playlists: sortByRank(cleanAndMap(rawPlaylists, mapPlaylist))
+                tracks: rankAndDedupeResults(mappedTracks, cleanQuery, (item) => item.name, (item) => `${item.artist} ${item.album}`),
+                artists: rankAndDedupeResults(mappedArtists, cleanQuery, (item) => item.name),
+                albums: rankAndDedupeResults(mappedAlbums, cleanQuery, (item) => item.name, (item) => item.artist),
+                playlists: rankAndDedupeResults(mappedPlaylists, cleanQuery, (item) => item.name, (item) => item.creator)
             };
 
             setResults(resultsData);
+            setSearchNotice(failedRequests > 0
+                ? (failedRequests === requestedTypes.length
+                    ? 'No pudimos consultar el catálogo. Revisa tu conexión e inténtalo otra vez.'
+                    : 'Algunos tipos de resultado no pudieron cargarse. Mostramos lo que sí encontramos.')
+                : null);
 
-            // Guardar en caché
-            searchCacheRef.current[normalizedQuery] = resultsData;
+            if (failedRequests === 0) {
+                searchCacheRef.current[cacheKey] = resultsData;
+                const cacheKeys = Object.keys(searchCacheRef.current);
+                if (cacheKeys.length > 30) delete searchCacheRef.current[cacheKeys[0]];
+            }
 
         } catch (error) {
             console.error("[Search] Error:", error);
+            if (requestId === searchRequestRef.current) {
+                setSearchNotice('No pudimos completar la búsqueda. Inténtalo nuevamente.');
+            }
         } finally {
-            setIsLoading(false);
+            if (requestId === searchRequestRef.current) setIsLoading(false);
         }
-    }, [filter]); // cleanResults ya no es dependencia porque es interna o reemplazada
+    }, [filter]);
 
     // ========================================
     // GUARDAR BÚSQUEDA EN HISTORIAL
@@ -918,16 +961,25 @@ export default function Search() {
         setQuery(term);
         setShowRecents(false);
         performSearch(term);
-        // No guardar aquí - ya está guardado en el historial
+        inputRef.current?.blur();
     }, [performSearch]);
+
+    const submitSearch = useCallback((event) => {
+        event.preventDefault();
+        const cleanQuery = query.trim().replace(/\s+/g, ' ');
+        if (cleanQuery.length < 2) return;
+        if (cleanQuery !== query) setQuery(cleanQuery);
+        saveToRecentSearches(cleanQuery);
+        setShowRecents(false);
+        inputRef.current?.blur();
+        performSearch(cleanQuery);
+    }, [performSearch, query, saveToRecentSearches]);
 
     // Debounce de búsqueda
     useEffect(() => {
         const timer = setTimeout(() => {
             if (query.trim()) {
                 performSearch(query);
-                // Guardar en historial cuando se realiza una búsqueda
-                saveToRecentSearches(query);
                 // Ocultar recientes cuando hay texto
                 setShowRecents(false);
             } else {
@@ -936,7 +988,7 @@ export default function Search() {
             }
         }, 400);
         return () => clearTimeout(timer);
-    }, [query, performSearch, saveToRecentSearches]);
+    }, [query, performSearch]);
 
     // ⭐ Reproducir track - Con RADIO INSTANTÁNEA (artistas relacionados vía API)
     const handlePlayTrack = useCallback(async (track) => {
@@ -1033,9 +1085,12 @@ export default function Search() {
 
     // Limpiar búsqueda
     const clearSearch = useCallback(() => {
+        searchRequestRef.current += 1;
         setQuery('');
-        setResults({ tracks: [], artists: [], albums: [], playlists: [] });
+        setResults(createEmptyResults());
         setHasSearched(false);
+        setIsLoading(false);
+        setSearchNotice(null);
     }, []);
 
     // Resultados a mostrar (sin filtrar por Top Result)
@@ -1240,16 +1295,18 @@ export default function Search() {
             <PageHeader
                 className="search-page-header"
                 isScrolled={isScrolled}
-                ref={headerRef}
             >
                 {/* Search Input */}
-                <div className="search-input-container">
+                <form className="search-input-container" role="search" onSubmit={submitSearch}>
                     <div className="search-capsule">
                         <input
                             ref={inputRef}
-                            type="text"
+                            type="search"
                             className="search-capsule-input"
                             placeholder="¿Qué quieres escuchar?"
+                            aria-label="Buscar música"
+                            autoComplete="off"
+                            enterKeyHint="search"
                             value={query}
                             onChange={(e) => setQuery(e.target.value)}
                             onFocus={() => {
@@ -1266,7 +1323,9 @@ export default function Search() {
                         />
                         <FaSearch className="search-icon" />
                         <button
+                            type="button"
                             className={`search-clear-btn ${query ? 'visible' : ''}`}
+                            aria-label="Limpiar búsqueda"
                             onClick={() => {
                                 clearSearch();
                                 setShowRecents(true);
@@ -1276,15 +1335,19 @@ export default function Search() {
                             <FaTimes size={12} />
                         </button>
                     </div>
-                </div>
+                </form>
 
                 {/* Filter Pills */}
-                <div className="search-filters">
+                <div className="search-filters" role="group" aria-label="Filtrar resultados">
                     {filters.map(f => (
                         <button
+                            type="button"
                             key={f.id}
                             className={`filter-glass-pill ${filter === f.id ? 'active' : ''}`}
-                            onClick={() => setFilter(f.id)}
+                            aria-pressed={filter === f.id}
+                            onClick={() => {
+                                if (f.id !== filter) setFilter(f.id);
+                            }}
                         >
                             {f.label}
                         </button>
@@ -1296,9 +1359,16 @@ export default function Search() {
             <main className="search-content">
                 {/* Loading State */}
                 {isLoading && (
-                    <div className="search-loading">
+                    <div className="search-loading" role="status" aria-live="polite">
                         <div className="loading-spinner-large" />
-                        <p>Buscando...</p>
+                        <p>Buscando {filter === 'all' ? 'en todo el catálogo' : filters.find((item) => item.id === filter)?.label.toLowerCase()}...</p>
+                    </div>
+                )}
+
+                {!isLoading && searchNotice && (
+                    <div className="search-notice" role="status">
+                        <span>{searchNotice}</span>
+                        <button type="button" onClick={() => performSearch(query)}>Reintentar</button>
                     </div>
                 )}
 
@@ -1318,18 +1388,23 @@ export default function Search() {
                                 <div
                                     key={`recent-${index}-${term}`}
                                     className="recent-item"
-                                    onClick={() => executeRecentSearch(term)}
                                 >
-                                    <div className="recent-icon">
-                                        <FaHistory />
-                                    </div>
-                                    <span className="recent-text">{term}</span>
                                     <button
+                                        type="button"
+                                        className="recent-main"
+                                        onClick={() => executeRecentSearch(term)}
+                                        aria-label={`Buscar ${term}`}
+                                    >
+                                        <span className="recent-icon" aria-hidden="true">
+                                            <FaHistory />
+                                        </span>
+                                        <span className="recent-text">{term}</span>
+                                    </button>
+                                    <button
+                                        type="button"
                                         className="recent-delete"
-                                        onClick={(e) => {
-                                            e.stopPropagation();
-                                            removeFromRecent(term);
-                                        }}
+                                        aria-label={`Eliminar ${term} del historial`}
+                                        onClick={() => removeFromRecent(term)}
                                     >
                                         <FaTimes size={12} />
                                     </button>
@@ -1348,7 +1423,8 @@ export default function Search() {
                         <h2 className="browse-title">Explorar Géneros</h2>
                         <div className="categories-grid">
                             {SEARCH_CATEGORIES.map((category) => (
-                                <div
+                                <button
+                                    type="button"
                                     key={category.id}
                                     className="category-card"
                                     style={{ background: category.color }}
@@ -1363,7 +1439,7 @@ export default function Search() {
                                             onError={(e) => { e.target.style.display = 'none'; }}
                                         />
                                     </div>
-                                </div>
+                                </button>
                             ))}
                         </div>
                     </div>
@@ -1454,10 +1530,10 @@ export default function Search() {
                         )}
 
                         {/* No Results */}
-                        {hasSearched && !hasResults && (
+                        {hasSearched && !hasResults && !searchNotice && (
                             <div className="no-results">
-                                <h3>No encontramos resultados para "{query}"</h3>
-                                <p>Intenta con otra búsqueda o verifica la ortografía</p>
+                                <h3>No encontramos {filter === 'all' ? 'resultados' : filters.find((item) => item.id === filter)?.label.toLowerCase()} para "{query.trim()}"</h3>
+                                <p>Prueba con el nombre del artista o canción, o usa menos palabras.</p>
                             </div>
                         )}
                     </div>

@@ -45,6 +45,21 @@ const trackResult = {
   rank: 100,
 };
 
+const artistResult = {
+  id: 'artist-1',
+  name: 'Luz Artista',
+  picture_xl: '',
+  nb_fan: 500,
+};
+
+const albumResult = {
+  id: 'album-1',
+  title: 'Luz Álbum',
+  artist: { name: 'Artista Demo' },
+  cover_xl: '',
+  fans: 200,
+};
+
 describe('Búsqueda y reproducción esenciales', () => {
   beforeEach(() => {
     localStorage.clear();
@@ -70,5 +85,96 @@ describe('Búsqueda y reproducción esenciales', () => {
     await waitFor(() => expect(playTrackMock).toHaveBeenCalled());
     expect(playTrackMock.mock.calls[0][0]).toMatchObject({ name: 'Luz de prueba', artist: 'Artista Demo' });
   });
-});
 
+  it('consulta cada filtro con su propia caché y una cantidad útil de resultados', async () => {
+    searchGlobalMock.mockImplementation(async (_query, type) => {
+      if (type === 'track') return [trackResult];
+      if (type === 'artist') return [artistResult];
+      if (type === 'album') return [albumResult];
+      return [];
+    });
+
+    const user = userEvent.setup();
+    render(<MemoryRouter><Search /></MemoryRouter>);
+    const input = screen.getByRole('searchbox', { name: 'Buscar música' });
+    await user.type(input, 'Luz');
+    expect(await screen.findByText('Luz de prueba', {}, { timeout: 2500 })).toBeInTheDocument();
+
+    await user.click(screen.getByRole('button', { name: 'Artistas' }));
+    expect(await screen.findByText('Luz Artista', {}, { timeout: 2500 })).toBeInTheDocument();
+    await waitFor(() => expect(searchGlobalMock).toHaveBeenCalledWith('Luz', 'artist', 24), { timeout: 2500 });
+
+    await user.click(screen.getByRole('button', { name: 'Álbumes' }));
+    expect(await screen.findByText('Luz Álbum', {}, { timeout: 2500 })).toBeInTheDocument();
+    await waitFor(() => expect(searchGlobalMock).toHaveBeenCalledWith('Luz', 'album', 24), { timeout: 2500 });
+  });
+
+  it('guarda en recientes sólo cuando la persona confirma la búsqueda', async () => {
+    const user = userEvent.setup();
+    render(<MemoryRouter><Search /></MemoryRouter>);
+    const input = screen.getByRole('searchbox', { name: 'Buscar música' });
+    await user.type(input, 'Luz');
+    await screen.findByText('Luz de prueba', {}, { timeout: 2500 });
+    expect(localStorage.getItem('musicalol_recent_searches_v2')).toBeNull();
+
+    await user.type(input, '{Enter}');
+    await waitFor(() => expect(JSON.parse(localStorage.getItem('musicalol_recent_searches_v2'))).toEqual(['Luz']));
+  });
+
+  it('ignora respuestas antiguas que llegan después de una búsqueda nueva', async () => {
+    const pendingFirstSearch = [];
+    searchGlobalMock.mockImplementation((query, type) => {
+      if (query === 'Primera') {
+        return new Promise((resolve) => pendingFirstSearch.push(() => resolve(type === 'track'
+          ? [{ ...trackResult, id: 'old', title: 'Resultado antiguo' }]
+          : [])));
+      }
+      return Promise.resolve(type === 'track'
+        ? [{ ...trackResult, id: 'new', title: 'Resultado vigente' }]
+        : []);
+    });
+
+    const user = userEvent.setup();
+    render(<MemoryRouter><Search /></MemoryRouter>);
+    const input = screen.getByRole('searchbox', { name: 'Buscar música' });
+    await user.type(input, 'Primera');
+    await waitFor(() => expect(pendingFirstSearch).toHaveLength(4), { timeout: 2500 });
+
+    await user.clear(input);
+    await user.type(input, 'Segunda');
+    expect(await screen.findByText('Resultado vigente', {}, { timeout: 2500 })).toBeInTheDocument();
+
+    pendingFirstSearch.forEach((resolve) => resolve());
+    await waitFor(() => expect(screen.queryByText('Resultado antiguo')).not.toBeInTheDocument());
+  });
+
+  it('prioriza coincidencias exactas y elimina resultados duplicados', async () => {
+    searchGlobalMock.mockImplementation(async (_query, type) => type === 'track' ? [
+      { ...trackResult, id: 'popular', title: 'Luces de fiesta', rank: 999999 },
+      { ...trackResult, id: 'exact', title: 'Luz', rank: 10 },
+      { ...trackResult, id: 'exact', title: 'Luz', rank: 10 },
+    ] : []);
+
+    const user = userEvent.setup();
+    const { container } = render(<MemoryRouter><Search /></MemoryRouter>);
+    await user.type(screen.getByRole('searchbox', { name: 'Buscar música' }), 'Luz');
+    await screen.findByText('Luces de fiesta', {}, { timeout: 2500 });
+
+    const names = [...container.querySelectorAll('.track-name')].map((node) => node.textContent);
+    expect(names).toEqual(['Luz', 'Luces de fiesta']);
+  });
+
+  it('conserva los resultados disponibles si una categoría falla', async () => {
+    searchGlobalMock.mockImplementation(async (_query, type) => {
+      if (type === 'artist') throw new Error('Servicio temporalmente no disponible');
+      return type === 'track' ? [trackResult] : [];
+    });
+
+    const user = userEvent.setup();
+    render(<MemoryRouter><Search /></MemoryRouter>);
+    await user.type(screen.getByRole('searchbox', { name: 'Buscar música' }), 'Luz');
+
+    expect(await screen.findByText('Luz de prueba', {}, { timeout: 2500 })).toBeInTheDocument();
+    expect(screen.getByText(/Algunos tipos de resultado no pudieron cargarse/i)).toBeInTheDocument();
+  });
+});
