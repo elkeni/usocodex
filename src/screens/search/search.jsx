@@ -26,6 +26,7 @@ import {
 } from '../../services/unifiedService';
 import { buildRadioQueue } from '../../services/radioService';
 import { PRODUCT_EVENTS, recordProductEvent } from '../../services/productMetrics';
+import { getAlbumPath } from '../../services/albumNavigation';
 
 
 
@@ -1217,7 +1218,7 @@ export default function Search() {
                                             <Card
                                                 item={album}
                                                 variant="vertical"
-                                                onClick={() => navigate(`/album/${encodeURIComponent(album.artist)}/${encodeURIComponent(album.name)}`)}
+                                                onClick={() => navigate(getAlbumPath(album))}
                                                 subtitle={album.artist}
                                             />
                                         </div>
@@ -1491,7 +1492,7 @@ export default function Search() {
                                         <Card
                                             item={album}
                                             variant="vertical"
-                                            onClick={() => navigate(`/album/${encodeURIComponent(album.artist)}/${encodeURIComponent(album.name)}`)}
+                                            onClick={() => navigate(getAlbumPath(album))}
                                         />
                                     </div>
                                 ))}

@@ -12,6 +12,7 @@ import { usePlayerActions, usePlayer } from "../../context/playerContext";
 import screenStateCache, { useScrollPersistence } from "../../services/screenStateCache";
 import { buildRadioQueue } from "../../services/radioService";
 import { PRODUCT_EVENTS, recordProductEvent } from "../../services/productMetrics";
+import { getAlbumPath } from "../../services/albumNavigation";
 import "./feed.css";
 import Card from "../../components/shared/Card";
 
@@ -261,7 +262,7 @@ const HeroCard = memo(({ item, onPlay }) => {
 
   const handleClick = useCallback(() => {
     if (item.type === 'album') {
-      navigate(`/album/${encodeURIComponent(item.artist)}/${encodeURIComponent(item.name)}`);
+      navigate(getAlbumPath(item));
     } else if (item.type === 'playlist') {
       navigate(`/playlist/${item.id}`, { state: { playlist: item } });
     } else if (item.type === 'artist') {
@@ -577,7 +578,7 @@ export default function Feed() {
     if (!item) return;
     if (item.type === "playlist") { navigate(`/playlist/${item.id}`, { state: { playlist: item } }); return; }
     if (item.type === "artist") { navigate(`/artist/${encodeURIComponent(item.artist || item.name)}`); return; }
-    if (item.type === "album") { navigate(`/album/${encodeURIComponent(item.artist)}/${encodeURIComponent(item.name)}`); return; }
+    if (item.type === "album") { navigate(getAlbumPath(item)); return; }
 
     // Si ya viene con una cola, usarla directamente
     if (contextQueue?.length > 1) {
@@ -1326,7 +1327,7 @@ export default function Feed() {
   /* handleForYouTracksClick removed as unused */
   const handlePlaylistClick = useCallback((item) => handlePlay(item), [handlePlay]);
   // Fix: Direct navigation for albums to avoid type mismatch ('Álbum' vs 'album')
-  const handleAlbumClick = useCallback((item) => navigate(`/album/${encodeURIComponent(item.artist || item.artistQuery)}/${encodeURIComponent(item.name)}`), [navigate]);
+  const handleAlbumClick = useCallback((item) => navigate(getAlbumPath(item)), [navigate]);
   const handleRecentlyPlayedClick = useCallback((item) => handlePlay(item, recentlyPlayed), [handlePlay, recentlyPlayed]);
   // 🎵 handleRecommendationsClick: Ahora usa Radio Instantánea (no pasa contextQueue)
   const handleRecommendationsClick = useCallback((item) => handlePlay(item), [handlePlay]);

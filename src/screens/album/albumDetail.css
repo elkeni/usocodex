@@ -417,6 +417,14 @@
     border-bottom: 1px solid rgba(255, 255, 255, 0.08);
     cursor: pointer;
     transition: background 0.15s ease;
+    width: 100%;
+    border-top: 0;
+    border-right: 0;
+    border-left: 0;
+    background: transparent;
+    color: inherit;
+    font: inherit;
+    text-align: left;
 }
 
 .album-track-item:hover {
@@ -474,29 +482,12 @@
     flex-shrink: 0;
 }
 
-.track-menu-btn {
-    width: 36px;
-    height: 36px;
-    border-radius: 50%;
-    background: transparent;
-    border: none;
-    color: var(--text-muted);
-    display: flex;
-    align-items: center;
-    justify-content: center;
-    cursor: pointer;
-    flex-shrink: 0;
-    opacity: 0;
-    transition: all 0.2s ease;
-}
-
-.album-track-item:hover .track-menu-btn {
-    opacity: 1;
-}
-
-.track-menu-btn:hover {
-    color: white;
-    background: rgba(255, 255, 255, 0.1);
+.album-playback-error {
+    margin: 12px 0 0;
+    color: rgba(255, 255, 255, 0.78);
+    font-size: 0.85rem;
+    line-height: 1.4;
+    text-align: center;
 }
 
 /* =============================================================================
@@ -691,6 +682,22 @@
     flex: 0 0 160px;
     /* Fixed width for horizontal scroll items */
     width: 160px;
+    padding: 0;
+    border: 0;
+    color: inherit;
+    font: inherit;
+    text-align: left;
+}
+
+.album-track-item:focus-visible,
+.album-more-card:focus-visible,
+.album-action-btn:focus-visible,
+.album-artist-apple:focus-visible,
+.nav-btn-circle:focus-visible,
+.header-action-btn:focus-visible,
+.header-back-btn:focus-visible {
+    outline: 2px solid var(--apple-red);
+    outline-offset: 2px;
 }
 
 .album-more-card:hover {

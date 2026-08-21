@@ -38,6 +38,14 @@ const cleanMetadata = (str, aggressive = false) => {
     return s.replace(/[^a-z0-9áéíóúñü .\-@&$!]/g, " ").replace(/\s+/g, " ").trim();
 };
 
+const normalizeCatalogName = (value) => String(value || '')
+    .normalize('NFD')
+    .replace(/[\u0300-\u036f]/g, '')
+    .toLocaleLowerCase('es')
+    .replace(/[^a-z0-9]+/g, ' ')
+    .replace(/\s+/g, ' ')
+    .trim();
+
 const parseDurationToSeconds = (duration) => {
     if (!duration) return 0;
     if (typeof duration === 'number') return duration;
@@ -179,6 +187,7 @@ const DeezerClient = {
 
     async getArtistAlbums(artistIdOrName, limit = 50) {
         let artistId = artistIdOrName;
+        let resolvedArtistName = isNaN(artistIdOrName) ? String(artistIdOrName) : '';
 
         if (isNaN(artistIdOrName)) {
             const artistInfo = await this.getArtistInfo(artistIdOrName);
@@ -187,6 +196,7 @@ const DeezerClient = {
                 return [];
             }
             artistId = artistInfo.id;
+            resolvedArtistName = artistInfo.name;
         }
 
         const data = await this._fetch(`/artist/${artistId}/albums?limit=${limit}`);
@@ -195,9 +205,9 @@ const DeezerClient = {
         return data.data.map(album => ({
             id: album.id,
             name: album.title,
-            artist: artistIdOrName,
-            artistId: artistId,
-            image: album.cover_medium || album.cover_big || album.cover_medium,
+            artist: album.artist?.name || resolvedArtistName,
+            artistId: album.artist?.id || artistId,
+            image: album.cover_xl || album.cover_big || album.cover_medium,
             releaseDate: album.release_date,
             trackCount: album.nb_tracks || null,
             fans: album.fans,
@@ -214,23 +224,21 @@ const DeezerClient = {
 
         if (isNaN(albumIdOrName)) {
             if (artistName) {
-                const artistInfo = await this.getArtistInfo(artistName);
-                if (artistInfo) {
-                    const artistAlbums = await this.getArtistAlbums(artistInfo.id, 100);
-                    const normalizedAlbumName = albumIdOrName.toLowerCase().trim();
+                // Admite tanto nombre como ID de artista para conservar enlaces antiguos.
+                const artistAlbums = await this.getArtistAlbums(artistName, 100);
+                const normalizedAlbumName = normalizeCatalogName(albumIdOrName);
+                const exactAlbumMatch = artistAlbums.find((album) =>
+                    normalizeCatalogName(album.name) === normalizedAlbumName
+                );
 
-                    const exactAlbumMatch = artistAlbums.find(a =>
-                        a.name.toLowerCase().trim() === normalizedAlbumName
-                    );
-
-                    if (exactAlbumMatch) {
-                        albumId = exactAlbumMatch.id;
-                    }
+                if (exactAlbumMatch) {
+                    albumId = exactAlbumMatch.id;
                 }
             }
 
             if (isNaN(albumId)) {
-                const searchQuery = artistName ? `${artistName} ${albumIdOrName}` : albumIdOrName;
+                const artistIsName = artistName && isNaN(artistName);
+                const searchQuery = artistIsName ? `${artistName} ${albumIdOrName}` : albumIdOrName;
                 const searchResults = await this.searchGlobal(searchQuery, 'album', 10);
 
                 if (!searchResults || searchResults.length === 0) {
@@ -238,26 +246,25 @@ const DeezerClient = {
                     return null;
                 }
 
-                const normalizedAlbumName = albumIdOrName.toLowerCase().trim();
-                const normalizedArtistName = artistName.toLowerCase().trim();
+                const normalizedAlbumName = normalizeCatalogName(albumIdOrName);
+                const normalizedArtistName = artistIsName ? normalizeCatalogName(artistName) : '';
 
                 const exactMatch = searchResults.find(a => {
-                    const albumNameMatch = a.title.toLowerCase().trim() === normalizedAlbumName;
-                    const artistMatch = !artistName ||
-                        a.artist?.name?.toLowerCase().trim() === normalizedArtistName ||
-                        a.artist?.name?.toLowerCase().includes(normalizedArtistName) ||
-                        normalizedArtistName.includes(a.artist?.name?.toLowerCase() || '');
+                    const albumNameMatch = normalizeCatalogName(a.title) === normalizedAlbumName;
+                    const candidateArtist = normalizeCatalogName(a.artist?.name);
+                    const artistMatch = !normalizedArtistName || candidateArtist === normalizedArtistName;
                     return albumNameMatch && artistMatch;
                 });
 
-                const bestMatch = exactMatch || searchResults[0];
+                const titleMatch = searchResults.find((album) => {
+                    const candidateTitle = normalizeCatalogName(album.title);
+                    return candidateTitle.includes(normalizedAlbumName) || normalizedAlbumName.includes(candidateTitle);
+                });
+                const bestMatch = exactMatch || titleMatch;
 
-                if (!exactMatch) {
-                    const matchTitle = bestMatch.title.toLowerCase();
-                    if (!matchTitle.includes(normalizedAlbumName) && !normalizedAlbumName.includes(matchTitle)) {
-                        console.warn(`[DeezerClient] No exact album match for "${albumIdOrName}" by "${artistName}"`);
-                        return null;
-                    }
+                if (!bestMatch) {
+                    console.warn(`[DeezerClient] No reliable album match for "${albumIdOrName}" by "${artistName}"`);
+                    return null;
                 }
 
                 albumId = bestMatch.id;
@@ -278,7 +285,7 @@ const DeezerClient = {
                 artist: track.artist?.name || albumData.artist?.name,
                 album: albumData.title,
                 albumId: albumData.id,
-                image: albumData.cover_medium || albumData.cover_big,
+                image: albumData.cover_xl || albumData.cover_big || albumData.cover_medium,
                 duration: track.duration,
                 trackNumber: track.track_position || (index + 1),
                 diskNumber: track.disk_number || 1,
@@ -293,7 +300,7 @@ const DeezerClient = {
             name: albumData.title,
             artist: albumData.artist?.name,
             artistId: albumData.artist?.id,
-            image: albumData.cover_medium || albumData.cover_big || albumData.cover_medium,
+            image: albumData.cover_xl || albumData.cover_big || albumData.cover_medium,
             releaseDate: albumData.release_date,
             trackCount: albumData.nb_tracks,
             duration: albumData.duration,

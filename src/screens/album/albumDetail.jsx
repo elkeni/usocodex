@@ -7,10 +7,11 @@ import {
 } from '../../services/unifiedService';
 import '../../shared/globalStyles.css';
 import './albumDetail.css';
-import { FaPlay, FaRandom, FaEllipsisH, FaCompactDisc, FaArrowLeft, FaPlus, FaCheck } from 'react-icons/fa';
-import { usePlayer } from '../../context/playerContext';
+import { FaPlay, FaRandom, FaCompactDisc, FaArrowLeft, FaPlus, FaCheck } from 'react-icons/fa';
+import { usePlayerActions } from '../../context/playerContext';
 import { useUser } from '../../context/userContext';
 import PageState from '../../components/shared/PageState';
+import { getAlbumPath, shuffleAlbumTracks } from '../../services/albumNavigation';
 
 // getBestImage removed - images now come as strings from API
 
@@ -91,7 +92,7 @@ const useColorExtractor = (imageUrl) => {
 export default function AlbumDetail() {
     const { artist, name } = useParams();
     const navigate = useNavigate();
-    const { playTrack } = usePlayer();
+    const { playTrack } = usePlayerActions();
     const { isAlbumSaved, toggleSaveAlbum } = useUser();
     const containerRef = useRef(null);
 
@@ -102,6 +103,7 @@ export default function AlbumDetail() {
     const [loadError, setLoadError] = useState(null);
     const [retryKey, setRetryKey] = useState(0);
     const [playingTrackId, setPlayingTrackId] = useState(null);
+    const [playbackError, setPlaybackError] = useState(null);
     const [isScrolled, setIsScrolled] = useState(false);
 
     // La imagen ahora viene directamente como string desde getAlbumDetails
@@ -122,9 +124,15 @@ export default function AlbumDetail() {
     }, []);
 
     useEffect(() => {
+        let cancelled = false;
+
         const fetchData = async () => {
             setLoading(true);
             setLoadError(null);
+            setPlaybackError(null);
+            setRelatedAlbums([]);
+            setTracks([]);
+            if (containerRef.current) containerRef.current.scrollTop = 0;
             const safeName = decodeURIComponent(name);
             const safeArtist = decodeURIComponent(artist);
 
@@ -135,18 +143,24 @@ export default function AlbumDetail() {
                 // 2. Obtiene el tracklist COMPLETO con orden correcto (track_position)
                 // 3. Incluye metadata precisa (tipo, fecha, duración, explicit, etc.)
                 const albumData = await getAlbumDetails(safeName, safeArtist);
+                if (cancelled) return;
 
                 if (albumData) {
                     setAlbumInfo(albumData);
                     // Los tracks ya vienen ordenados por track_position
                     setTracks(albumData.tracks || []);
+                    // Mostrar el álbum sin esperar la sección secundaria "Más de".
+                    setLoading(false);
 
                     // Cargar más álbumes del artista
                     if (albumData.artistId) {
                         try {
                             const otherAlbums = await getArtistAlbums(albumData.artistId, 10);
+                            if (cancelled) return;
                             // Filtrar el álbum actual
-                            const filtered = otherAlbums.filter(a => a.id !== albumData.id && a.name !== albumData.name);
+                            const filtered = otherAlbums
+                                .filter(a => a.id !== albumData.id && a.name !== albumData.name)
+                                .map(a => ({ ...a, artist: a.artist || albumData.artist }));
                             setRelatedAlbums(filtered);
                         } catch (err) {
                             console.warn("Failed to load related albums", err);
@@ -158,22 +172,25 @@ export default function AlbumDetail() {
                     setLoadError('No encontramos un álbum que coincida con este enlace.');
                 }
             } catch (e) {
+                if (cancelled) return;
                 console.error("[AlbumDetail] Error cargando álbum:", e);
                 setAlbumInfo(null);
                 setLoadError('No pudimos cargar el álbum. Revisa tu conexión e inténtalo otra vez.');
             } finally {
-                setLoading(false);
+                if (!cancelled) setLoading(false);
             }
         };
 
         if (artist && name) fetchData();
+        return () => { cancelled = true; };
     }, [artist, name, retryKey]);
 
-    const handlePlayTrack = useCallback(async (track) => {
+    const handlePlayTrack = useCallback(async (track, queueSource = tracks) => {
         if (playingTrackId) return;
 
         const trackId = track.id || track.name;
         setPlayingTrackId(trackId);
+        setPlaybackError(null);
 
         try {
             // Las imágenes ahora vienen directamente como strings
@@ -191,7 +208,7 @@ export default function AlbumDetail() {
 
             if (audioUrl) {
                 // Crear cola con todos los tracks del álbum
-                const fullQueue = tracks.map(t => ({
+                const fullQueue = queueSource.map(t => ({
                     id: t.id || t.name,
                     name: t.name,
                     artist: t.artist || albumInfo?.artist || artist,
@@ -210,9 +227,12 @@ export default function AlbumDetail() {
                     url: audioUrl,
                     album: albumInfo?.name || name
                 }, fullQueue);
+            } else {
+                setPlaybackError(`No encontramos audio disponible para “${trackName}”.`);
             }
         } catch (e) {
             console.error("[AlbumDetail] Error reproduciendo:", e);
+            setPlaybackError('No pudimos iniciar la reproducción. Inténtalo nuevamente.');
         } finally {
             setPlayingTrackId(null);
         }
@@ -220,14 +240,14 @@ export default function AlbumDetail() {
 
     const handlePlayAlbum = useCallback(() => {
         if (tracks.length > 0) {
-            handlePlayTrack(tracks[0]);
+            handlePlayTrack(tracks[0], tracks);
         }
     }, [tracks, handlePlayTrack]);
 
     const handleShuffle = useCallback(() => {
         if (tracks.length > 0) {
-            const shuffled = [...tracks].sort(() => Math.random() - 0.5);
-            handlePlayTrack(shuffled[0]);
+            const shuffled = shuffleAlbumTracks(tracks);
+            handlePlayTrack(shuffled[0], shuffled);
         }
     }, [tracks, handlePlayTrack]);
 
@@ -248,36 +268,38 @@ export default function AlbumDetail() {
         <div className="album-page-apple" ref={containerRef} style={dynamicStyles}>
             {/* Sticky Header */}
             <header className={`album-sticky-header ${isScrolled ? 'visible' : ''}`}>
-                <button className="header-back-btn" onClick={() => navigate(-1)}>
+                <button type="button" className="header-back-btn" onClick={() => navigate(-1)} aria-label="Volver">
                     <FaArrowLeft size={18} />
                 </button>
                 <span className="header-title">{albumInfo.name}</span>
                 <div className="header-actions">
                     <button
+                        type="button"
                         className={`header-action-btn ${isAlbumSaved(albumInfo.name, albumInfo.artist) ? 'saved' : ''}`}
                         onClick={() => toggleSaveAlbum(albumInfo)}
                         title={isAlbumSaved(albumInfo.name, albumInfo.artist) ? 'Quitar de biblioteca' : 'Guardar en biblioteca'}
+                        aria-label={isAlbumSaved(albumInfo.name, albumInfo.artist) ? 'Quitar de biblioteca' : 'Guardar en biblioteca'}
                     >
                         {isAlbumSaved(albumInfo.name, albumInfo.artist) ? <FaCheck size={18} /> : <FaPlus size={18} />}
                     </button>
-                    <button className="header-action-btn"><FaEllipsisH size={18} /></button>
                 </div>
             </header>
 
             {/* Navigation Overlay */}
             <div className="album-nav-overlay">
-                <button className="nav-btn-circle" onClick={() => navigate(-1)}>
+                <button type="button" className="nav-btn-circle" onClick={() => navigate(-1)} aria-label="Volver">
                     <FaArrowLeft size={18} />
                 </button>
                 <div className="nav-right-actions">
                     <button
+                        type="button"
                         className={`nav-btn-circle save-btn ${isAlbumSaved(albumInfo.name, albumInfo.artist) ? 'saved' : ''}`}
                         onClick={() => toggleSaveAlbum(albumInfo)}
                         title={isAlbumSaved(albumInfo.name, albumInfo.artist) ? 'Quitar de biblioteca' : 'Guardar en biblioteca'}
+                        aria-label={isAlbumSaved(albumInfo.name, albumInfo.artist) ? 'Quitar de biblioteca' : 'Guardar en biblioteca'}
                     >
                         {isAlbumSaved(albumInfo.name, albumInfo.artist) ? <FaCheck size={18} /> : <FaPlus size={18} />}
                     </button>
-                    <button className="nav-btn-circle"><FaEllipsisH size={18} /></button>
                 </div>
             </div>
 
@@ -310,6 +332,7 @@ export default function AlbumDetail() {
                 {/* Action Buttons */}
                 <div className="album-action-buttons">
                     <button
+                        type="button"
                         className="album-action-btn play"
                         onClick={handlePlayAlbum}
                         disabled={tracks.length === 0}
@@ -318,6 +341,7 @@ export default function AlbumDetail() {
                         <span>Reproducir</span>
                     </button>
                     <button
+                        type="button"
                         className="album-action-btn shuffle"
                         onClick={handleShuffle}
                         disabled={tracks.length === 0}
@@ -326,6 +350,7 @@ export default function AlbumDetail() {
                         <span>Aleatorio</span>
                     </button>
                 </div>
+                {playbackError && <p className="album-playback-error" role="status">{playbackError}</p>}
             </section>
 
             {/* Tracklist */}
@@ -342,10 +367,12 @@ export default function AlbumDetail() {
                             const isExplicit = track.explicit === true;
 
                             return (
-                                <div
+                                <button
+                                    type="button"
                                     key={track.id || track.trackNumber}
                                     className={`album-track-item ${isPlaying ? 'loading' : ''}`}
                                     onClick={() => handlePlayTrack(track)}
+                                    aria-label={`Reproducir ${track.name}`}
                                 >
                                     <span className="track-number">
                                         {isPlaying ? (
@@ -367,13 +394,7 @@ export default function AlbumDetail() {
                                         )}
                                     </div>
 
-                                    <button
-                                        className="track-menu-btn"
-                                        onClick={(e) => e.stopPropagation()}
-                                    >
-                                        <FaEllipsisH size={16} />
-                                    </button>
-                                </div>
+                                </button>
                             );
                         })
                     )}
@@ -400,16 +421,18 @@ export default function AlbumDetail() {
                         <h3 className="album-more-title">Más de {albumInfo.artist}</h3>
                         <div className="album-more-grid">
                             {relatedAlbums.map(album => (
-                                <div
+                                <button
+                                    type="button"
                                     key={album.id}
                                     className="album-more-card"
+                                    aria-label={`Abrir álbum ${album.name}`}
                                     onClick={() => {
-                                        navigate(`/album/${encodeURIComponent(album.artist)}/${encodeURIComponent(album.name)}`);
-                                        window.scrollTo(0, 0);
+                                        const path = getAlbumPath(album, albumInfo.artist);
+                                        if (path) navigate(path);
                                     }}
                                 >
                                     <div className="album-more-img">
-                                        <img src={album.image} alt={album.name} loading="lazy" />
+                                        <img src={album.image || DEFAULT_IMAGE} alt={album.name} loading="lazy" onError={(event) => { event.currentTarget.src = DEFAULT_IMAGE; }} />
                                     </div>
                                     <div className="album-more-info">
                                         <div className="album-more-name">{album.name}</div>
@@ -417,7 +440,7 @@ export default function AlbumDetail() {
                                             {album.releaseDate ? new Date(album.releaseDate).getFullYear() : ''} • {album.type || 'Álbum'}
                                         </div>
                                     </div>
-                                </div>
+                                </button>
                             ))}
                         </div>
                     </div>

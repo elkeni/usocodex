@@ -5,6 +5,7 @@ import { FaPlay, FaChevronRight, FaEllipsisH, FaArrowLeft, FaCheck, FaPlus, FaRa
 import { usePlayer } from '../../context/playerContext';
 import { useUser } from '../../context/userContext';
 import PageState from '../../components/shared/PageState';
+import { getAlbumPath } from '../../services/albumNavigation';
 import {
     getArtistInfo,
     getArtistAlbums,
@@ -280,7 +281,7 @@ export default function ArtistDetail() {
                     <section className="latest-release-section">
                         <div
                             className="latest-release-card"
-                            onClick={() => navigate(`/album/${encodeURIComponent(artistInfo.name)}/${encodeURIComponent(latestAlbum.name)}`)}
+                            onClick={() => navigate(getAlbumPath(latestAlbum, artistInfo.name))}
                         >
                             <div className="latest-release-cover">
                                 <img
@@ -360,7 +361,7 @@ export default function ArtistDetail() {
                                     <div
                                         key={album.id || i}
                                         className="album-card-apple"
-                                        onClick={() => navigate(`/album/${encodeURIComponent(artistInfo.name)}/${encodeURIComponent(album.name)}`)}
+                                        onClick={() => navigate(getAlbumPath(album, artistInfo.name))}
                                     >
                                         <div className="album-cover-apple">
                                             <img src={albSrc} alt={album.name} loading="lazy" />
