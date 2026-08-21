@@ -16,6 +16,18 @@ La **Fase 1 — Honestidad y recorridos esenciales** fue implementada el 21 de a
 - Añadidos estados visibles de carga, buffering, error y cola vacía al reproductor.
 - Añadidas pruebas de login, búsqueda, reproducción, favoritos, playlists, teclado y feedback; la suite suma diez pruebas correctas.
 
+La **Fase 2 — Fluidez y sistema visual** fue implementada el 21 de agosto de 2026 con prioridad móvil:
+
+- Las rutas privadas se cargan por separado y solo permanece montada la pantalla activa; consulta, filtros y posición de scroll útil se restauran desde el caché existente.
+- El bloque inicial privado bajó de aproximadamente 259 KB de JavaScript y 194 KB de CSS a 56 KB y 50 KB; Feed, Buscar, Biblioteca, Importar y detalles se descargan cuando se necesitan.
+- Se consolidaron los componentes compartidos en `src/components/shared/`; se retiró la segunda familia duplicada y el contenedor animado heredado.
+- Se añadió un sistema móvil común para espaciado, superficies, zonas táctiles de 44 px, `safe-area`, navegación inferior, reproductor flotante, capas y espacio inferior dinámico con o sin canción activa.
+- Reproductor, cola, letras, menús y modales respetan alturas dinámicas, bloqueo del fondo, cierre con Escape y semántica de diálogo. Los diálogos globales conservan el foco dentro y lo devuelven al cerrar.
+- Se añadieron estados reutilizables de carga, error, vacío y entidad inexistente, además de una página 404 con acciones de recuperación.
+- Se eliminaron las descargas de fuentes de Google para usar tipografía del sistema, reduciendo esperas y evitando una dependencia visual externa.
+- Los efectos de desenfoque se degradan a superficies sólidas en navegadores sin soporte y se desactivan en pantallas muy pequeñas; movimiento y transparencia reducidos son respetados.
+- La entrada pública fue verificada en 320×568, 375×667, 430×932 y 568×320 sin desbordamiento lateral ni errores de consola. La suite suma trece pruebas correctas.
+
 La auditoría original se conserva debajo como registro de las decisiones que originaron los cambios.
 
 ## 1. Resumen ejecutivo
@@ -264,8 +276,10 @@ Este lote reduce desconfianza y fricción sin alterar todavía la arquitectura m
 ## 8. Verificación realizada
 
 - `npm run lint`: correcto.
-- `npm run test:ci`: 1 archivo / 1 prueba correcta.
+- `npm run test:ci`: 5 archivos / 13 pruebas correctas.
 - `npm run build`: correcto.
+- División por ruta comprobada: bloque privado inicial de ~56 KB JS y ~50 KB CSS antes de compresión; pantallas privadas en archivos independientes.
+- Auditoría responsive local: 320×568, 375×667, 430×932 y paisaje 568×320, sin desbordamiento horizontal ni errores de consola.
 - Comprobación del backend: metadatos Deezer, búsqueda musical y resolución de audio correctos.
 - Auditoría visual pública: login/registro y estructura general.
 - Auditoría estática privada: rutas, pantallas, reproductor, biblioteca, perfil, importación, estados y CSS.
