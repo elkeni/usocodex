@@ -1,7 +1,8 @@
 {
   "name": "ParadisQuo",
   "short_name": "ParadisQuo",
-  "description": "Tu reproductor de música personal con streaming de alta calidad",
+  "description": "Tu biblioteca y reproductor personal. La música requiere conexión.",
+  "id": "/",
   "start_url": "/",
   "display": "standalone",
   "orientation": "portrait-primary",
@@ -16,9 +17,9 @@
   "icons": [
     {
       "src": "iconapp.png",
-      "sizes": "192x192 512x512",
+      "sizes": "1024x1024",
       "type": "image/png",
-      "purpose": "any maskable"
+      "purpose": "any"
     }
   ],
   "shortcuts": [
@@ -30,7 +31,7 @@
       "icons": [
         {
           "src": "iconapp.png",
-          "sizes": "192x192 512x512",
+          "sizes": "1024x1024",
           "type": "image/png"
         }
       ]
@@ -43,7 +44,7 @@
       "icons": [
         {
           "src": "iconapp.png",
-          "sizes": "192x192 512x512",
+          "sizes": "1024x1024",
           "type": "image/png"
         }
       ]

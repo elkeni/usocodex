@@ -183,8 +183,19 @@
 }
 
 .platform-card.disabled {
-    opacity: 0.5;
+    opacity: 0.72;
     cursor: not-allowed;
+}
+
+.platform-status {
+    margin-left: auto;
+    padding: 6px 9px;
+    border-radius: 999px;
+    background: rgba(255, 255, 255, 0.09);
+    color: rgba(255, 255, 255, 0.72);
+    font-size: 0.72rem;
+    font-weight: 700;
+    white-space: nowrap;
 }
 
 .platform-card.spotify .platform-icon {

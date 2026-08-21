@@ -11,7 +11,6 @@ import {
     FaEllipsisH,
     FaArrowLeft,
     FaMusic,
-    FaGlobe,
     FaCheck,
     FaPlus,
     FaEdit,
@@ -66,7 +65,6 @@ export default function Playlist() {
     const [isEditMode, setIsEditMode] = useState(false);
     const [editTitle, setEditTitle] = useState('');
     const [editDescription, setEditDescription] = useState('');
-    const [isPublic, setIsPublic] = useState(false);
 
     // Estados para agregar canciones
     const [showAddTrack, setShowAddTrack] = useState(false);
@@ -271,7 +269,6 @@ export default function Playlist() {
                     setIsNative(true);
                     setEditTitle(nativePlaylist.name || nativePlaylist.title || '');
                     setEditDescription(nativePlaylist.description || '');
-                    setIsPublic(nativePlaylist.isPublic || false);
 
                     const coverImage = nativePlaylist.image || generateCoverFromTracks(formattedTracks);
                     if (typeof coverImage === 'string') {
@@ -420,7 +417,7 @@ export default function Playlist() {
             name: editTitle.trim(),
             title: editTitle.trim(),
             description: editDescription.trim(),
-            isPublic: isPublic
+            isPublic: false
         });
 
         setPlaylist(prev => ({
@@ -428,30 +425,18 @@ export default function Playlist() {
             name: editTitle.trim(),
             title: editTitle.trim(),
             description: editDescription.trim(),
-            isPublic: isPublic
+            isPublic: false
         }));
 
         setIsEditMode(false);
         showNotification('Playlist actualizada');
-    }, [isNative, playlistId, editTitle, editDescription, isPublic, updatePlaylist, showNotification]);
+    }, [isNative, playlistId, editTitle, editDescription, updatePlaylist, showNotification]);
 
     const handleCancelEdit = useCallback(() => {
         setIsEditMode(false);
         setEditTitle(playlist?.name || playlist?.title || '');
         setEditDescription(playlist?.description || '');
-        setIsPublic(playlist?.isPublic || false);
     }, [playlist]);
-
-    // Cambiar privacidad desde menú
-    const handleTogglePrivacy = useCallback(async () => {
-        if (!isNative || !playlistId) return;
-
-        const newIsPublic = !isPublic;
-        await updatePlaylist(playlistId, { isPublic: newIsPublic });
-        setIsPublic(newIsPublic);
-        setPlaylist(prev => ({ ...prev, isPublic: newIsPublic }));
-        showNotification(newIsPublic ? 'Playlist ahora es pública' : 'Playlist ahora es privada');
-    }, [isNative, playlistId, isPublic, updatePlaylist, showNotification]);
 
     // Eliminar playlist
     const handleDeletePlaylist = useCallback(async () => {
@@ -715,14 +700,6 @@ export default function Playlist() {
                         <FaPlus />
                         <span>Añadir canciones</span>
                     </button>
-                    <button className="dropdown-item" onClick={() => { handleTogglePrivacy(); closeMenuFn(); }}>
-                        {isPublic ? <FaLock /> : <FaGlobe />}
-                        <span>{isPublic ? 'Hacer privada' : 'Hacer pública'}</span>
-                    </button>
-                    <button className="dropdown-item" onClick={() => { handleShare(); closeMenuFn(); }}>
-                        <FaShare />
-                        <span>Compartir</span>
-                    </button>
                     <div className="dropdown-divider"></div>
                     <button className="dropdown-item danger" onClick={() => { setShowDeleteConfirm(true); closeMenuFn(); }}>
                         <FaTrash />
@@ -885,26 +862,16 @@ export default function Playlist() {
                                         rows={2}
                                     />
 
-                                    {/* Toggle de privacidad en modo edición */}
+                                    {/* El alcance social se mantiene privado hasta tener controles reales. */}
                                     <div className="playlist-privacy-toggle">
-                                        <label className="privacy-toggle-label">
+                                        <div className="privacy-toggle-label">
                                             <span className="privacy-toggle-text">
-                                                {isPublic ? <FaGlobe /> : <FaLock />}
-                                                {isPublic ? 'Playlist pública' : 'Playlist privada'}
+                                                <FaLock />
+                                                Playlist privada
                                             </span>
-                                            <div className="privacy-switch">
-                                                <input
-                                                    type="checkbox"
-                                                    checked={isPublic}
-                                                    onChange={() => setIsPublic(!isPublic)}
-                                                />
-                                                <span className="privacy-switch-slider"></span>
-                                            </div>
-                                        </label>
+                                        </div>
                                         <p className="privacy-toggle-hint">
-                                            {isPublic
-                                                ? 'Otros usuarios pueden ver esta playlist en la sección Social'
-                                                : 'Solo tú puedes ver esta playlist'}
+                                            Solo tú puedes verla. La publicación social no forma parte de esta versión.
                                         </p>
                                     </div>
 

@@ -22,10 +22,10 @@ import { useUser } from '../../context/userContext';
 import useBodyScrollLock from '../../hooks/useBodyScrollLock';
 import {
     searchGlobal,
-    fetchAudioUrl,
-    artistGetTopTracks,
-    getRelatedArtists
+    fetchAudioUrl
 } from '../../services/unifiedService';
+import { buildRadioQueue } from '../../services/radioService';
+import { PRODUCT_EVENTS, recordProductEvent } from '../../services/productMetrics';
 
 
 
@@ -381,206 +381,20 @@ const generateSmartQueue = (selectedTrack, allTracks, searchQuery = '') => {
 // 2. Artista Principal: Familiaridad.
 // 3. Artistas Relacionados: Descubrimiento.
 // =============================================================================
-const buildInstantRadioForSearch = async (seedTrack, localTracks = []) => {
-    if (!seedTrack?.artist || !seedTrack?.name) {
-        return [seedTrack];
-    }
-
-    // Normalización de claves para evitar duplicados
-    const getTrackKey = (t) => `${t.artist}-${t.name}`.toLowerCase();
-    const seenKeys = new Set();
-    seenKeys.add(getTrackKey(seedTrack));
-
-    // Helper para limpiar metadatos de artista
-    const getCleanArtist = (t) => {
-        const artist = typeof t === 'string' ? t : (t.artist?.name || t.artist || '');
-        return artist.split(/[,&]|feat\.?|ft\.?|with|x\s/i)[0].trim();
-    };
-
-    const seedArtistName = getCleanArtist(seedTrack);
-    console.log(`[InstantRadio/Search] 🎵 Generando radio para: "${seedTrack.name}" (${seedArtistName})`);
-
-    // --- 1. PREPARAR POOLS DE CANCIONES ---
-
-    // A. POOL CONTEXTO (Resultados de la búsqueda actual - MÁXIMA RELEVANCIA)
-    // Filtramos el seed y duplicados
-    const contextPool = localTracks
-        .filter(t => {
-            // Descartar si ya lo vimos
-            if (seenKeys.has(getTrackKey(t))) return false;
-
-            // [MOD] NO FILTER: Incluir todo lo que venga del contexto (Search Results).
-            // Si el usuario buscó algo y sale un cover, es relevante.
-            return true;
-        })
-        .map(t => ({ ...t, _source: 'context' }));
-
-    // B. POOL ARTISTA PRINCIPAL (Familiaridad)
-    const mainArtistPool = [];
-
-    // C. POOL RELACIONADOS (Descubrimiento)
-    const relatedPool = [];
-
-    try {
-        // Fetch en paralelo: Top de artista principal + Artistas relacionados
-        const [mainArtistRes, relatedArtistsData] = await Promise.all([
-            artistGetTopTracks({ artist: seedArtistName, limit: 15 }).catch(() => null),
-            getRelatedArtists(seedArtistName, 10).catch(() => [])
-        ]);
-
-        // Llenar pool principal
-        if (mainArtistRes?.toptracks?.track) {
-            mainArtistRes.toptracks.track.forEach(t => {
-                if (!seenKeys.has(getTrackKey(t))) {
-                    mainArtistPool.push({
-                        id: t.id,
-                        name: t.name || t.title,
-                        artist: t.artist?.name || seedArtistName,
-                        image: t.image || t.album?.cover_big,
-                        duration: t.duration,
-                        preview: t.preview,
-                        _source: 'main_artist'
-                    });
-                }
-            });
-        }
-
-        // Llenar pool relacionados (Fetch en paralelo de sus top tracks)
-        const relatedArtists = (relatedArtistsData || []).slice(0, 6); // Top 6 relacionados
-        if (relatedArtists.length > 0) {
-            const relatedPromises = relatedArtists.map(rel =>
-                artistGetTopTracks({ artist: rel.name, limit: 3 }) // Solo Top 3 de cada uno para variar
-                    .then(res => ({ artist: rel.name, tracks: res?.toptracks?.track || [] }))
-                    .catch(() => ({ artist: rel.name, tracks: [] }))
-            );
-
-            const relatedResults = await Promise.all(relatedPromises);
-
-            // Aplanar resultados: Mezclar artistas, no bloques del mismo
-            const tempRelated = [];
-            relatedResults.forEach(res => {
-                res.tracks.forEach(t => {
-                    if (!seenKeys.has(getTrackKey(t))) {
-                        tempRelated.push({
-                            id: t.id,
-                            name: t.name || t.title,
-                            artist: res.artist,
-                            image: t.image || t.album?.cover_big,
-                            duration: t.duration,
-                            preview: t.preview,
-                            _source: 'related'
-                        });
-                    }
-                });
-            });
-            // Shuffle simple para variedad
-            relatedPool.push(...tempRelated.sort(() => Math.random() - 0.5));
-        }
-
-    } catch (e) {
-        console.warn('[InstantRadio] Error fetching external data:', e);
-    }
-
-    // --- 2. ALGORITMO DE MEZCLA (INTERLEAVING) ---
-    const finalQueue = [];
-    const TARGET_SIZE = 25;
-
-    // Estructura de mezcla ponderada:
-    // [Contexto, Main, Related, Contexto, Related, Main...]
-    // Priorizamos Contexto si existe (porque el usuario lo buscó)
-
-    // Índices
-    let idxContext = 0;
-    let idxMain = 0;
-    let idxRelated = 0;
-
-    let consecutiveArtistCount = 0;
-    let lastArtist = seedArtistName.toLowerCase();
-
-    // Helper para añadir track verificando diversidad
-    const tryAdd = (track) => {
-        if (!track) return false;
-
-        const trackKey = getTrackKey(track);
-        if (seenKeys.has(trackKey)) return false;
-
-        const thisArtist = getCleanArtist(track).toLowerCase();
-
-        // Evitar más de 2 veces seguidas el mismo artista (salvo que sea el único disponible)
-        if (thisArtist === lastArtist) {
-            consecutiveArtistCount++;
-            if (consecutiveArtistCount > 2) return false;
-        } else {
-            consecutiveArtistCount = 1;
-            lastArtist = thisArtist;
-        }
-
-        finalQueue.push(track);
-        seenKeys.add(trackKey);
-        return true;
-    };
-
-    while (finalQueue.length < TARGET_SIZE) {
-        let added = false;
-
-        // 1. Intento Contexto (Search Results)
-        if (idxContext < contextPool.length) {
-            if (tryAdd(contextPool[idxContext])) added = true;
-            idxContext++;
-        }
-
-        // 2. Intento Main Artist (si no hemos abusado)
-        if (idxMain < mainArtistPool.length && consecutiveArtistCount < 2) {
-            if (tryAdd(mainArtistPool[idxMain])) added = true;
-            idxMain++;
-        }
-
-        // 3. Intento Related (Discovery)
-        if (idxRelated < relatedPool.length) {
-            if (tryAdd(relatedPool[idxRelated])) added = true;
-            idxRelated++;
-        }
-
-        // 4. Intento Contexto de nuevo (Mayor peso a la búsqueda original)
-        if (idxContext < contextPool.length) {
-            if (tryAdd(contextPool[idxContext])) added = true;
-            idxContext++;
-        }
-
-        // Si fallamos en añadir de las 3 fuentes en esta ronda, forzamos avance
-        if (!added) {
-            // Si nos quedamos sin opciones válidas por restricciones de artista,
-            // relajamos las restricciones o salimos si no hay tracks.
-            const remaining = [
-                ...contextPool.slice(idxContext),
-                ...relatedPool.slice(idxRelated),
-                ...mainArtistPool.slice(idxMain)
-            ];
-
-            if (remaining.length === 0) break;
-
-            // Force add next available regardless of artist restriction
-            const next = remaining[0];
-            finalQueue.push(next);
-            seenKeys.add(getTrackKey(next));
-
-            // Advance corresponding index manually (inefficient but safe backup)
-            if (contextPool.includes(next)) idxContext++;
-            else if (relatedPool.includes(next)) idxRelated++;
-            else idxMain++;
-        }
-    }
-
-    console.log(`[InstantRadio] ✅ Radio generada con ${finalQueue.length} tracks. (Contexto: ${idxContext}, Main: ${idxMain}, Related: ${idxRelated})`);
-
-    return [seedTrack, ...finalQueue];
-};
+const buildInstantRadioForSearch = (seedTrack, localTracks = []) => (
+    buildRadioQueue({
+        seedTrack,
+        contextTracks: localTracks,
+        targetSize: 24,
+    })
+);
 
 // =============================================================================
 // COMPONENTES
 // =============================================================================
 
 // Menu de opciones (Long Press)
+
 const LongPressMenu = ({ track, onClose }) => {
     const { playTrack, addToQueue } = usePlayerActions();
     const { toggleFavorite, isFavorite, playlists, addTrackToPlaylist } = useUser();
@@ -1207,6 +1021,7 @@ export default function Search() {
                 radioQueue = [trackToPlay];
             }
 
+            if (radioQueue.length > 1) recordProductEvent(PRODUCT_EVENTS.RADIO_STARTED);
             playTrack(trackToPlay, radioQueue);
 
         } catch (e) {

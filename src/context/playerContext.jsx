@@ -7,7 +7,9 @@ import {
     useCallback,
     useMemo,
 } from "react";
-import { fetchAudioUrl, artistGetTopTracks, getRelatedArtists } from "../services/unifiedService";
+import { fetchAudioUrl } from "../services/unifiedService";
+import { buildRadioQueue } from "../services/radioService";
+import { PRODUCT_EVENTS, recordProductEvent } from "../services/productMetrics";
 
 const PlayerContext = createContext(null);
 export const usePlayer = () => useContext(PlayerContext);
@@ -121,6 +123,9 @@ export const PlayerProvider = ({ children }) => {
     const [listeningHistory, setListeningHistory] = useState(() =>
         safeJsonParse("paradox_listening_history", [])
     );
+    const [historyPaused, setHistoryPaused] = useState(() =>
+        safeJsonParse("paradox_history_paused", false)
+    );
 
     // Engagement tracking: artistas que gustan vs no gustan
     // { likedArtists: { "Artist Name": score }, skippedArtists: { "Artist Name": count } }
@@ -147,6 +152,9 @@ export const PlayerProvider = ({ children }) => {
     // Ref para trackear tiempo de reproducción del track actual
     const playStartTimeRef = useRef(null);
     const currentTrackKeyRef = useRef(null);
+    const historyRecordedKeyRef = useRef(null);
+    const playbackStartedKeyRef = useRef(null);
+    const historyPausedRef = useRef(historyPaused);
 
     const [isQueueOpen, setIsQueueOpen] = useState(false);
 
@@ -270,6 +278,11 @@ export const PlayerProvider = ({ children }) => {
     useEffect(() => {
         volumeRef.current = volume;
     }, [volume]);
+
+    useEffect(() => {
+        historyPausedRef.current = historyPaused;
+        try { localStorage.setItem("paradox_history_paused", JSON.stringify(historyPaused)); } catch { }
+    }, [historyPaused]);
 
     // =========================
     // Persistencia (throttle con try/catch)
@@ -409,6 +422,12 @@ export const PlayerProvider = ({ children }) => {
         const onPlay = () => {
             setIsPlaying(true);
             setIsBuffering(false);
+            const track = currentTrackRef.current;
+            const key = makeTrackKey(track);
+            if (key && playbackStartedKeyRef.current !== key) {
+                playbackStartedKeyRef.current = key;
+                recordProductEvent(PRODUCT_EVENTS.PLAYBACK_STARTED);
+            }
         };
 
         // Evento: audio pausado
@@ -456,6 +475,22 @@ export const PlayerProvider = ({ children }) => {
 
             setCurrentTime(ct);
             setPlayed(ct / dur);
+
+            const track = currentTrackRef.current;
+            const key = makeTrackKey(track);
+            if (ct >= 30 && key && historyRecordedKeyRef.current !== key) {
+                historyRecordedKeyRef.current = key;
+                recordProductEvent(PRODUCT_EVENTS.PLAYBACK_30_SECONDS);
+                if (!historyPausedRef.current) {
+                    const artist = getSafeString(track?.artist);
+                    const name = getSafeString(track?.name || track?.title);
+                    const image = track?.image || track?.album?.cover_xl || track?.album?.cover_big || track?.picture_xl || "";
+                    setListeningHistory((previous) => {
+                        const entry = { name, artist, image, timestamp: Date.now(), duration: track?.duration || dur || 0 };
+                        return [entry, ...previous.filter((item) => makeTrackKey(item) !== key)].slice(0, 100);
+                    });
+                }
+            }
 
             // Sincronizar duration si difiere significativamente
             const currentDuration = durationRef.current;
@@ -1016,17 +1051,9 @@ export const PlayerProvider = ({ children }) => {
                     // Track engagement y historial
                     const artistName = getSafeString(track.artist);
                     const trackName = getSafeString(track.name || track.title);
-                    const trackImage = track.image || track.album?.cover_xl || track.album?.cover_big || track.picture_xl || "";
-
                     playStartTimeRef.current = Date.now();
                     currentTrackKeyRef.current = `${artistName.toLowerCase()}-${trackName.toLowerCase()}`;
                     syncIndicesByTrackId(track.id, track);
-
-                    setListeningHistory((prev) => {
-                        const info = { name: trackName, artist: artistName, image: trackImage, timestamp: Date.now(), duration: track.duration || 0 };
-                        const filtered = prev.filter((h) => !(h.name === info.name && h.artist === info.artist));
-                        return [info, ...filtered].slice(0, 100);
-                    });
 
                     setIsLoading(false);
                     return;
@@ -1128,8 +1155,6 @@ export const PlayerProvider = ({ children }) => {
                 // Historial
                 const artistName = getSafeString(track.artist);
                 const trackName = getSafeString(track.name || track.title);
-                const trackImage = track.image || track.album?.cover_xl || track.album?.cover_big || track.picture_xl || "";
-
                 // Iniciar tracking de engagement
                 playStartTimeRef.current = Date.now();
                 currentTrackKeyRef.current = `${artistName.toLowerCase()}-${trackName.toLowerCase()}`;
@@ -1137,17 +1162,6 @@ export const PlayerProvider = ({ children }) => {
                 // [FIX #6] Sincronizar índices después de setCurrentTrack
                 syncIndicesByTrackId(track.id, track);
 
-                setListeningHistory((prev) => {
-                    const info = {
-                        name: trackName,
-                        artist: artistName,
-                        image: trackImage,
-                        timestamp: Date.now(),
-                        duration: track.duration || 0,
-                    };
-                    const filtered = prev.filter((h) => !(h.name === info.name && h.artist === info.artist));
-                    return [info, ...filtered].slice(0, 100);
-                });
             } catch (e) {
                 if (activeRequestId.current === requestId) {
                     showError("Error de conexión");
@@ -1403,51 +1417,12 @@ export const PlayerProvider = ({ children }) => {
         lastRadioGenerationRef.current = Date.now();
 
         try {
-            // Extraer artista principal
-            let rawArtist = typeof seedTrack.artist === 'string' ? seedTrack.artist : seedTrack.artist?.name || '';
-            const artistName = rawArtist.split(/[,&]|feat\.?|ft\.?|with|x\s/i)[0].trim();
-
-            if (!artistName) {
-                isGeneratingRadioRef.current = false;
-                return [];
-            }
-
-            console.log(`[RadioInfinita] 🔄 Generating more tracks based on: ${artistName}`);
-
-            // Obtener artistas relacionados y sus tracks
-            const relatedArtists = await getRelatedArtists(artistName, 4).catch(() => []);
-            const artistNames = [artistName, ...relatedArtists.map(a => a.name).filter(Boolean)].slice(0, 4);
-
-            // Obtener tracks de cada artista en paralelo
-            const allTracksArrays = await Promise.all(
-                artistNames.map(async (artist) => {
-                    try {
-                        const r = await artistGetTopTracks({ artist, limit: 6 });
-                        return (r?.toptracks?.track || []).map(t => ({
-                            id: t.id || `${artist}-${t.name}`,
-                            name: t.name || t.title,
-                            artist: (typeof t.artist === 'object' ? t.artist?.name : t.artist) || artist,
-                            image: typeof t.image === 'string' ? t.image : (t.image?.[3]?.['#text'] || t.image?.[2]?.['#text'] || t.album?.cover_big),
-                            duration: t.duration,
-                            type: 'track'
-                        }));
-                    } catch {
-                        return [];
-                    }
-                })
-            );
-
-            // Aplanar y filtrar
-            const currentQueue = queueRef.current;
-            const existingKeys = new Set(currentQueue.map(t => makeTrackKey(t)));
-
-            const newTracks = allTracksArrays
-                .flat()
-                .filter(t => t && t.name && t.image && !existingKeys.has(makeTrackKey(t)))
-                .slice(0, 10); // Agregar hasta 10 tracks nuevos
-
-            console.log(`[RadioInfinita] ✅ Generated ${newTracks.length} new tracks`);
-
+            const newTracks = await buildRadioQueue({
+                seedTrack,
+                existingQueue: queueRef.current,
+                targetSize: 10,
+                includeSeed: false,
+            });
             isGeneratingRadioRef.current = false;
             return newTracks;
         } catch (err) {
@@ -1924,6 +1899,8 @@ export const PlayerProvider = ({ children }) => {
     // =========================
     const toggleRepeat = useCallback(() => setRepeatMode((p) => (p + 1) % 3), []);
     const toggleQueue = useCallback(() => setIsQueueOpen((p) => !p), []);
+    const toggleHistoryPaused = useCallback(() => setHistoryPaused((paused) => !paused), []);
+    const clearListeningHistory = useCallback(() => setListeningHistory([]), []);
 
     // =========================
     // Value memo (menos renders)
@@ -1952,6 +1929,7 @@ export const PlayerProvider = ({ children }) => {
             currentIndex: isShuffle ? shuffledIndex : currentIndex,
 
             listeningHistory,
+            historyPaused,
             tasteEngagement, // Engagement tracking para recomendaciones
             playbackContext, // [NUEVO] Contexto activo
 
@@ -1965,6 +1943,8 @@ export const PlayerProvider = ({ children }) => {
             toggleShuffle,
             toggleRepeat,
             toggleQueue,
+            toggleHistoryPaused,
+            clearListeningHistory,
 
             addToQueue,
             playNextInQueue,
@@ -1998,6 +1978,7 @@ export const PlayerProvider = ({ children }) => {
             shuffledQueue,
             playbackContext,
             listeningHistory,
+            historyPaused,
             tasteEngagement,
             isCrossfadeEnabled,
             setVolume,
@@ -2009,6 +1990,8 @@ export const PlayerProvider = ({ children }) => {
             toggleShuffle,
             toggleRepeat,
             toggleQueue,
+            toggleHistoryPaused,
+            clearListeningHistory,
             addToQueue,
             playNextInQueue,
             removeFromQueue,

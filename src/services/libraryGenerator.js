@@ -12,7 +12,7 @@
 import { artistGetTopTracks, trackSearch, getRelatedArtists } from './unifiedService';
 import { GENRE_RULES, VIBE_CHARACTERISTICS, VIBE_GRADIENTS } from './musicConstants';
 
-class LibraryGenerator {
+export class LibraryGenerator {
 
     /**
      * Entry Point: Decide si es Género o Vibe y genera
@@ -20,10 +20,12 @@ class LibraryGenerator {
     async generate(input, userContext) {
         const userId = userContext.user?.uid || 'anon';
         const genreMatch = this._matchGenre(input);
+        let generated;
 
         if (genreMatch) {
             console.log(`[LibraryGenerator] Generando por Género Estricto: ${genreMatch}`);
-            return this._generateByGenre(genreMatch, userId);
+            generated = await this._generateByGenre(genreMatch, userId);
+            return this._personalizeResult(generated, userContext);
         }
 
         // HEURÍSTICA: Si no hay keywords de vibe claras, asumir que es un ARTISTA
@@ -32,14 +34,15 @@ class LibraryGenerator {
             console.log(`[LibraryGenerator] No se detectó vibe, intentando como Artista: ${input}`);
             try {
                 const artistMix = await this._generateByArtist(input, userId);
-                if (artistMix) return artistMix;
+                if (artistMix) return this._personalizeResult(artistMix, userContext);
             } catch (e) {
                 console.warn('[LibraryGenerator] Falló generación por artista, volviendo a Vibe genérico');
             }
         }
 
         console.log(`[LibraryGenerator] Generando por Vibe: ${input}`);
-        return this._generateByVibe(input, userContext, vibeAnalysis);
+        generated = await this._generateByVibe(input, userContext, vibeAnalysis);
+        return this._personalizeResult(generated, userContext);
     }
 
     // =========================================================================
@@ -319,11 +322,46 @@ class LibraryGenerator {
     _deduplicateTracks(tracks) {
         const seen = new Set();
         return tracks.filter(t => {
-            const key = `${t.artist}-${t.name}`.toLowerCase();
+            const artist = typeof t.artist === 'object' ? t.artist?.name : t.artist;
+            const key = `${artist || ''}-${t.name || t.title || ''}`.toLowerCase();
+            if (key === '-') return false;
             if (seen.has(key)) return false;
             seen.add(key);
             return true;
         });
+    }
+
+    _personalizeResult(result, userContext = {}) {
+        if (!result?.tracks?.length) return result;
+
+        const favorites = userContext.favorites || [];
+        const history = userContext.listeningHistory || [];
+        const resultArtists = new Set(result.tracks.map((track) => String(track.artist || '').toLowerCase()));
+        const personalTracks = this._formatTracks(
+            this._deduplicateTracks([...favorites, ...history]).filter((track) => {
+                const artist = typeof track.artist === 'object' ? track.artist?.name : track.artist;
+                return artist && resultArtists.has(String(artist).toLowerCase());
+            }).slice(0, 8)
+        );
+
+        const combined = this._deduplicateTracks([...personalTracks, ...result.tracks]).slice(0, 40);
+        const personalizedCount = combined.filter((track) => personalTracks.some((personal) =>
+            String(personal.artist).toLowerCase() === String(track.artist).toLowerCase() &&
+            String(personal.title).toLowerCase() === String(track.title).toLowerCase()
+        )).length;
+
+        return {
+            ...result,
+            tracks: combined,
+            description: personalizedCount
+                ? `${result.description} Adaptada con ${personalizedCount} canciones de tus favoritos e historial.`
+                : `${result.description} Creada a partir de tu pedido; aún no había coincidencias útiles en tu historial.`,
+            personalization: {
+                favoritesAvailable: favorites.length,
+                historyAvailable: history.length,
+                tracksUsed: personalizedCount,
+            },
+        };
     }
 
     _hexToRgb(hex) {

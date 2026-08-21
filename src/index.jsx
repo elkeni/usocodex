@@ -15,3 +15,13 @@ root.render(
     </AppErrorBoundary>
   </FeedbackProvider>
 );
+
+// PWA de alcance honesto: instala la interfaz y ofrece una portada sin conexión.
+// Audio, búsquedas e importaciones siempre dependen del backend y no se almacenan aquí.
+if ('serviceWorker' in navigator && import.meta.env.PROD) {
+  window.addEventListener('load', () => {
+    navigator.serviceWorker.register('/sw.js').catch(() => {
+      // La instalación es opcional; nunca debe impedir abrir o reproducir la app.
+    });
+  });
+}

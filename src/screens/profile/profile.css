@@ -246,6 +246,11 @@
 
 .profile-setting.clickable { cursor: pointer; }
 
+.profile-setting.clickable:disabled {
+    opacity: 0.5;
+    cursor: not-allowed;
+}
+
 .profile-setting.clickable:hover {
     background: var(--glass-hover);
     border-color: var(--glass-border);
@@ -282,9 +287,28 @@
     font-size: 12px;
     color: rgba(255, 255, 255, 0.5);
     margin-top: 2px;
-    white-space: nowrap;
-    overflow: hidden;
-    text-overflow: ellipsis;
+    white-space: normal;
+    line-height: 1.45;
+}
+
+.profile-inline-action {
+    align-self: flex-start;
+    margin: 12px 0 0 52px;
+    padding: 8px 12px;
+    border: 1px solid rgba(255, 255, 255, 0.14);
+    border-radius: 999px;
+    background: rgba(255, 255, 255, 0.06);
+    color: rgba(255, 255, 255, 0.78);
+    font: inherit;
+    font-size: 0.78rem;
+    cursor: pointer;
+}
+
+@media (max-width: 520px) {
+    .profile-inline-action {
+        margin-left: 0;
+        width: 100%;
+    }
 }
 
 /* Settings Action (right side) */

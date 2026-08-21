@@ -21,6 +21,7 @@ import './library.css';
 import './library-modal.css';
 import Card from '../../components/shared/Card';
 import { libraryGenerator } from '../../services/libraryGenerator';
+import { PRODUCT_EVENTS, recordProductEvent } from '../../services/productMetrics';
 
 const DEFAULT_IMAGE = 'https://images.unsplash.com/photo-1470225620780-dba8ba36b745?auto=format&fit=crop&w=500&q=60';
 
@@ -28,7 +29,7 @@ const DEFAULT_IMAGE = 'https://images.unsplash.com/photo-1470225620780-dba8ba36b
 // COMPONENTE PRINCIPAL: BIBLIOTECA UNIFICADA
 // =============================================================================
 export default function Library() {
-    const { playTrack } = usePlayer();
+    const { playTrack, listeningHistory } = usePlayer();
     const { notify, confirm } = useFeedback();
     const navigate = useNavigate();
     const containerRef = useRef(null);
@@ -167,7 +168,7 @@ export default function Library() {
                 const generated = await libraryGenerator.generate(newPlaylistName.trim(), {
                     user,
                     favorites,
-                    listeningHistory: [], // TODO: Pasar historial real si está disponible
+                    listeningHistory,
                 });
 
                 if (!generated || !generated.tracks || generated.tracks.length === 0) {
@@ -178,6 +179,13 @@ export default function Library() {
 
                 // 2. Guardar en Firebase (aprovechando que createPlaylist soporta objetos completos)
                 result = await createPlaylist(generated);
+                recordProductEvent(PRODUCT_EVENTS.MAGIC_PLAYLIST_CREATED);
+                notify(
+                    generated.personalization?.tracksUsed
+                        ? `Playlist creada con ${generated.personalization.tracksUsed} coincidencias de tus gustos.`
+                        : 'Playlist creada. Mejorará cuando tengas más favoritos e historial.',
+                    { type: 'success' }
+                );
 
             } else {
                 // --- MODO MANUAL ---
@@ -200,7 +208,7 @@ export default function Library() {
         } finally {
             setIsCreating(false);
         }
-    }, [newPlaylistName, newPlaylistDesc, createPlaylist, navigate, activeSection, user, favorites, setActiveSection, notify]);
+    }, [newPlaylistName, newPlaylistDesc, createPlaylist, navigate, activeSection, user, favorites, listeningHistory, setActiveSection, notify]);
 
     // Cerrar modal y limpiar
     const onCloseModal = useCallback(() => {

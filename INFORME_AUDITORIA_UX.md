@@ -261,6 +261,16 @@ Algunas funciones devuelven listas vacías o `null`, otras muestran alertas y ot
 4. Decidir alcance de privacidad social, historial pausado y PWA.
 5. Añadir medición de éxito sin registrar datos sensibles.
 
+#### Implementación completada — 21 de agosto de 2026
+
+- **Radio única:** Feed, Búsqueda, estaciones de artista y continuación automática usan `radioService`; se eliminó la duplicación y la ampliación excluye lo ya encolado.
+- **Historial útil:** una canción entra al historial después de 30 segundos reales, no al tocarla. El usuario puede pausar, reanudar y borrar el historial desde Perfil.
+- **Playlist mágica explicable:** recibe favoritos e historial reales, prioriza coincidencias del mismo universo de artistas e informa cuántas canciones personales utilizó.
+- **Importaciones honestas:** Spotify presenta un recorrido más directo. YouTube quedó desactivado en la interfaz hasta que el backend implemente `GET /api/youtube-playlist`; se eliminaron scraping, proxies CORS e instancias Invidious del navegador.
+- **Privacidad social:** perfiles y playlists permanecen privados en esta versión. Se retiraron controles de publicación que prometían una superficie social inexistente.
+- **PWA acotada:** la interfaz puede instalarse y conserva una portada de emergencia sin conexión; audio, búsqueda e importación requieren internet y no se cachean. El manifest declara el tamaño real del icono.
+- **Medición local:** sólo se guardan contadores permitidos (inicio/30 s de reproducción, radio, playlist mágica e importación). No se transmiten ni almacenan usuario, canción, consulta, URL o identificador.
+
 ## 7. Primer lote de trabajo propuesto
 
 El primer lote debería ser pequeño y visible:

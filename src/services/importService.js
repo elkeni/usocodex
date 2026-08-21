@@ -700,246 +700,41 @@ const YouTubeClient = {
     },
 
     /**
-     * MEJORADO: Devuelve tracks con metadata mínima garantizada
-     */
-    /**
-     * MEJORADO: Devuelve tracks con metadata mínima garantizada
-     * Incluye FALLBACK a APIs públicas (Invidious) si el backend falla
+     * Devuelve tracks con metadata mínima garantizada usando exclusivamente el backend.
      */
     async getPlaylistTracks(playlistId, onProgress = null) {
-        // 1. INTENTO PRINCIPAL: Backend propio
-        try {
-            const endpoint = `${BACKEND_URL}/api/youtube-playlist?id=${encodeURIComponent(playlistId)}`;
-            const response = await fetch(endpoint);
+        if (onProgress) onProgress({ phase: 'fetching', info: 'Consultando el servicio de importación...' });
 
-            if (response.ok) {
-                const data = await response.json();
-                if (data.success && data.items) {
-                    return this._processResponse(data.items, data, playlistId, onProgress, 'backend');
-                }
-            } else if (response.status !== 404) {
-                console.warn(`[YouTube Import] Backend 404, intentando fallback...`);
-            }
+        const endpoint = `${BACKEND_URL}/api/youtube-playlist?id=${encodeURIComponent(playlistId)}`;
+        let response;
+        try {
+            response = await fetch(endpoint, { headers: { Accept: 'application/json' } });
         } catch (error) {
-            console.warn(`[YouTube Import] Backend error (${error.message}), intentando fallback...`);
+            throw new Error('El servicio de importación de YouTube no está disponible.', { cause: error });
         }
 
-        // 2. FALLBACK MANUAL: Scrape directo ("importar desde youtube")
-        // Como pidió el usuario: obtener la info directamente de la página de YouTube
-        try {
-            console.log('[YouTube Import] Intentando scrape directo...');
-            if (onProgress) onProgress({ phase: 'fetching', info: 'Obteniendo datos de YouTube...' });
-
-            const targetUrl = `https://www.youtube.com/playlist?list=${playlistId}`;
-
-            // Lista de proxies para rotar en caso de fallo (CORS / Bloqueos)
-            const PROXIES = [
-                { name: 'allorigins', url: (u) => `https://api.allorigins.win/raw?url=${encodeURIComponent(u)}&timestamp=${Date.now()}` },
-                { name: 'corsproxy', url: (u) => `https://corsproxy.io/?${encodeURIComponent(u)}` },
-                { name: 'codetabs', url: (u) => `https://api.codetabs.com/v1/proxy?quest=${encodeURIComponent(u)}` }
-            ];
-
-            let tracks = [];
-            let playlistInfo = {};
-            let lastError = null;
-
-            // Intentar con cada proxy
-            for (const proxy of PROXIES) {
-                try {
-                    console.log(`[YouTube Import] Probando proxy: ${proxy.name}...`);
-                    const proxyUrl = proxy.url(targetUrl);
-
-                    const response = await fetch(proxyUrl);
-                    if (!response.ok) throw new Error(`Status ${response.status}`);
-
-                    const html = await response.text();
-                    if (!html || !html.includes('ytInitialData')) {
-                        throw new Error('HTML inválido o sin datos');
-                    }
-
-                    // Intentar parsear ESTE html
-                    // Regex más permisiva para capturar el JSON
-                    let match = html.match(/ytInitialData\s*=\s*({.+?});/);
-                    if (!match) {
-                        // Intento alternativo: a veces viene dentro de una función o asignación window
-                        match = html.match(/window\["ytInitialData"\]\s*=\s*({.+?});/);
-                    }
-
-                    if (!match) {
-                        // Último intento: buscar el objeto JSON puro si está en un script tag específico
-                        const jsonStart = html.indexOf('var ytInitialData = {');
-                        if (jsonStart !== -1) {
-                            let jsonEnd = html.indexOf('};', jsonStart);
-                            if (jsonEnd !== -1) {
-                                match = [null, html.substring(jsonStart + 20, jsonEnd + 1)];
-                            }
-                        }
-                    }
-
-                    if (!match) throw new Error('No se encontró ytInitialData en el HTML');
-
-                    const data = JSON.parse(match[1]);
-
-                    // --- ESTRATEGIA DE EXTRACCIÓN ROBUSTA ---
-
-                    // 1. Metadata (Búsqueda segura)
-                    // Intentamos sacar el título de varios lugares posibles
-                    let pTitle = 'YouTube Playlist';
-                    let pOwner = 'YouTube';
-                    let pThumb = '';
-
-                    try {
-                        const header = data.header?.playlistHeaderRenderer ||
-                            data.sidebar?.playlistSidebarRenderer?.items?.[0]?.playlistSidebarPrimaryInfoRenderer ||
-                            data.contents?.twoColumnWatchNextResults?.playlist?.playlist;
-
-                        pTitle = header?.title?.runs?.[0]?.text || header?.title?.simpleText || pTitle;
-
-                        const ownerData = data.sidebar?.playlistSidebarRenderer?.items?.[1]?.playlistSidebarSecondaryInfoRenderer?.videoOwner?.videoOwnerRenderer ||
-                            header?.ownerText?.runs?.[0];
-
-                        pOwner = ownerData?.title?.runs?.[0]?.text || ownerData?.text || pOwner;
-
-                        // Thumbnails can be deeply nested
-                        const thumbList = header?.thumbnailRenderer?.playlistVideoThumbnailRenderer?.thumbnail?.thumbnails ||
-                            header?.playlistHeaderBanner?.thumbnails ||
-                            header?.thumbnail?.thumbnails;
-
-                        pThumb = thumbList?.pop()?.url || '';
-                    } catch (metaErr) {
-                        console.warn('Error extrayendo metadata (usando defaults):', metaErr);
-                    }
-
-                    playlistInfo = {
-                        title: pTitle,
-                        owner: pOwner,
-                        thumbnail: pThumb
-                    };
-
-                    // 2. Contenidos (Videos)
-                    // Buscar recursivamente en las ubicaciones conocidas
-                    const candidates = [
-                        // Playlist normal (Desktop)
-                        data.contents?.twoColumnBrowseResultsRenderer?.tabs?.[0]?.tabRenderer?.content?.sectionListRenderer?.contents?.[0]?.itemSectionRenderer?.contents?.[0]?.playlistVideoListRenderer?.contents,
-                        // Playlist (Mobile / Single Column)
-                        data.contents?.singleColumnBrowseResultsRenderer?.tabs?.[0]?.tabRenderer?.content?.sectionListRenderer?.contents?.[0]?.itemSectionRenderer?.contents?.[0]?.playlistVideoListRenderer?.contents,
-
-                        // Radio / Mix (Watch Page - Desktop)
-                        data.contents?.twoColumnWatchNextResults?.playlist?.playlist?.contents,
-
-                        // Radio / Mix (Panel Lateral)
-                        data.contents?.twoColumnWatchNextResults?.playlist?.playlistPanelRenderer?.contents,
-
-                        // Radio (Mobile / Single Column Watch)
-                        data.contents?.singleColumnWatchNextResults?.playlist?.playlist?.contents,
-
-                        // Resultados de Autoplay
-                        data.contents?.twoColumnWatchNextResults?.autoplay?.autoplay?.sets?.[0]?.autoplaySetRenderer?.items
-                    ];
-
-                    let contents = candidates.find(c => c && c.length > 0);
-
-                    if (!contents) {
-                        // Debug para saber qué estructura llegó
-                        const topLevel = Object.keys(data.contents || {});
-                        throw new Error(`Estructura desconocida. Top-level contents: ${topLevel.join(', ')}`);
-                    }
-
-                    // Filtrar y mapear
-                    const items = contents
-                        .filter(item => item.playlistVideoRenderer || item.playlistPanelVideoRenderer)
-                        .map(item => {
-                            const v = item.playlistVideoRenderer || item.playlistPanelVideoRenderer;
-                            const thumbs = v.thumbnail?.thumbnails || [];
-
-                            // Duración
-                            let durationMs = 0;
-                            if (v.lengthSeconds) {
-                                durationMs = parseInt(v.lengthSeconds) * 1000;
-                            } else if (v.lengthText?.simpleText) {
-                                const parts = v.lengthText.simpleText.split(':').map(Number);
-                                if (parts.length === 2) durationMs = (parts[0] * 60 + parts[1]) * 1000;
-                                if (parts.length === 3) durationMs = (parts[0] * 3600 + parts[1] * 60 + parts[2]) * 1000;
-                            }
-
-                            return {
-                                videoId: v.videoId,
-                                title: v.title?.runs?.[0]?.text || v.title?.simpleText || 'Unknown',
-                                channelTitle: v.shortBylineText?.runs?.[0]?.text || v.longBylineText?.runs?.[0]?.text || pOwner,
-                                duration: durationMs,
-                                thumbnail: thumbs.length > 0 ? thumbs[thumbs.length - 1].url : ''
-                            };
-                        });
-
-                    if (items.length > 0) {
-                        tracks = items;
-                        console.log(`[YouTube Import] ÉXITO con ${proxy.name}: ${tracks.length} tracks`);
-                        break; // ¡Éxito total! Salimos del loop
-                    } else {
-                        throw new Error('Lista de videos vacía tras parseo');
-                    }
-
-                } catch (e) {
-                    console.warn(`[YouTube Import] Falló proxy ${proxy.name}:`, e.message);
-                    lastError = e;
-                    // Continuamos al siguiente proxy
-                }
-            }
-
-            // FALLBACK FINAL: INVIDIOUS ROTATIVO
-            if (tracks.length === 0) {
-                if (playlistId.startsWith('RD') || playlistId.startsWith('PL')) {
-                    console.log('[YouTube Import] Scrape falló, intentando Invidious (Fallback)...');
-
-                    const INV_INSTANCES = [
-                        'https://inv.tux.pizza',
-                        'https://invidious.io.lol',
-                        'https://vid.puffyan.us'
-                    ];
-
-                    for (const instance of INV_INSTANCES) {
-                        try {
-                            const invUrl = `${instance}/api/v1/playlists/${playlistId}`;
-                            console.log(`[Import] Probando Invidious: ${instance}`);
-
-                            const r = await fetch(invUrl);
-                            if (r.ok) {
-                                const d = await r.json();
-                                if (d.videos && d.videos.length > 0) {
-                                    return this._processResponse(d.videos.map(v => ({
-                                        videoId: v.videoId,
-                                        title: v.title,
-                                        channelTitle: v.author,
-                                        duration: v.lengthSeconds * 1000,
-                                        thumbnail: v.videoThumbnails?.[0]?.url
-                                    })), {
-                                        title: d.title || 'YouTube Playlist',
-                                        owner: d.author || 'YouTube',
-                                        thumbnail: d.playlistThumbnail
-                                    }, playlistId, onProgress, 'invidious-api');
-                                }
-                            }
-                        } catch (invErr) {
-                            console.warn(`Skip instance ${instance}:`, invErr.message);
-                        }
-                    }
-                }
-
-                throw new Error(lastError ? lastError.message : 'No se pudo importar la playlist (ni scrape ni API)');
-            }
-
-            return this._processResponse(tracks, playlistInfo, playlistId, onProgress, 'scrape');
-
-
-        } catch (scrapeError) {
-            console.error('[YouTube Import] Scrape falló:', scrapeError);
-            throw new Error(`No se pudo importar: ${scrapeError.message || 'Error desconocido'}`, { cause: scrapeError });
+        if (response.status === 404 || response.status === 501) {
+            const error = new Error('YouTube estará disponible cuando el backend habilite /api/youtube-playlist.');
+            error.code = 'YOUTUBE_BACKEND_UNAVAILABLE';
+            throw error;
         }
+        if (!response.ok) {
+            throw new Error('El backend no pudo leer esa playlist de YouTube.');
+        }
+
+        const data = await response.json();
+        const items = data.items || data.tracks;
+        if (!Array.isArray(items)) {
+            throw new Error('El backend devolvió una respuesta de YouTube incompleta.');
+        }
+
+        return this._processResponse(items, data.playlist || data, playlistId, onProgress, 'backend');
     },
 
     /**
-     * Procesa la respuesta cruda (ya sea del backend o fallback) y devuelve el formato esperado
+     * Procesa únicamente la respuesta del backend. El navegador no usa proxies ni scraping.
      */
+
     _processResponse(items, playlistMeta, playlistId, onProgress, sourceName) {
         const tracks = items.map((item, index) => {
             const { title, artist } = this._parseVideoTitle(item.title);

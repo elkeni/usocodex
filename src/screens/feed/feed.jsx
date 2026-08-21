@@ -10,6 +10,8 @@ import {
 import { useUser } from "../../context/userContext";
 import { usePlayerActions, usePlayer } from "../../context/playerContext";
 import screenStateCache, { useScrollPersistence } from "../../services/screenStateCache";
+import { buildRadioQueue } from "../../services/radioService";
+import { PRODUCT_EVENTS, recordProductEvent } from "../../services/productMetrics";
 import "./feed.css";
 import Card from "../../components/shared/Card";
 
@@ -535,208 +537,13 @@ export default function Feed() {
   // =========================================================================
   // 🎵 RADIO INSTANTÁNEA: Genera cola de canciones similares automáticamente
   // =========================================================================
-  const buildInstantRadio = useCallback(async (seedTrack) => {
-    if (!seedTrack?.artist || !seedTrack?.name) {
-      console.log('[InstantRadio] No seed track info, returning single track');
-      return [seedTrack];
-    }
-
-    // Extraer el nombre del artista, manejando múltiples formatos
-    let rawArtist = typeof seedTrack.artist === 'string' ? seedTrack.artist : seedTrack.artist.name || '';
-
-    // Si hay múltiples artistas (separados por coma, &, feat, etc), extraer solo el primero
-    const artistName = rawArtist
-      .split(/[,&]|feat\.?|ft\.?|with|x\s/i)[0]  // Separar por delimitadores comunes
-      .trim();
-
-    if (!artistName) {
-      console.log('[InstantRadio] No artist name after parsing, returning single track');
-      return [seedTrack];
-    }
-
-    console.log(`[InstantRadio] 🎵 Building radio for: "${seedTrack.name}" by "${artistName}" (original: "${rawArtist}")`);
-
-    // Configuración de diversidad
-    const MAX_TRACKS_MAIN_ARTIST = 3;    // Máximo del artista principal
-    const MAX_TRACKS_PER_RELATED = 2;    // Máximo por artista relacionado
-    const MAX_RELATED_ARTISTS = 5;       // Cuántos artistas relacionados buscar
-    const TARGET_QUEUE_SIZE = 20;        // Tamaño objetivo de la cola
-
-    // 🎲 Seed único para esta sesión de radio (varía en cada click)
-    const radioSeed = `${seedTrack.name}-${artistName}-${Date.now()}-${Math.random()}`;
-
-    try {
-      // Estrategia paralela para máxima velocidad
-      const [sameArtistTracks, relatedArtistsData] = await Promise.all([
-        // 1. Más tracks del mismo artista (pedir más para tener variedad)
-        artistGetTopTracks({ artist: artistName, limit: 15 })
-          .then(r => {
-            const tracks = (r?.toptracks?.track || []).map(t => ({ ...normalizeItem(t, 'track'), _source: 'main' }));
-            console.log(`[InstantRadio] Got ${tracks.length} tracks from main artist`);
-            return tracks;
-          })
-          .catch(err => {
-            console.warn('[InstantRadio] Failed to get main artist tracks:', err?.message);
-            return [];
-          }),
-        // 2. Artistas relacionados (pedir más para variar)
-        getRelatedArtists(artistName, 8)
-          .then(artists => {
-            console.log(`[InstantRadio] Got ${artists?.length || 0} related artists:`, artists?.map(a => a.name).join(', '));
-            return artists;
-          })
-          .catch(err => {
-            console.warn('[InstantRadio] Failed to get related artists:', err?.message);
-            return [];
-          })
-      ]);
-
-      // 3. 🎲 Randomizar qué artistas relacionados usamos (no siempre los primeros)
-      const shuffledRelatedArtists = pickRandomSample(
-        relatedArtistsData || [],
-        Math.min((relatedArtistsData || []).length, MAX_RELATED_ARTISTS),
-        `${radioSeed}-related`
-      );
-      const relatedArtistNames = shuffledRelatedArtists.map(a => a.name).filter(Boolean);
-
-      const relatedTracksGrouped = await Promise.all(
-        relatedArtistNames.map(async (relArtist) => {
-          try {
-            // Pedir más tracks para tener variedad
-            const r = await artistGetTopTracks({ artist: relArtist, limit: 8 });
-            return {
-              artist: relArtist,
-              tracks: (r?.toptracks?.track || []).map(t => ({ ...normalizeItem(t, 'track'), _source: 'related', _relatedArtist: relArtist }))
-            };
-          } catch {
-            return { artist: relArtist, tracks: [] };
-          }
-        })
-      );
-
-      // Filtrar y preparar tracks del artista principal
-      const seedKey = makeTrackKey(seedTrack);
-      const seedNameLower = (seedTrack.name || '').toLowerCase();
-
-      const filteredMainTracks = filterQualityTracks(sameArtistTracks)
-        .filter(t =>
-          t &&
-          makeTrackKey(t) !== seedKey &&
-          !t.name.toLowerCase().includes(seedNameLower.slice(0, 10)) && // Evitar versiones de la misma canción
-          t.image &&
-          t.image !== DEFAULT_IMAGE
-        );
-
-      // 🎲 Seleccionar tracks aleatorios del artista principal (no siempre los mismos)
-      const mainArtistTracks = pickRandomSample(
-        filteredMainTracks,
-        Math.min(filteredMainTracks.length, MAX_TRACKS_MAIN_ARTIST),
-        `${radioSeed}-main`
-      );
-
-      // Preparar tracks de artistas relacionados con variedad
-      const relatedArtistTracksMap = new Map();
-      for (const { artist, tracks } of relatedTracksGrouped) {
-        const filtered = filterQualityTracks(tracks)
-          .filter(t => t && t.image && t.image !== DEFAULT_IMAGE);
-
-        if (filtered.length > 0) {
-          // 🎲 Seleccionar tracks aleatorios de cada artista relacionado
-          const randomTracks = pickRandomSample(
-            filtered,
-            Math.min(filtered.length, MAX_TRACKS_PER_RELATED),
-            `${radioSeed}-${artist}`
-          );
-          relatedArtistTracksMap.set(artist, randomTracks);
-        }
-      }
-
-      console.log(`[InstantRadio] Main artist: ${mainArtistTracks.length} tracks | Related artists: ${relatedArtistTracksMap.size} with tracks`);
-
-      // ===== INTERCALADO ALEATORIO =====
-      // Combinar todos los tracks y mezclarlos de forma inteligente
-      const allRelatedTracks = Array.from(relatedArtistTracksMap.values()).flat();
-
-      // 🎲 Mezclar los tracks relacionados
-      const shuffledRelatedTracks = pickRandomSample(
-        allRelatedTracks,
-        allRelatedTracks.length,
-        `${radioSeed}-shuffle`
-      );
-
-      // Intercalar: 1 del principal, 2-3 relacionados, repetir
-      const finalQueue = [];
-      let mainIndex = 0;
-      let relatedIndex = 0;
-
-      while (finalQueue.length < TARGET_QUEUE_SIZE) {
-        // Agregar 1 del artista principal (si quedan)
-        if (mainIndex < mainArtistTracks.length) {
-          finalQueue.push(mainArtistTracks[mainIndex++]);
-        }
-
-        // Agregar 2-3 relacionados (variado aleatoriamente)
-        const relatedToAdd = 2 + (finalQueue.length % 2); // Alterna entre 2 y 3
-        for (let i = 0; i < relatedToAdd && relatedIndex < shuffledRelatedTracks.length; i++) {
-          finalQueue.push(shuffledRelatedTracks[relatedIndex++]);
-        }
-
-        // Si no hay más tracks, salir
-        if (mainIndex >= mainArtistTracks.length && relatedIndex >= shuffledRelatedTracks.length) break;
-      }
-
-      // Eliminar duplicados que pudieran haberse colado
-      const uniqueQueue = uniqByKey(finalQueue, makeTrackKey);
-
-      console.log(`[InstantRadio] 🎲 Randomized queue: ${uniqueQueue.length} tracks (seed: ${radioSeed.slice(-8)})`);
-
-      // Si no tenemos suficientes tracks, usar fallback local
-      if (uniqueQueue.length < 5) {
-        console.log('[InstantRadio] Not enough from API, using local cache fallback');
-
-        const localFallback = [
-          ...(sectionsRef.current.smartRecommendations || []),
-          ...(sectionsRef.current.trending || []),
-          ...(sectionsRef.current.newReleases || [])
-        ].filter(t =>
-          t &&
-          makeTrackKey(t) !== seedKey &&
-          t.image &&
-          t.image !== DEFAULT_IMAGE
-        );
-
-        const shuffledFallback = pickRandomSample(
-          localFallback,
-          Math.min(localFallback.length, TARGET_QUEUE_SIZE),
-          `fallback-${seedTrack.name}-${Date.now()}`
-        );
-
-        console.log(`[InstantRadio] ✅ Built radio with ${shuffledFallback.length + 1} tracks (using fallback)`);
-        return [seedTrack, ...shuffledFallback];
-      }
-
-      console.log(`[InstantRadio] ✅ Built diverse radio with ${uniqueQueue.length + 1} tracks`);
-
-      // La canción seleccionada siempre va primero
-      return [seedTrack, ...uniqueQueue];
-    } catch (error) {
-      console.error('[InstantRadio] Error building radio:', error);
-
-      // Fallback final: usar tracks del cache local
-      const localFallback = [
-        ...(sectionsRef.current.smartRecommendations || []),
-        ...(sectionsRef.current.trending || []),
-        ...(sectionsRef.current.newReleases || [])
-      ].filter(t => t && t.image && t.image !== DEFAULT_IMAGE).slice(0, 15);
-
-      if (localFallback.length > 0) {
-        console.log(`[InstantRadio] Using emergency fallback with ${localFallback.length} tracks`);
-        return [seedTrack, ...localFallback];
-      }
-
-      return [seedTrack];
-    }
-  }, []);
+  const buildInstantRadio = useCallback((seedTrack, contextTracks = []) => (
+    buildRadioQueue({
+      seedTrack,
+      contextTracks,
+      targetSize: 24,
+    })
+  ), []);
 
   const handlePlay = useCallback(async (item, contextQueue = null) => {
     console.log('[handlePlay] Called with:', {
@@ -783,6 +590,7 @@ export default function Feed() {
         );
 
         if (tracksToAdd.length > 0) {
+          recordProductEvent(PRODUCT_EVENTS.RADIO_STARTED);
           console.log(`[handlePlay] 🎵 Adding ${tracksToAdd.length} tracks to queue automatically`);
 
           // Agregar cada track a la cola, asegurando imagen XL
@@ -808,131 +616,28 @@ export default function Feed() {
     if (!artist?.name) return;
 
     showToast(`Creando estación de ${artist.name}...`, artist.image);
-    console.log(`[ArtistRadio] 🎵 Building infinite radio for: "${artist.name}"`);
+    const seedResponse = await artistGetTopTracks({ artist: artist.name, limit: 1 }).catch(() => null);
+    const seedTrack = seedResponse?.toptracks?.track?.[0];
 
-    try {
-      // Estrategia: Cargar MUCHAS canciones inicialmente para simular radio infinita
-      const TARGET_INITIAL_QUEUE = 50; // Comenzar con 50+ canciones
-      const MAX_TRACKS_MAIN_ARTIST = 15;
-      const MAX_TRACKS_PER_RELATED = 5;
-      const MAX_RELATED_ARTISTS = 8;
-
-      // Cargar en paralelo para máxima velocidad
-      const [mainArtistTracks, relatedArtistsData] = await Promise.all([
-        // 1. Top tracks del artista principal (muchas)
-        artistGetTopTracks({ artist: artist.name, limit: 25 })
-          .then(r => {
-            const tracks = (r?.toptracks?.track || [])
-              .map(t => normalizeItem(t, 'track'))
-              .filter(t => t.image && t.image !== DEFAULT_IMAGE);
-            console.log(`[ArtistRadio] Got ${tracks.length} tracks from ${artist.name}`);
-            return tracks;
-          })
-          .catch(err => {
-            console.warn('[ArtistRadio] Failed to get main artist tracks:', err?.message);
-            return [];
-          }),
-
-        // 2. Artistas relacionados (muchos)
-        getRelatedArtists(artist.name, 12)
-          .then(artists => {
-            console.log(`[ArtistRadio] Got ${artists?.length || 0} related artists`);
-            return artists;
-          })
-          .catch(err => {
-            console.warn('[ArtistRadio] Failed to get related artists:', err?.message);
-            return [];
-          })
-      ]);
-
-      // 3. Obtener tracks de artistas relacionados en paralelo
-      const selectedRelatedArtists = pickRandomSample(
-        relatedArtistsData || [],
-        Math.min((relatedArtistsData || []).length, MAX_RELATED_ARTISTS),
-        `artistRadio-${artist.name}-${Date.now()}`
-      );
-
-      const relatedTracksPromises = selectedRelatedArtists.map(async (relArtist) => {
-        try {
-          const r = await artistGetTopTracks({ artist: relArtist.name, limit: 10 });
-          return {
-            artist: relArtist.name,
-            tracks: (r?.toptracks?.track || [])
-              .map(t => normalizeItem(t, 'track'))
-              .filter(t => t.image && t.image !== DEFAULT_IMAGE)
-          };
-        } catch {
-          return { artist: relArtist.name, tracks: [] };
-        }
-      });
-
-      const relatedTracksGrouped = await Promise.all(relatedTracksPromises);
-
-      // 4. Construir la cola intercalando artista principal con relacionados
-      const mainTracks = pickRandomSample(
-        filterQualityTracks(mainArtistTracks),
-        Math.min(mainArtistTracks.length, MAX_TRACKS_MAIN_ARTIST),
-        `main-${artist.name}-${Date.now()}`
-      );
-
-      const allRelatedTracks = [];
-      for (const { artist: relArtist, tracks } of relatedTracksGrouped) {
-        if (tracks.length > 0) {
-          const selected = pickRandomSample(
-            filterQualityTracks(tracks),
-            Math.min(tracks.length, MAX_TRACKS_PER_RELATED),
-            `related-${relArtist}-${Date.now()}`
-          );
-          allRelatedTracks.push(...selected);
-        }
-      }
-
-      const shuffledRelated = pickRandomSample(
-        allRelatedTracks,
-        allRelatedTracks.length,
-        `shuffle-${artist.name}-${Date.now()}`
-      );
-
-      // Intercalar: 1-2 del principal, 3-4 relacionados, repetir
-      const radioQueue = [];
-      let mainIndex = 0;
-      let relatedIndex = 0;
-
-      while (radioQueue.length < TARGET_INITIAL_QUEUE) {
-        // Agregar 1-2 del artista principal
-        const mainToAdd = 1 + (radioQueue.length % 2); //  Alterna entre 1 y 2
-        for (let i = 0; i < mainToAdd && mainIndex < mainTracks.length; i++) {
-          radioQueue.push(mainTracks[mainIndex++]);
-        }
-
-        // Agregar 3-4 relacionados
-        const relatedToAdd = 3 + (radioQueue.length % 2); // Alterna entre 3 y 4
-        for (let i = 0; i < relatedToAdd && relatedIndex < shuffledRelated.length; i++) {
-          radioQueue.push(shuffledRelated[relatedIndex++]);
-        }
-
-        // Si no hay más tracks, salir
-        if (mainIndex >= mainTracks.length && relatedIndex >= shuffledRelated.length) break;
-      }
-
-      // Eliminar duplicados
-      const uniqueQueue = uniqByKey(radioQueue, makeTrackKey);
-
-      console.log(`[ArtistRadio] ✅ Built infinite radio with ${uniqueQueue.length} tracks`);
-
-      // Si tenemos tracks, reproducir el primero
-      if (uniqueQueue.length > 0) {
-        playTrack(uniqueQueue[0], uniqueQueue);
-      } else {
-        console.warn('[ArtistRadio] No tracks found, navigating to artist page');
-        navigate(`/artist/${encodeURIComponent(artist.name)}`);
-      }
-
-    } catch (error) {
-      console.error('[ArtistRadio] Error building radio:', error);
-      // Fallback: navegar a la página del artista
-      navigate(`/artist/${encodeURIComponent(artist.name)}`);
+    if (!seedTrack) {
+      showToast('No encontramos canciones disponibles para esta estación.', artist.image);
+      return;
     }
+
+    const radioQueue = await buildRadioQueue({
+      seedTrack,
+      contextTracks: sectionsRef.current.smartRecommendations || [],
+      targetSize: 32,
+    });
+
+    if (radioQueue.length < 2) {
+      showToast('No pudimos completar esta estación. Intenta nuevamente.', artist.image);
+      return;
+    }
+
+    recordProductEvent(PRODUCT_EVENTS.RADIO_STARTED);
+    playTrack(radioQueue[0], radioQueue);
+    navigate('/player');
   }, [playTrack, navigate, showToast]);
 
   const applyCacheIfValid = useCallback(() => {
@@ -947,9 +652,10 @@ export default function Feed() {
 
   const saveCache = useCallback((data) => safeJsonWrite(cacheKey, { timestamp: Date.now(), data }), [cacheKey]);
 
+  // =========================================================================
+  // LOADERS
+  // =========================================================================
 
-
-  // Load Critical
   const loadCritical = useCallback(async (requestId) => {
     const controller = makeController("critical");
     setLoading((p) => ({ ...p, critical: true })); setError(null);

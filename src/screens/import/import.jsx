@@ -9,6 +9,7 @@ import { HiSparkles } from 'react-icons/hi';
 import { useUser } from '../../context/userContext';
 import ImportService, { MATCH_STATUS } from '../../services/importService';
 import { finalizeTracksArray } from '../../utils/trackNormalizer';
+import { PRODUCT_EVENTS, recordProductEvent } from '../../services/productMetrics';
 import './import.css';
 
 // =============================================================================
@@ -136,6 +137,7 @@ export default function Import() {
     };
 
     const handleSpotifyImport = async () => {
+        recordProductEvent(PRODUCT_EVENTS.IMPORT_STARTED);
         setStep(IMPORT_STEPS.IMPORTING);
         setProgress({ phase: 'starting', current: 0, total: 0 });
 
@@ -152,8 +154,10 @@ export default function Import() {
             );
 
             setImportResult(result);
+            recordProductEvent(result?.errors?.length ? PRODUCT_EVENTS.IMPORT_FAILED : PRODUCT_EVENTS.IMPORT_COMPLETED);
             setStep(IMPORT_STEPS.RESULTS);
         } catch (err) {
+            recordProductEvent(PRODUCT_EVENTS.IMPORT_FAILED);
             setError(err.message);
             setStep(IMPORT_STEPS.ERROR);
         }
@@ -186,6 +190,7 @@ export default function Import() {
             return;
         }
 
+        recordProductEvent(PRODUCT_EVENTS.IMPORT_STARTED);
         setStep(IMPORT_STEPS.IMPORTING);
         setProgress({ phase: 'starting', current: 0, total: 0 });
 
@@ -196,8 +201,10 @@ export default function Import() {
             );
 
             setImportResult(result);
+            recordProductEvent(result?.errors?.length ? PRODUCT_EVENTS.IMPORT_FAILED : PRODUCT_EVENTS.IMPORT_COMPLETED);
             setStep(IMPORT_STEPS.RESULTS);
         } catch (err) {
+            recordProductEvent(PRODUCT_EVENTS.IMPORT_FAILED);
             setError(err.message);
             setStep(IMPORT_STEPS.ERROR);
         }
@@ -494,23 +501,24 @@ export default function Import() {
                     </div>
                     <div className="platform-info">
                         <h3>Spotify</h3>
-                        <p>Likes, playlists, álbumes y artistas</p>
+                        <p>Conecta una vez y elige qué guardar</p>
                     </div>
                     <FaChevronRight className="platform-arrow" />
                 </button>
 
                 <button
-                    className="platform-card youtube"
-                    onClick={() => setStep(IMPORT_STEPS.YOUTUBE_URL)}
+                    className="platform-card youtube disabled"
+                    disabled
+                    aria-describedby="youtube-import-status"
                 >
                     <div className="platform-icon">
                         <FaYoutube />
                     </div>
                     <div className="platform-info">
                         <h3>YouTube</h3>
-                        <p>Importar playlist pública</p>
+                        <p id="youtube-import-status">En preparación: falta habilitarlo en el backend</p>
                     </div>
-                    <FaChevronRight className="platform-arrow" />
+                    <span className="platform-status">Próximamente</span>
                 </button>
 
             </div>

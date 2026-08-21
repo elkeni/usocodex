@@ -7,56 +7,40 @@ import {
     FaCheck,
     FaEdit,
     FaCamera,
-    FaGlobe,
-    FaLock
+    FaLock,
+    FaPause,
+    FaPlay,
+    FaTrash
 } from 'react-icons/fa';
 
 import './profile.css';
 import { useUser } from '../../context/userContext';
+import { usePlayer } from '../../context/playerContext';
 import { useFeedback } from '../../context/feedbackContext';
 import { AuthService } from '../../services/authService';
 import PageHeader from '../../components/shared/PageHeader';
 import { auth, storage, db } from '../../firebase/config';
 import { updateProfile } from 'firebase/auth';
 import { ref, uploadBytes, getDownloadURL } from 'firebase/storage';
-import { doc, updateDoc, getDoc, setDoc } from 'firebase/firestore';
+import { doc, updateDoc } from 'firebase/firestore';
+import { clearProductMetrics, getSuccessSummary } from '../../services/productMetrics';
 
 const Profile = () => {
     const navigate = useNavigate();
     const { user, favorites, playlists, loading: userLoading } = useUser();
+    const { listeningHistory, historyPaused, toggleHistoryPaused, clearListeningHistory } = usePlayer();
     const { notify, confirm } = useFeedback();
     const fileInputRef = useRef(null);
 
     // Estados UI
     const [theme] = useState(() => localStorage.getItem('paradox_theme') || 'dark');
-    const [incognito] = useState(() => localStorage.getItem('paradox_incognito') === 'true');
+    const [successSummary, setSuccessSummary] = useState(() => getSuccessSummary());
 
     // Estados de edición
     const [isEditingName, setIsEditingName] = useState(false);
     const [editedName, setEditedName] = useState('');
     const [isUploadingPhoto, setIsUploadingPhoto] = useState(false);
     const [isSavingName, setIsSavingName] = useState(false);
-
-    // Estado de privacidad persistente
-    const [isProfilePublic, setIsProfilePublic] = useState(true);
-
-    // Cargar estado de privacidad desde Firestore
-    useEffect(() => {
-        const loadPrivacySettings = async () => {
-            if (!user?.uid) return;
-            try {
-                const userDocRef = doc(db, 'users', user.uid);
-                const userDoc = await getDoc(userDocRef);
-                if (userDoc.exists()) {
-                    const data = userDoc.data();
-                    setIsProfilePublic(data.isProfilePublic !== false);
-                }
-            } catch (error) {
-                console.error('Error loading privacy settings:', error);
-            }
-        };
-        loadPrivacySettings();
-    }, [user?.uid]);
 
     useEffect(() => {
         document.body.setAttribute('data-theme', theme);
@@ -341,30 +325,23 @@ const Profile = () => {
         }
     };
 
-    // ========== PRIVACIDAD DEL PERFIL ==========
-    const handlePrivacyChange = async () => {
-        const newState = !isProfilePublic;
-
-        try {
-            const userDocRef = doc(db, 'users', user.uid);
-            const userDoc = await getDoc(userDocRef);
-
-            if (userDoc.exists()) {
-                await updateDoc(userDocRef, {
-                    isProfilePublic: newState
-                });
-            } else {
-                await setDoc(userDocRef, {
-                    isProfilePublic: newState
-                }, { merge: true });
-            }
-
-            setIsProfilePublic(newState);
-            showNotification(newState ? 'Tu perfil ahora es público' : 'Tu perfil ahora es privado');
-        } catch (error) {
-            console.error('Error updating privacy:', error);
-            showNotification('Error al actualizar privacidad', 'error');
+    const handleClearHistory = async () => {
+        const accepted = await confirm({
+            title: 'Borrar historial',
+            message: 'Se eliminarán las escuchas guardadas en este dispositivo. Tus favoritos no cambian.',
+            confirmLabel: 'Borrar historial',
+            tone: 'danger',
+        });
+        if (accepted) {
+            clearListeningHistory();
+            showNotification('Historial borrado');
         }
+    };
+
+    const handleClearMetrics = () => {
+        clearProductMetrics();
+        setSuccessSummary(getSuccessSummary());
+        showNotification('Contadores locales borrados');
     };
 
     // Helpers
@@ -431,7 +408,6 @@ const Profile = () => {
                                 </div>
                             )}
 
-                            {!incognito && !isEditingName && <span className="profile-online-dot" />}
                         </div>
 
                         {/* Input de archivo oculto */}
@@ -482,23 +458,6 @@ const Profile = () => {
                                         </div>
                                     </div>
 
-                                    {/* Selector de Privacidad Explícito */}
-                                    <div className="profile-privacy-selector">
-                                        <button
-                                            className={`privacy-option ${isProfilePublic ? 'active' : ''}`}
-                                            onClick={() => !isProfilePublic && handlePrivacyChange()}
-                                        >
-                                            <FaGlobe />
-                                            Público
-                                        </button>
-                                        <button
-                                            className={`privacy-option ${!isProfilePublic ? 'active' : ''}`}
-                                            onClick={() => isProfilePublic && handlePrivacyChange()}
-                                        >
-                                            <FaLock />
-                                            Privado
-                                        </button>
-                                    </div>
                                 </div>
                             ) : (
                                 <div className="profile-name-display">
@@ -511,9 +470,9 @@ const Profile = () => {
 
                             {/* Badge de privacidad (Solo cuando NO se edita) */}
                             {!isEditingName && (
-                                <div className={`profile-privacy-badge ${isProfilePublic ? 'public' : 'private'}`}>
-                                    {isProfilePublic ? <FaGlobe /> : <FaLock />}
-                                    <span>{isProfilePublic ? 'Perfil público' : 'Perfil privado'}</span>
+                                <div className="profile-privacy-badge private">
+                                    <FaLock />
+                                    <span>Perfil privado</span>
                                 </div>
                             )}
                         </div>
@@ -555,12 +514,61 @@ const Profile = () => {
                                         <div className="profile-setting-info">
                                             <h4>Editar perfil</h4>
                                             <p className="profile-setting-desc">
-                                                Cambiar nombre, foto y privacidad
+                                                Cambiar nombre y foto
                                             </p>
                                         </div>
                                         <FaEdit className="profile-setting-action" />
                                     </div>
                                 </button>
+                            </div>
+
+                            <h3 className="profile-section-title" style={{ marginTop: '32px' }}>Privacidad y datos</h3>
+
+                            <div className="profile-settings-list">
+                                <div className="profile-setting">
+                                    <div className="profile-setting-header">
+                                        <div className="profile-setting-icon"><FaLock /></div>
+                                        <div className="profile-setting-info">
+                                            <h4>Perfil privado por ahora</h4>
+                                            <p className="profile-setting-desc">No existen perfiles públicos ni actividad social visible en esta versión.</p>
+                                        </div>
+                                    </div>
+                                </div>
+
+                                <button type="button" className="profile-setting clickable" onClick={toggleHistoryPaused}>
+                                    <div className="profile-setting-header">
+                                        <div className="profile-setting-icon">{historyPaused ? <FaPlay /> : <FaPause />}</div>
+                                        <div className="profile-setting-info">
+                                            <h4>{historyPaused ? 'Reanudar historial' : 'Pausar historial'}</h4>
+                                            <p className="profile-setting-desc">
+                                                {historyPaused ? 'Las nuevas escuchas no se están guardando.' : `${listeningHistory.length} escuchas útiles guardadas en este dispositivo.`}
+                                            </p>
+                                        </div>
+                                    </div>
+                                </button>
+
+                                <button type="button" className="profile-setting clickable" onClick={handleClearHistory} disabled={!listeningHistory.length}>
+                                    <div className="profile-setting-header">
+                                        <div className="profile-setting-icon"><FaTrash /></div>
+                                        <div className="profile-setting-info">
+                                            <h4>Borrar historial</h4>
+                                            <p className="profile-setting-desc">Elimina las escuchas locales sin tocar favoritos ni playlists.</p>
+                                        </div>
+                                    </div>
+                                </button>
+
+                                <div className="profile-setting">
+                                    <div className="profile-setting-header">
+                                        <div className="profile-setting-icon"><FaCheck /></div>
+                                        <div className="profile-setting-info">
+                                            <h4>Medición privada en este dispositivo</h4>
+                                            <p className="profile-setting-desc">
+                                                {successSummary.meaningfulPlayback} escuchas de 30 s · {successSummary.radioStarted} radios · {successSummary.magicPlaylists} playlists mágicas. No guardamos canciones, búsquedas, URLs ni tu identidad.
+                                            </p>
+                                        </div>
+                                    </div>
+                                    <button type="button" className="profile-inline-action" onClick={handleClearMetrics}>Borrar contadores</button>
+                                </div>
                             </div>
 
                             {/* Zona de Peligro / Sesión */}
