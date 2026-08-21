@@ -129,6 +129,9 @@ const SEARCH_LIMITS = {
     focused: { track: 30, artist: 24, album: 24, playlist: 24 }
 };
 const createEmptyResults = () => ({ tracks: [], artists: [], albums: [], playlists: [] });
+const RECENT_STORAGE_KEY = 'musicalol_recent_searches_v3';
+const LEGACY_RECENT_STORAGE_KEY = 'musicalol_recent_searches_v2';
+const MAX_RECENT_SEARCHES = 10;
 
 // =============================================================================
 // UTILIDADES
@@ -706,17 +709,17 @@ export default function Search() {
     // Estados de UI
     const [isScrolled, setIsScrolled] = useState(false);
 
-    // Búsquedas recientes desde localStorage
-    const RECENT_STORAGE_KEY = 'musicalol_recent_searches_v2'; // v2 para estructura limpia
-    const MAX_RECENT_SEARCHES = 10;
+    // Búsquedas confirmadas por la persona, nunca fragmentos escritos durante el debounce.
     const [recentSearches, setRecentSearches] = useState([]);
 
-    // Cargar recientes al inicio
+    // La versión anterior guardaba fragmentos al escribir; se descarta una sola vez.
     useEffect(() => {
         try {
+            localStorage.removeItem(LEGACY_RECENT_STORAGE_KEY);
             const saved = localStorage.getItem(RECENT_STORAGE_KEY);
             if (saved) {
-                setRecentSearches(JSON.parse(saved));
+                const parsed = JSON.parse(saved);
+                if (Array.isArray(parsed)) setRecentSearches(parsed.slice(0, MAX_RECENT_SEARCHES));
             }
         } catch (e) {
             console.warn('Error loading recent searches', e);

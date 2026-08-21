@@ -115,10 +115,21 @@ describe('Búsqueda y reproducción esenciales', () => {
     const input = screen.getByRole('searchbox', { name: 'Buscar música' });
     await user.type(input, 'Luz');
     await screen.findByText('Luz de prueba', {}, { timeout: 2500 });
-    expect(localStorage.getItem('musicalol_recent_searches_v2')).toBeNull();
+    expect(localStorage.getItem('musicalol_recent_searches_v3')).toBeNull();
 
     await user.type(input, '{Enter}');
-    await waitFor(() => expect(JSON.parse(localStorage.getItem('musicalol_recent_searches_v2'))).toEqual(['Luz']));
+    await waitFor(() => expect(JSON.parse(localStorage.getItem('musicalol_recent_searches_v3'))).toEqual(['Luz']));
+  });
+
+  it('elimina el historial fragmentado creado por la versión anterior', async () => {
+    localStorage.setItem('musicalol_recent_searches_v2', JSON.stringify(['von jovi', 'von j', 'von jo', 'von']));
+
+    const user = userEvent.setup();
+    render(<MemoryRouter><Search /></MemoryRouter>);
+    await user.click(screen.getByRole('searchbox', { name: 'Buscar música' }));
+
+    expect(localStorage.getItem('musicalol_recent_searches_v2')).toBeNull();
+    expect(screen.queryByText('von j')).not.toBeInTheDocument();
   });
 
   it('ignora respuestas antiguas que llegan después de una búsqueda nueva', async () => {
