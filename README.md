@@ -43,16 +43,7 @@ npm run test:backend
 
 El workflow `firebase-hosting-merge.yml` instala dependencias, ejecuta las pruebas, compila y publica el directorio `dist` cuando `main` recibe un cambio.
 
-Los valores de Firebase se configuran como secretos de GitHub:
-
-- `FIREBASE_API_KEY`
-- `FIREBASE_AUTH_DOMAIN`
-- `FIREBASE_PROJECT_ID`
-- `FIREBASE_STORAGE_BUCKET`
-- `FIREBASE_MESSAGING_SENDER_ID`
-- `FIREBASE_APP_ID`
-- `FIREBASE_MEASUREMENT_ID`
-- `FIREBASE_SERVICE_ACCOUNT_APPMUSICA_5C872`
+La configuración web de Firebase es pública y está versionada con el cliente. Para habilitar el despliegue automático sólo hace falta el secreto de repositorio `FIREBASE_SERVICE_ACCOUNT_APPMUSICA_5C872`. Si no está configurado, el workflow valida el frontend y omite la publicación sin fallar.
 
 Nunca debe añadirse un Spotify Client Secret al frontend. La importación usa OAuth PKCE y sólo requiere el Client ID público.
 

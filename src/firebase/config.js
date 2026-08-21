@@ -5,13 +5,13 @@ import { getFirestore } from "firebase/firestore";
 import { getStorage } from "firebase/storage";
 
 const firebaseConfig = {
-    apiKey: import.meta.env.VITE_FIREBASE_API_KEY,
-    authDomain: import.meta.env.VITE_FIREBASE_AUTH_DOMAIN,
-    projectId: import.meta.env.VITE_FIREBASE_PROJECT_ID,
-    storageBucket: import.meta.env.VITE_FIREBASE_STORAGE_BUCKET,
-    messagingSenderId: import.meta.env.VITE_FIREBASE_MESSAGING_SENDER_ID,
-    appId: import.meta.env.VITE_FIREBASE_APP_ID,
-    measurementId: import.meta.env.VITE_FIREBASE_MEASUREMENT_ID
+    apiKey: import.meta.env.VITE_FIREBASE_API_KEY || 'AIzaSyBist-khRNjofRcliaN3W-b9FdiIDv2fvg',
+    authDomain: import.meta.env.VITE_FIREBASE_AUTH_DOMAIN || 'appmusica-5c872.firebaseapp.com',
+    projectId: import.meta.env.VITE_FIREBASE_PROJECT_ID || 'appmusica-5c872',
+    storageBucket: import.meta.env.VITE_FIREBASE_STORAGE_BUCKET || 'appmusica-5c872.firebasestorage.app',
+    messagingSenderId: import.meta.env.VITE_FIREBASE_MESSAGING_SENDER_ID || '134336615838',
+    appId: import.meta.env.VITE_FIREBASE_APP_ID || '1:134336615838:web:826064c59849c9c0d9b28f',
+    measurementId: import.meta.env.VITE_FIREBASE_MEASUREMENT_ID || 'G-KT5M6DYJ39'
 };
 
 const requiredFirebaseKeys = ['apiKey', 'authDomain', 'projectId', 'appId'];
