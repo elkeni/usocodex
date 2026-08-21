@@ -23,7 +23,7 @@ import { ImportResult, Album, Artist } from '../models/dataModels';
 
 // Spotify OAuth Configuration (PKCE Flow - Client-side only)
 const SPOTIFY_CONFIG = {
-    CLIENT_ID: process.env.REACT_APP_SPOTIFY_CLIENT_ID || '',
+    CLIENT_ID: import.meta.env.VITE_SPOTIFY_CLIENT_ID || '7de90d09b8a240e8bcb4ab468e68b24d',
     REDIRECT_URI: `${window.location.origin}/import`,
     SCOPES: [
         'user-library-read',
@@ -350,7 +350,7 @@ function parseDuration(duration) {
 const SpotifyClient = {
     async startAuth() {
         if (!SPOTIFY_CONFIG.CLIENT_ID) {
-            throw new Error('SPOTIFY_CLIENT_ID not configured. Add REACT_APP_SPOTIFY_CLIENT_ID to .env');
+            throw new Error('Spotify no está configurado. Añade VITE_SPOTIFY_CLIENT_ID a .env.local.');
         }
 
         const codeVerifier = generateRandomString(64);
@@ -933,7 +933,7 @@ const YouTubeClient = {
 
         } catch (scrapeError) {
             console.error('[YouTube Import] Scrape falló:', scrapeError);
-            throw new Error(`No se pudo importar: ${scrapeError.message || 'Error desconocido'}`);
+            throw new Error(`No se pudo importar: ${scrapeError.message || 'Error desconocido'}`, { cause: scrapeError });
         }
     },
 

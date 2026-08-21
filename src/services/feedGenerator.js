@@ -10,8 +10,8 @@
  * - On Repeat
  */
 
-import { artistGetTopTracks, getRelatedArtists, trackSearch } from './unifiedService';
-import { GENRE_RULES, VIBE_CHARACTERISTICS } from './musicConstants';
+import { artistGetTopTracks, getRelatedArtists } from './unifiedService';
+import { GENRE_RULES } from './musicConstants';
 
 class FeedGenerator {
 

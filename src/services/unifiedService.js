@@ -213,12 +213,10 @@ const DeezerClient = {
         let albumId = albumIdOrName;
 
         if (isNaN(albumIdOrName)) {
-            let artistId = null;
             if (artistName) {
                 const artistInfo = await this.getArtistInfo(artistName);
                 if (artistInfo) {
-                    artistId = artistInfo.id;
-                    const artistAlbums = await this.getArtistAlbums(artistId, 100);
+                    const artistAlbums = await this.getArtistAlbums(artistInfo.id, 100);
                     const normalizedAlbumName = albumIdOrName.toLowerCase().trim();
 
                     const exactAlbumMatch = artistAlbums.find(a =>

@@ -46,6 +46,7 @@ build/Release
 
 # Build directory (contains compiled files with secrets)
 /build
+/dist
 
 # Dependency directories
 node_modules/

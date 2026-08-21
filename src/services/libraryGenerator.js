@@ -9,7 +9,7 @@
  * 2. Generar por Género Estricto (Botones: "Rock", "Pop", etc.)
  */
 
-import { fetchAudioUrl, artistGetTopTracks, playlistGetInfo, trackSearch, getRelatedArtists } from './unifiedService';
+import { artistGetTopTracks, trackSearch, getRelatedArtists } from './unifiedService';
 import { GENRE_RULES, VIBE_CHARACTERISTICS, VIBE_GRADIENTS } from './musicConstants';
 
 class LibraryGenerator {

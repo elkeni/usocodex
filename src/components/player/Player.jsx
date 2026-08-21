@@ -10,7 +10,7 @@
  * - fullscreen: overlay vertical completo con scroll
  */
 
-import React, {
+import {
     useState,
     useEffect,
     useRef,

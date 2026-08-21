@@ -1,7 +1,7 @@
 // musicalol/src/config.js
 
 export const BACKEND_URL = (
-    process.env.REACT_APP_BACKEND_URL || "https://music-backend-tau.vercel.app"
+    import.meta.env.VITE_BACKEND_URL || "https://music-backend-tau.vercel.app"
 ).replace(/\/$/, '');
 
 export const CONFIG = {

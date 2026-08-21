@@ -1,18 +1,7 @@
 {
   "compilerOptions": {
     "baseUrl": "src",
-    "paths": {
-      "@/*": ["*"],
-      "@components/*": ["components/*"],
-      "@services/*": ["services/*"],
-      "@context/*": ["context/*"],
-      "@utils/*": ["utils/*"],
-      "@api/*": ["api/*"],
-      "@views/*": ["views/*"],
-      "@hooks/*": ["hooks/*"],
-      "@layouts/*": ["layouts/*"],
-      "@types/*": ["types/*"]
-    }
+    "checkJs": false
   },
   "include": ["src/**/*"],
   "exclude": ["node_modules", "build", "public"]

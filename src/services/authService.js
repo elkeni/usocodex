@@ -26,8 +26,12 @@ export const AuthService = {
                 username: username,
                 email: email,
                 createdAt: new Date(),
-                favorites: [], // Array vacío para futuras canciones favoritas
-                playlists: []  // Array vacío para playlists
+                favorites: [],
+                playlists: [],
+                savedArtists: [],
+                savedAlbums: [],
+                savedPlaylists: [],
+                onboardingCompleted: false
             });
 
             return user;
@@ -45,9 +49,6 @@ export const AuthService = {
             // Opcional: Obtener datos extra del usuario desde la BD
             const userDoc = await getDoc(doc(db, "users", userCredential.user.uid));
 
-            // Guardamos sesión básica en localStorage para persistencia rápida
-            localStorage.setItem('user_uid', userCredential.user.uid);
-
             return {
                 ...userCredential.user,
                 ...userDoc.data() // Combina datos de Auth con datos de la BD
@@ -60,26 +61,36 @@ export const AuthService = {
 
     // 3. Cerrar Sesión
     logout: async () => {
-        localStorage.removeItem('user_uid');
-        localStorage.removeItem('lastfm_session'); // Limpiamos lo de tu callback anterior
         await signOut(auth);
     }
 };
 
 // Función auxiliar para traducir errores de Firebase al español
 const translateError = (error) => {
+    let message;
     switch (error.code) {
         case 'auth/email-already-in-use':
-            return { message: 'Este correo ya está registrado.' };
+            message = 'Este correo ya está registrado.';
+            break;
         case 'auth/invalid-email':
-            return { message: 'El correo no es válido.' };
+            message = 'El correo no es válido.';
+            break;
         case 'auth/user-not-found':
-            return { message: 'Usuario no encontrado.' };
         case 'auth/wrong-password':
-            return { message: 'Contraseña incorrecta.' };
+        case 'auth/invalid-credential':
+            message = 'Credenciales inválidas. Verifica tu correo y contraseña.';
+            break;
         case 'auth/weak-password':
-            return { message: 'La contraseña es muy débil (mínimo 6 caracteres).' };
+            message = 'La contraseña es muy débil (mínimo 6 caracteres).';
+            break;
+        case 'auth/too-many-requests':
+            message = 'Demasiados intentos. Espera unos minutos antes de volver a intentarlo.';
+            break;
         default:
-            return { message: 'Ocurrió un error inesperado. Intenta de nuevo.' };
+            message = 'Ocurrió un error inesperado. Intenta de nuevo.';
     }
+
+    const translated = new Error(message);
+    translated.code = error.code;
+    return translated;
 };
