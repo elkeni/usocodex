@@ -76,6 +76,7 @@ describe('Favoritos y playlists desde el reproductor', () => {
   it('permite marcar la canción actual como favorita', async () => {
     const user = userEvent.setup();
     renderPlayer();
+    await user.click(screen.getByRole('button', { name: /Abrir reproductor/i }));
     await user.click(screen.getByRole('button', { name: 'Me gusta' }));
     expect(toggleFavoriteMock).toHaveBeenCalledWith(currentTrack);
   });
@@ -83,6 +84,7 @@ describe('Favoritos y playlists desde el reproductor', () => {
   it('añade la canción a una playlist y confirma el resultado', async () => {
     const user = userEvent.setup();
     renderPlayer();
+    await user.click(screen.getByRole('button', { name: /Abrir reproductor/i }));
     await user.click(screen.getByRole('button', { name: 'Más opciones' }));
     await user.click(screen.getByRole('button', { name: /Añadir a playlist/i }));
     await user.click(screen.getByRole('button', { name: /Favoritas para probar/i }));
@@ -90,4 +92,3 @@ describe('Favoritos y playlists desde el reproductor', () => {
     expect(await screen.findByRole('status')).toHaveTextContent('Añadida a Favoritas para probar');
   });
 });
-

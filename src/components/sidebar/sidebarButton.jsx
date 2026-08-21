@@ -5,6 +5,7 @@ export default function SidebarButton({ to, icon, title }) {
   return (
     <NavLink
       to={to}
+      aria-label={title}
       className={({ isActive }) => `btn-body${isActive ? ' active' : ''}`}
       end
     >

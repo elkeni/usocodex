@@ -6,11 +6,11 @@
 /* Global Design System (tokens, utilities, base styles) */
 @import url(./shared/globalStyles.css);
 
-/* Shared Components (buttons, cards, headers, etc.) */
-@import url(./shared/components/index.css);
-
 /* Global Fixes (correcciones de márgenes, íconos, alineación) */
 @import url(./shared/globalFixes.css);
+
+/* Mobile experience overrides: safe areas, bottom stack and touch behavior */
+@import url(./shared/mobileExperience.css);
 
 .app-loading {
   min-height: 100vh;

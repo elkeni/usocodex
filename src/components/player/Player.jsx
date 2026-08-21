@@ -23,6 +23,7 @@ import { usePlayer } from '../../context/playerContext';
 import { useUser } from '../../context/userContext';
 import { useFeedback } from '../../context/feedbackContext';
 import { fetchLyrics, getArtistInfo, getAlbumDetails, artistGetTopTracks } from '../../services/unifiedService';
+import useBodyScrollLock from '../../hooks/useBodyScrollLock';
 
 import './Player.css';
 
@@ -345,6 +346,26 @@ export default function Player() {
     const fullscreenRef = useRef(null);
     const lyricsContainerRef = useRef(null);
     const lyricsOverlayRef = useRef(null);
+    useBodyScrollLock(
+        playerView === 'fullscreen' || isQueueOpen || isMenuOpen || isArtistSheetOpen || isLyricsOpen
+    );
+
+    useEffect(() => {
+        const hasOpenLayer = playerView === 'fullscreen' || isQueueOpen || isMenuOpen || isArtistSheetOpen || isLyricsOpen;
+        if (!hasOpenLayer) return undefined;
+
+        const closeTopLayer = (event) => {
+            if (event.key !== 'Escape') return;
+            if (isLyricsOpen) setIsLyricsOpen(false);
+            else if (isArtistSheetOpen) setIsArtistSheetOpen(false);
+            else if (isMenuOpen) setIsMenuOpen(false);
+            else if (isQueueOpen) setIsQueueOpen(false);
+            else setPlayerView('dock');
+        };
+
+        document.addEventListener('keydown', closeTopLayer);
+        return () => document.removeEventListener('keydown', closeTopLayer);
+    }, [playerView, isQueueOpen, isMenuOpen, isArtistSheetOpen, isLyricsOpen]);
 
     // ========================================================================
     // DATOS DERIVADOS
@@ -492,16 +513,6 @@ export default function Player() {
             scrollToActive(lyricsOverlayRef, 2);   // Fullscreen: Center
         }
     }, [played, duration, parsedLyrics, hasSyncedLyrics, activeLyricIndex]);
-
-    // Bloquear scroll del body cuando fullscreen está abierto
-    useEffect(() => {
-        if (playerView === 'fullscreen') {
-            document.body.classList.add('ytm-fullscreen-open');
-        } else {
-            document.body.classList.remove('ytm-fullscreen-open');
-        }
-        return () => document.body.classList.remove('ytm-fullscreen-open');
-    }, [playerView]);
 
     // ========================================================================
     // HANDLERS
@@ -740,6 +751,10 @@ export default function Player() {
             <div
                 ref={fullscreenRef}
                 className={`ytm-fullscreen${playerView === 'fullscreen' ? ' open' : ''}${isDragging ? ' dragging' : ''}`}
+                role="dialog"
+                aria-modal={playerView === 'fullscreen' ? 'true' : undefined}
+                aria-hidden={playerView !== 'fullscreen'}
+                aria-label="Reproductor en pantalla completa"
                 onTouchStart={handleDragStart}
                 onTouchMove={handleDragMove}
                 onTouchEnd={handleDragEnd}
@@ -1045,11 +1060,17 @@ export default function Player() {
                 onClick={handleQueueClose}
             />
 
-            <div className={`ytm-queue-sheet${isQueueOpen ? ' open' : ''}`}>
+            <div
+                className={`ytm-queue-sheet${isQueueOpen ? ' open' : ''}`}
+                role="dialog"
+                aria-modal={isQueueOpen ? 'true' : undefined}
+                aria-hidden={!isQueueOpen}
+                aria-labelledby="player-queue-title"
+            >
                 <div className="ytm-queue-sheet__handle" />
 
                 <div className="ytm-queue-sheet__header">
-                    <h2 className="ytm-queue-sheet__title">Cola de reproducción</h2>
+                    <h2 id="player-queue-title" className="ytm-queue-sheet__title">Cola de reproducción</h2>
                     <button
                         className="ytm-queue-sheet__close"
                         onClick={handleQueueClose}
@@ -1081,7 +1102,13 @@ export default function Player() {
                 onClick={handleMenuClose}
             />
 
-            <div className={`ytm-menu-sheet${isMenuOpen ? ' open' : ''}`}>
+            <div
+                className={`ytm-menu-sheet${isMenuOpen ? ' open' : ''}`}
+                role="dialog"
+                aria-modal={isMenuOpen ? 'true' : undefined}
+                aria-hidden={!isMenuOpen}
+                aria-label="Opciones de reproducción"
+            >
                 <div className="ytm-queue-sheet__handle" />
 
                 {menuView === 'playlists' ? (
@@ -1156,7 +1183,13 @@ export default function Player() {
                 onClick={() => setIsArtistSheetOpen(false)}
             />
 
-            <div className={`ytm-artist-sheet${isArtistSheetOpen ? ' open' : ''}`}>
+            <div
+                className={`ytm-artist-sheet${isArtistSheetOpen ? ' open' : ''}`}
+                role="dialog"
+                aria-modal={isArtistSheetOpen ? 'true' : undefined}
+                aria-hidden={!isArtistSheetOpen}
+                aria-label="Información del artista"
+            >
                 {artistInfo && (
                     <>
                         <div className="ytm-artist-sheet__header">
@@ -1266,7 +1299,7 @@ export default function Player() {
             FULLSCREEN LYRICS
             ============================================================ */}
             {isLyricsOpen && (
-                <div className="ytm-lyrics-overlay open">
+                <div className="ytm-lyrics-overlay open" role="dialog" aria-modal="true" aria-label="Letra en pantalla completa">
                     <div className="ytm-lyrics-overlay__bg" style={{ '--track-image': `url(${trackImage || ''})` }} />
                     <div className="ytm-lyrics-overlay__backdrop" />
 

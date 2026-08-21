@@ -1,123 +1,74 @@
-import { Routes, Route, useLocation, useNavigate, Navigate, Link } from 'react-router-dom';
-import Library from '../library';
-import Feed from '../feed/feed';
-import Sidebar from '../../components/sidebar';
-import ArtistDetail from '../artist/artistDetail';
-import AlbumDetail from '../album/albumDetail';
-
-import Search from '../search/search';
-import Profile from '../profile';
-import Playlist from '../playlist/playlist';
+import { lazy, Suspense } from 'react';
+import { Link, Navigate, Route, Routes, useLocation, useNavigate } from 'react-router-dom';
 import { FaUserCircle } from 'react-icons/fa';
+import Sidebar from '../../components/sidebar';
+import PageState from '../../components/shared/PageState';
+import NotFound from '../../components/shared/NotFound';
 import { useUser } from '../../context/userContext';
+import { usePlayer } from '../../context/playerContext';
 import './home.css';
-import Import from '../import/import';
-import AnimatedPage from '../../components/shared/AnimatedPage';
 
-// =============================================================================
-// HOME COMPONENT
-// Ahora es solo el layout principal (navbar + sidebar + contenido)
-// El PlayerProvider y MiniPlayer están a nivel global en App.js
-// =============================================================================
+const Feed = lazy(() => import('../feed/feed'));
+const Search = lazy(() => import('../search/search'));
+const Library = lazy(() => import('../library'));
+const Profile = lazy(() => import('../profile'));
+const Playlist = lazy(() => import('../playlist/playlist'));
+const ArtistDetail = lazy(() => import('../artist/artistDetail'));
+const AlbumDetail = lazy(() => import('../album/albumDetail'));
+const Import = lazy(() => import('../import/import'));
+
+function RouteLoader() {
+  return <PageState variant="loading" title="Preparando tu música" compact />;
+}
+
 export default function Home() {
   const location = useLocation();
   const navigate = useNavigate();
   const { user } = useUser();
-
+  const { currentTrack } = usePlayer();
   const isProfilePage = location.pathname === '/profile';
 
-  const userAvatar = user?.photoURL || null;
-
   return (
-    <div className="home-container">
-
-
-      {/* Glass Navbar */}
-      <nav className="glass-navbar">
+    <div className={`home-container${currentTrack ? ' has-player' : ' without-player'}`}>
+      <nav className="glass-navbar" aria-label="Navegación superior">
         <Link className="nav-logo" to="/feed" aria-label="Ir a Descubrir">
-          <span className="nav-logo-icon"></span>
+          <span className="nav-logo-icon" aria-hidden="true" />
           PARADISQUO
         </Link>
 
-        <button type="button"
+        <button
+          type="button"
           className={`nav-profile ${isProfilePage ? 'active' : ''}`}
           onClick={() => navigate('/profile')}
           aria-label="Abrir mi perfil"
+          aria-current={isProfilePage ? 'page' : undefined}
         >
-          {userAvatar ? (
-            <img
-              src={userAvatar}
-              alt="Mi perfil"
-              style={{ width: '100%', height: '100%', borderRadius: '50%', objectFit: 'cover' }}
-            />
-          ) : (
-            <FaUserCircle color="white" size={24} />
-          )}
+          {user?.photoURL ? <img src={user.photoURL} alt="" /> : <FaUserCircle color="white" size={24} />}
         </button>
       </nav>
 
-      {/* Content Wrapper (Sidebar + Main Content) */}
-      <div style={{ display: 'flex', flex: 1, overflow: 'hidden', position: 'relative', zIndex: 10 }}>
+      <div className="home-shell">
         <Sidebar />
-
-        <div className="main-content">
-          {/* ============================================================= */}
-          {/* TAB NAVIGATION - KEEP ALIVE (HOVER BEHAVIOR)                 */}
-          {/* Screens stay mounted but hidden to preserve state & scroll    */}
-          {/* ============================================================= */}
-
-          {/* ============================================================= */}
-          {/* TAB NAVIGATION - ANIMATED LAYOUT                             */}
-          {/* ============================================================= */}
-
-          {/* FEED TAB */}
-          <AnimatedPage isActive={location.pathname === '/' || location.pathname === '/feed'}>
-            <Feed />
-          </AnimatedPage>
-
-          {/* SEARCH TAB */}
-          <AnimatedPage isActive={location.pathname === '/search'}>
-            <Search />
-          </AnimatedPage>
-
-          {/* LIBRARY TAB */}
-          <AnimatedPage isActive={location.pathname === '/library' || location.pathname === '/favorites'}>
-            <Library />
-          </AnimatedPage>
-
-          {/* DETAIL VIEWS & OTHER ROUTES */}
-          <AnimatedPage
-            isActive={!['/', '/feed', '/search', '/library', '/favorites'].includes(location.pathname)}
-            className="detail-view-container"
-          >
-            {/* Animación interna para cambios de ruta dentro de este contenedor (ej: Playlist -> Artist) */}
-            {/* Nota: Usamos AnimatePresence mode="wait" para transiciones limpias entre detalles */}
-            <Routes location={location}>
-              {/* Dummy routes for tabs to preventing matching errors if any */}
-              <Route path="/" element={null} />
-              <Route path="/feed" element={null} />
-              <Route path="/search" element={null} />
-              <Route path="/library" element={null} />
-              <Route path="/favorites" element={null} />
-
-              {/* Full views */}
-              <Route path="/profile" element={<Profile />} />
-              <Route path="/playlist/:playlistId" element={<Playlist />} />
-              <Route path="/artist/:name" element={<ArtistDetail />} />
-              <Route path="/album/:artist/:name" element={<AlbumDetail />} />
-              <Route path="/import/*" element={<Import />} />
-
-              {/* Fallback */}
-              <Route path="*" element={<Navigate to="/feed" replace />} />
-            </Routes>
-          </AnimatedPage>
-        </div>
+        <main className="main-content" id="main-content">
+          <div className="route-page" key={location.pathname}>
+            <Suspense fallback={<RouteLoader />}>
+              <Routes location={location}>
+                <Route path="/" element={<Navigate to="/feed" replace />} />
+                <Route path="/feed" element={<Feed />} />
+                <Route path="/search" element={<Search />} />
+                <Route path="/library" element={<Library />} />
+                <Route path="/favorites" element={<Navigate to="/library" replace />} />
+                <Route path="/profile" element={<Profile />} />
+                <Route path="/playlist/:playlistId" element={<Playlist />} />
+                <Route path="/artist/:name" element={<ArtistDetail />} />
+                <Route path="/album/:artist/:name" element={<AlbumDetail />} />
+                <Route path="/import/*" element={<Import />} />
+                <Route path="*" element={<NotFound />} />
+              </Routes>
+            </Suspense>
+          </div>
+        </main>
       </div>
-
-      {/* ============================================================= */}
-      {/* NOTA: MiniPlayer ahora está en App.js como componente global */}
-      {/* Esto evita problemas de z-index y posicionamiento heredados  */}
-      {/* ============================================================= */}
     </div>
   );
 }

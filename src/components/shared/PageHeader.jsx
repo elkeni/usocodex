@@ -38,12 +38,12 @@ const PageHeader = memo(({
             <div className="app-header-main-row">
                 <div className="app-header-left">
                     {onBack && (
-                        <button className="app-header-nav-btn back-btn" onClick={onBack} aria-label="Go back">
+                        <button type="button" className="app-header-nav-btn back-btn" onClick={onBack} aria-label="Volver">
                             <FaArrowLeft />
                         </button>
                     )}
                     {onClose && (
-                        <button className="app-header-nav-btn close-btn" onClick={onClose} aria-label="Close">
+                        <button type="button" className="app-header-nav-btn close-btn" onClick={onClose} aria-label="Cerrar">
                             <FaTimes />
                         </button>
                     )}

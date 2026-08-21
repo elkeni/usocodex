@@ -12,12 +12,12 @@ import { MdLibraryMusic } from "react-icons/md";
 import { usePlayer } from '../../context/playerContext';
 import { useUser } from '../../context/userContext';
 import { useFeedback } from '../../context/feedbackContext';
+import useBodyScrollLock from '../../hooks/useBodyScrollLock';
 
 // ⭐ Sistema de caché en memoria para persistencia entre navegaciones
 import screenStateCache, { useScrollPersistence } from '../../services/screenStateCache';
 
 import './library.css';
-import './library-modal.css';
 import './library-modal.css';
 import Card from '../../components/shared/Card';
 import { libraryGenerator } from '../../services/libraryGenerator';
@@ -117,6 +117,7 @@ export default function Library() {
     }, [savedAlbums, albumSortOrder]);
 
     const [showCreateModal, setShowCreateModal] = useState(false);
+    useBodyScrollLock(showCreateModal);
     const [newPlaylistName, setNewPlaylistName] = useState('');
     const [newPlaylistDesc, setNewPlaylistDesc] = useState('');
     const [isCreating, setIsCreating] = useState(false);
@@ -207,6 +208,15 @@ export default function Library() {
         setNewPlaylistName('');
         setNewPlaylistDesc('');
     }, []);
+
+    useEffect(() => {
+        if (!showCreateModal) return undefined;
+        const closeOnEscape = (event) => {
+            if (event.key === 'Escape') onCloseModal();
+        };
+        document.addEventListener('keydown', closeOnEscape);
+        return () => document.removeEventListener('keydown', closeOnEscape);
+    }, [onCloseModal, showCreateModal]);
 
     const handleDeletePlaylist = async (playlistId, e) => {
         e.stopPropagation();
@@ -879,10 +889,10 @@ export default function Library() {
             {/* Create Playlist Modal - Mejorado con Tabs Manual / Mágica */}
             {showCreateModal && createPortal(
                 <div className="modal-overlay" onClick={onCloseModal}>
-                    <div className="modal-content vibe-modal" onClick={(e) => e.stopPropagation()}>
+                    <div className="modal-content vibe-modal" role="dialog" aria-modal="true" aria-labelledby="create-playlist-title" onClick={(e) => e.stopPropagation()}>
                         <div className="modal-header">
-                            <h2>Nueva Playlist</h2>
-                            <button className="modal-close" onClick={onCloseModal}>
+                            <h2 id="create-playlist-title">Nueva playlist</h2>
+                            <button className="modal-close" onClick={onCloseModal} aria-label="Cerrar creación de playlist">
                                 <FaTimes />
                             </button>
                         </div>
@@ -908,8 +918,9 @@ export default function Library() {
                                 /* --- MODO MANUAL --- */
                                 <>
                                     <div className="modal-field">
-                                        <label>Nombre</label>
+                                        <label htmlFor="new-playlist-name">Nombre</label>
                                         <input
+                                            id="new-playlist-name"
                                             type="text"
                                             placeholder="Ej. Para Codear"
                                             value={newPlaylistName}
@@ -919,8 +930,9 @@ export default function Library() {
                                         />
                                     </div>
                                     <div className="modal-field">
-                                        <label>Descripción (Opcional)</label>
+                                        <label htmlFor="new-playlist-description">Descripción (opcional)</label>
                                         <textarea
+                                            id="new-playlist-description"
                                             placeholder="¿De qué trata esta playlist?"
                                             value={newPlaylistDesc}
                                             onChange={(e) => setNewPlaylistDesc(e.target.value)}
@@ -932,8 +944,9 @@ export default function Library() {
                                 /* --- MODO MÁGICO --- */
                                 <div className="magic-mode-content">
                                     <div className="modal-field">
-                                        <label>¿Qué quieres escuchar?</label>
+                                        <label htmlFor="magic-playlist-prompt">¿Qué quieres escuchar?</label>
                                         <input
+                                            id="magic-playlist-prompt"
                                             type="text"
                                             placeholder="Ej. 'Música relajante para estudiar' o 'Rock'"
                                             value={newPlaylistName}

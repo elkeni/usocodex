@@ -1,6 +1,4 @@
 /* ===== SIDEBAR PREMIUM GLASS THEME (LIQUID EDITION) ===== */
-@import url('https://fonts.googleapis.com/css2?family=Inter:wght@300;400;500;600;700&display=swap');
-
 /* =============================================================================
    SIDEBAR STYLING VARIABLES
    NOTE: Layout/stacking variables (--mobile-nav-height, --player-height, etc.)
@@ -19,7 +17,7 @@
    ============================================================================= */
 .sidebar-container {
     width: 260px;
-    height: 100vh;
+    height: 100%;
 
     /* Base Liquid Glass */
     background: rgba(255, 255, 255, 0.02);

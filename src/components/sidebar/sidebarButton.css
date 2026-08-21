@@ -32,7 +32,7 @@
 
 	/* Bordes brillantes sutiles */
 	border-color: rgba(255, 255, 255, 0.15);
-	border-top-color: rgba(255, 255, 255, 0. 3);
+	border-top-color: rgba(255, 255, 255, 0.3);
 
 	/* Volumen suave */
 	box-shadow:
@@ -52,9 +52,9 @@
 	height: 100%;
 	background: linear-gradient(115deg,
 			transparent 0%,
-			rgba(255, 255, 255, 0. 0) 30%,
+			rgba(255, 255, 255, 0) 30%,
 			rgba(0, 242, 255, 0.1) 45%,
-			rgba(255, 255, 255, 0. 2) 50%,
+			rgba(255, 255, 255, 0.2) 50%,
 			rgba(255, 0, 221, 0.05) 55%,
 			transparent 100%);
 	transform: skewX(-20deg);
@@ -108,7 +108,7 @@
 	display: inline-flex;
 	font-size: 20px;
 	min-width: 20px;
-	transition: all 0. 3s ease;
+	transition: all 0.3s ease;
 	color: rgba(255, 255, 255, 0.5);
 	filter: drop-shadow(0 2px 4px rgba(0, 0, 0, 0.2));
 }
@@ -116,7 +116,7 @@
 /* El icono brilla en estado activo */
 .btn-body.active .btn-icon {
 	color: #ffffff;
-	filter: drop-shadow(0 0 8px rgba(255, 255, 255, 0. 6));
+	filter: drop-shadow(0 0 8px rgba(255, 255, 255, 0.6));
 	transform: scale(1.05);
 }
 
@@ -127,14 +127,14 @@
 }
 
 .btn-body.active .btn-text {
-	text-shadow: 0 0 12px rgba(255, 255, 255, 0. 4);
+	text-shadow: 0 0 12px rgba(255, 255, 255, 0.4);
 }
 
 /* Keyframes */
 @keyframes pearlescentSheen {
 	0% {
 		transform: translateX(-50%) skewX(-20deg);
-		opacity: 0. 4;
+		opacity: 0.4;
 	}
 
 	50% {

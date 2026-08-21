@@ -10,6 +10,7 @@ import './albumDetail.css';
 import { FaPlay, FaRandom, FaEllipsisH, FaCompactDisc, FaArrowLeft, FaPlus, FaCheck } from 'react-icons/fa';
 import { usePlayer } from '../../context/playerContext';
 import { useUser } from '../../context/userContext';
+import PageState from '../../components/shared/PageState';
 
 // getBestImage removed - images now come as strings from API
 
@@ -98,6 +99,8 @@ export default function AlbumDetail() {
     const [relatedAlbums, setRelatedAlbums] = useState([]);
     const [tracks, setTracks] = useState([]);
     const [loading, setLoading] = useState(true);
+    const [loadError, setLoadError] = useState(null);
+    const [retryKey, setRetryKey] = useState(0);
     const [playingTrackId, setPlayingTrackId] = useState(null);
     const [isScrolled, setIsScrolled] = useState(false);
 
@@ -121,6 +124,7 @@ export default function AlbumDetail() {
     useEffect(() => {
         const fetchData = async () => {
             setLoading(true);
+            setLoadError(null);
             const safeName = decodeURIComponent(name);
             const safeArtist = decodeURIComponent(artist);
 
@@ -150,16 +154,20 @@ export default function AlbumDetail() {
                     }
                 } else {
                     console.warn(`[AlbumDetail] No se encontró el álbum "${safeName}" de "${safeArtist}"`);
+                    setAlbumInfo(null);
+                    setLoadError('No encontramos un álbum que coincida con este enlace.');
                 }
             } catch (e) {
                 console.error("[AlbumDetail] Error cargando álbum:", e);
+                setAlbumInfo(null);
+                setLoadError('No pudimos cargar el álbum. Revisa tu conexión e inténtalo otra vez.');
             } finally {
                 setLoading(false);
             }
         };
 
         if (artist && name) fetchData();
-    }, [artist, name]);
+    }, [artist, name, retryKey]);
 
     const handlePlayTrack = useCallback(async (track) => {
         if (playingTrackId) return;
@@ -225,18 +233,9 @@ export default function AlbumDetail() {
 
     // --- RENDER ---
 
-    if (loading) return (
-        <div className="album-page-apple loading">
-            <div className="album-spinner"></div>
-        </div>
-    );
+    if (loading) return <PageState variant="loading" title="Cargando álbum" />;
 
-    if (!albumInfo) return (
-        <div className="album-page-apple error">
-            <p>Álbum no encontrado</p>
-            <button onClick={() => navigate(-1)}>Volver</button>
-        </div>
-    );
+    if (!albumInfo) return <PageState variant="error" title="Álbum no encontrado" message={loadError} actionLabel="Reintentar" onAction={() => setRetryKey(key => key + 1)} secondaryLabel="Volver" onSecondary={() => navigate(-1)} />;
 
     // CSS Variables para color adaptativo
     const dynamicStyles = {

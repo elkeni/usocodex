@@ -1,6 +1,7 @@
 import { useEffect, useRef } from 'react';
 import { createPortal } from 'react-dom';
 import { FaCheckCircle, FaExclamationCircle, FaInfoCircle, FaTimes } from 'react-icons/fa';
+import useBodyScrollLock from '../../hooks/useBodyScrollLock';
 import './feedback.css';
 
 const icons = {
@@ -12,6 +13,8 @@ const icons = {
 
 export default function FeedbackLayer({ toasts, dialog, onDismiss, onDialogClose }) {
   const cancelRef = useRef(null);
+  const dialogRef = useRef(null);
+  useBodyScrollLock(Boolean(dialog));
 
   useEffect(() => {
     if (!dialog) return undefined;
@@ -19,7 +22,24 @@ export default function FeedbackLayer({ toasts, dialog, onDismiss, onDialogClose
     cancelRef.current?.focus();
 
     const onKeyDown = (event) => {
-      if (event.key === 'Escape') onDialogClose(false);
+      if (event.key === 'Escape') {
+        event.preventDefault();
+        onDialogClose(false);
+      }
+
+      if (event.key === 'Tab') {
+        const focusable = dialogRef.current?.querySelectorAll('button:not([disabled]), [href], input:not([disabled]), select:not([disabled]), textarea:not([disabled]), [tabindex]:not([tabindex="-1"])');
+        if (!focusable?.length) return;
+        const first = focusable[0];
+        const last = focusable[focusable.length - 1];
+        if (event.shiftKey && document.activeElement === first) {
+          event.preventDefault();
+          last.focus();
+        } else if (!event.shiftKey && document.activeElement === last) {
+          event.preventDefault();
+          first.focus();
+        }
+      }
     };
     document.addEventListener('keydown', onKeyDown);
     return () => {
@@ -44,7 +64,7 @@ export default function FeedbackLayer({ toasts, dialog, onDismiss, onDialogClose
 
       {dialog && (
         <div className="feedback-dialog-backdrop" onMouseDown={(event) => event.target === event.currentTarget && onDialogClose(false)}>
-          <section className="feedback-dialog" role="alertdialog" aria-modal="true" aria-labelledby="feedback-dialog-title" aria-describedby="feedback-dialog-message">
+          <section ref={dialogRef} className="feedback-dialog" role="alertdialog" aria-modal="true" aria-labelledby="feedback-dialog-title" aria-describedby="feedback-dialog-message">
             <h2 id="feedback-dialog-title">{dialog.title}</h2>
             <p id="feedback-dialog-message">{dialog.message}</p>
             <div className="feedback-dialog__actions">
@@ -62,4 +82,3 @@ export default function FeedbackLayer({ toasts, dialog, onDismiss, onDialogClose
     document.body,
   );
 }
-

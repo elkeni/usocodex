@@ -1,0 +1,367 @@
+/* ParadisQuo mobile experience layer.
+   Imported last so every screen follows the same safe areas and touch rhythm. */
+
+@media (max-width: 767px) {
+  :root {
+    --mobile-nav-height: 62px;
+    --player-height: 66px;
+    --header-height: 54px;
+  }
+
+  html,
+  body,
+  #root {
+    width: 100%;
+    min-width: 0;
+    height: 100%;
+    overflow: hidden;
+  }
+
+  body {
+    background:
+      radial-gradient(circle at 16% -10%, rgba(130, 74, 255, 0.13), transparent 34%),
+      radial-gradient(circle at 95% 10%, rgba(233, 30, 99, 0.09), transparent 30%),
+      #000;
+  }
+
+  button,
+  [role='button'],
+  a {
+    touch-action: manipulation;
+  }
+
+  .glass-navbar {
+    min-height: calc(var(--header-height) + var(--safe-top));
+    padding: var(--safe-top) max(var(--mobile-content-x), var(--safe-right)) 0 max(var(--mobile-content-x), var(--safe-left)) !important;
+    background: rgba(0, 0, 0, 0.82);
+    backdrop-filter: blur(16px) saturate(125%);
+    -webkit-backdrop-filter: blur(16px) saturate(125%);
+    animation-duration: 220ms;
+  }
+
+  .nav-logo {
+    min-height: var(--touch-target);
+    gap: 9px;
+    font-size: 1.02rem;
+    letter-spacing: 0.055em;
+  }
+
+  .nav-logo-icon {
+    width: 20px;
+    height: 20px;
+    border-width: 1.5px;
+    box-shadow: 0 0 18px rgba(255, 255, 255, 0.2);
+  }
+
+  .nav-profile {
+    width: var(--touch-target);
+    height: var(--touch-target);
+    padding: 4px;
+    background: rgba(255, 255, 255, 0.07);
+  }
+
+  .home-shell,
+  .main-content,
+  .route-page {
+    min-height: 0;
+  }
+
+  .route-page {
+    padding-bottom: 0;
+    animation: mobile-route-enter 160ms cubic-bezier(0.2, 0, 0.2, 1) both;
+  }
+
+  .sidebar-container {
+    height: calc(var(--mobile-nav-height) + var(--safe-bottom)) !important;
+    min-height: calc(var(--mobile-nav-height) + var(--safe-bottom)) !important;
+    padding: 0 max(4px, var(--safe-right)) var(--safe-bottom) max(4px, var(--safe-left)) !important;
+    background: var(--surface-nav) !important;
+    backdrop-filter: blur(18px) saturate(140%) !important;
+    -webkit-backdrop-filter: blur(18px) saturate(140%) !important;
+    border-top-color: rgba(255, 255, 255, 0.1) !important;
+    box-shadow: 0 -12px 38px rgba(0, 0, 0, 0.34) !important;
+  }
+
+  .btn-body {
+    width: 25% !important;
+    min-width: 0 !important;
+    min-height: var(--touch-target) !important;
+    padding: 7px 3px 6px !important;
+    gap: 3px !important;
+    border-radius: 14px !important;
+  }
+
+  .btn-body .btn-icon {
+    width: 26px !important;
+    height: 26px !important;
+    font-size: 24px !important;
+  }
+
+  .btn-body .btn-text {
+    max-width: 100%;
+    overflow: hidden !important;
+    font-size: 10px !important;
+    line-height: 1.1 !important;
+    text-overflow: ellipsis;
+  }
+
+  .btn-body.active {
+    background: linear-gradient(180deg, rgba(255, 255, 255, 0.075), rgba(255, 255, 255, 0.025)) !important;
+  }
+
+  .btn-body.active .btn-icon,
+  .btn-body.active .btn-text {
+    color: #fff !important;
+  }
+
+  .btn-body.active .btn-icon {
+    filter: drop-shadow(0 0 9px rgba(233, 30, 99, 0.5)) !important;
+  }
+
+  .feed-screen,
+  .library-page,
+  .album-page-apple,
+  .artist-page,
+  .playlist-page,
+  .import-page,
+  .import-container,
+  .profile-wrapper {
+    overscroll-behavior-y: contain;
+    -webkit-overflow-scrolling: touch;
+  }
+
+  .feed-screen,
+  .library-page {
+    padding-bottom: calc(var(--total-bottom-stack) + 14px) !important;
+  }
+
+  .search-results,
+  .search-content,
+  .search-scroll-content {
+    padding-bottom: calc(var(--total-bottom-stack) + 14px) !important;
+  }
+
+  .feed-row,
+  .feed-album-row,
+  .feed-recommended-grid,
+  .feed-hero-row,
+  .cards-scroll,
+  .artists-horizontal-list,
+  .recent-songs-grid {
+    scroll-snap-type: x proximity;
+    scroll-padding-inline: var(--mobile-content-x);
+  }
+
+  .feed-row > *,
+  .feed-album-row > *,
+  .feed-hero-row > *,
+  .cards-scroll > *,
+  .artists-horizontal-list > *,
+  .recent-songs-grid > * {
+    scroll-snap-align: start;
+  }
+
+  .feed-section,
+  .library-content,
+  .playlist-content,
+  .artist-content,
+  .album-content {
+    content-visibility: auto;
+    contain-intrinsic-size: auto 420px;
+  }
+
+  .app-page-header {
+    min-height: var(--header-height);
+    padding-inline: max(var(--mobile-content-x), var(--safe-left)) max(var(--mobile-content-x), var(--safe-right));
+  }
+
+  .app-header-nav-btn,
+  .search-clear-btn,
+  .modal-close,
+  .back-btn,
+  .context-menu-back {
+    min-width: var(--touch-target);
+    min-height: var(--touch-target);
+  }
+
+  .ytm-dock {
+    left: max(8px, var(--safe-left));
+    right: max(8px, var(--safe-right));
+    bottom: calc(var(--mobile-nav-height) + var(--safe-bottom) + 8px);
+    width: auto;
+    height: 58px;
+    gap: 8px;
+    padding: 0 8px;
+    border: 1px solid rgba(255, 255, 255, 0.11);
+    border-radius: 15px;
+    background: rgba(24, 24, 28, 0.96);
+    box-shadow: 0 12px 38px rgba(0, 0, 0, 0.55);
+    backdrop-filter: blur(18px) saturate(130%);
+    -webkit-backdrop-filter: blur(18px) saturate(130%);
+    overflow: hidden;
+  }
+
+  .ytm-dock__open {
+    gap: 10px;
+  }
+
+  .ytm-dock__artwork {
+    width: 44px;
+    height: 44px;
+    border-radius: 10px;
+  }
+
+  .ytm-dock__title { font-size: 13px; }
+  .ytm-dock__artist { font-size: 11px; }
+  .ytm-dock__btn { width: 40px; height: 44px; }
+
+  .ytm-fullscreen {
+    height: 100vh;
+    height: 100svh;
+    height: 100dvh;
+    padding-top: var(--safe-top);
+  }
+
+  .ytm-header {
+    min-height: 52px;
+    padding-inline: max(10px, var(--safe-left)) max(10px, var(--safe-right));
+  }
+
+  .ytm-artwork {
+    width: min(78vw, 340px);
+    height: min(78vw, 340px);
+    max-height: 42dvh;
+    border-radius: 18px;
+  }
+
+  .ytm-controls {
+    gap: clamp(8px, 4vw, 22px);
+  }
+
+  .ytm-queue-sheet,
+  .ytm-menu-sheet,
+  .context-menu-content,
+  .modal-content,
+  .add-track-modal,
+  .confirm-modal,
+  .add-to-playlist-modal {
+    max-height: min(82vh, 720px);
+    max-height: min(82dvh, 720px);
+    padding-bottom: max(16px, var(--safe-bottom));
+    border: 1px solid rgba(255, 255, 255, 0.11);
+    border-bottom: 0;
+    border-radius: 24px 24px 0 0;
+    background: #17171b;
+    box-shadow: 0 -24px 70px rgba(0, 0, 0, 0.65);
+  }
+
+  .modal-overlay,
+  .context-menu-overlay,
+  .add-track-modal-overlay,
+  .confirm-modal-overlay,
+  .feedback-dialog-backdrop,
+  .ytm-menu-backdrop.open,
+  .ytm-queue-backdrop.open {
+    background: rgba(0, 0, 0, 0.7) !important;
+    backdrop-filter: blur(5px);
+    -webkit-backdrop-filter: blur(5px);
+  }
+
+  .feedback-toasts {
+    left: max(12px, var(--safe-left));
+    right: max(12px, var(--safe-right));
+    bottom: calc(var(--total-bottom-stack) + 12px);
+    width: auto;
+  }
+
+  .feedback-toast {
+    min-height: 50px;
+    border-radius: 15px;
+  }
+
+}
+
+@media (max-width: 767px) and (hover: none) {
+  .app-card:active,
+  .track-row:active,
+  .library-main-btn:active,
+  .platform-card:active {
+    transform: scale(0.975);
+    opacity: 0.88;
+  }
+}
+
+@media (max-width: 359px) {
+  :root {
+    --mobile-content-x: 12px;
+    --mobile-nav-height: 58px;
+    --player-height: 62px;
+  }
+
+  .glass-navbar { min-height: calc(50px + var(--safe-top)); }
+  .nav-logo { font-size: 0.9rem; letter-spacing: 0.035em; }
+  .nav-logo-icon { width: 18px; height: 18px; }
+  .nav-profile { width: 40px; height: 40px; }
+  .btn-body { padding-inline: 1px !important; }
+  .btn-body .btn-icon { width: 22px !important; height: 22px !important; font-size: 20px !important; }
+  .btn-body .btn-text { font-size: 8.5px !important; }
+  .ytm-dock { left: 5px; right: 5px; bottom: calc(var(--mobile-nav-height) + var(--safe-bottom) + 5px); }
+  .ytm-dock__btn { width: 36px; }
+  .ytm-dock__controls { gap: 0; }
+  .ytm-artwork { width: min(72vw, 250px); height: min(72vw, 250px); }
+  .feedback-dialog { padding: 20px 16px; }
+
+  .glass-navbar,
+  .sidebar-container,
+  .ytm-dock {
+    backdrop-filter: none !important;
+    -webkit-backdrop-filter: none !important;
+  }
+}
+
+@media (max-width: 767px) and (max-height: 680px) {
+  .ytm-artwork { width: min(58vw, 250px); height: min(58vw, 250px); max-height: 34dvh; }
+  .ytm-hero { padding-top: 8px; }
+  .ytm-lyrics { margin-top: 20px; }
+  .ytm-scroll { padding-bottom: calc(var(--safe-bottom) + 52px); }
+}
+
+@media (max-width: 900px) and (orientation: landscape) and (max-height: 520px) {
+  :root { --mobile-nav-height: 50px; --player-height: 56px; }
+  .glass-navbar { display: none; }
+  .btn-body { flex-direction: row !important; gap: 5px !important; }
+  .btn-body .btn-text { font-size: 9px !important; }
+  .ytm-dock { height: 48px; bottom: calc(var(--mobile-nav-height) + var(--safe-bottom) + 4px); }
+  .ytm-dock__artwork { width: 38px; height: 38px; }
+  .ytm-fullscreen .ytm-scroll { padding-top: 0; }
+  .ytm-artwork { width: min(34vh, 180px); height: min(34vh, 180px); }
+}
+
+@supports not ((backdrop-filter: blur(2px)) or (-webkit-backdrop-filter: blur(2px))) {
+  .glass-navbar,
+  .sidebar-container,
+  .ytm-dock,
+  .feedback-toast {
+    background: #111114 !important;
+  }
+}
+
+@media (prefers-reduced-transparency: reduce) {
+  .glass-navbar,
+  .sidebar-container,
+  .ytm-dock,
+  .feedback-toast,
+  .feedback-dialog-backdrop {
+    backdrop-filter: none !important;
+    -webkit-backdrop-filter: none !important;
+  }
+}
+
+@media (prefers-reduced-motion: reduce) {
+  .route-page { animation: none; }
+}
+
+@keyframes mobile-route-enter {
+  from { opacity: 0; transform: translate3d(0, 5px, 0); }
+  to { opacity: 1; transform: translate3d(0, 0, 0); }
+}

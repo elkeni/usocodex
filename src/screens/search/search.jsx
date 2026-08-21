@@ -19,6 +19,7 @@ import PageHeader from '../../components/shared/PageHeader';
 
 import { usePlayerActions } from '../../context/playerContext';
 import { useUser } from '../../context/userContext';
+import useBodyScrollLock from '../../hooks/useBodyScrollLock';
 import {
     searchGlobal,
     fetchAudioUrl,
@@ -585,6 +586,15 @@ const LongPressMenu = ({ track, onClose }) => {
     const { toggleFavorite, isFavorite, playlists, addTrackToPlaylist } = useUser();
     const [view, setView] = useState('main'); // 'main' | 'playlists'
     const [feedback, setFeedback] = useState(null); // Mensaje de feedback
+    useBodyScrollLock(Boolean(track));
+
+    useEffect(() => {
+        const closeOnEscape = (event) => {
+            if (event.key === 'Escape') onClose();
+        };
+        document.addEventListener('keydown', closeOnEscape);
+        return () => document.removeEventListener('keydown', closeOnEscape);
+    }, [onClose]);
 
     if (!track) return null;
 
@@ -620,7 +630,7 @@ const LongPressMenu = ({ track, onClose }) => {
     // Renderizado del contenido según la vista
     return (
         <div className="context-menu-overlay" onClick={onClose} style={{ animation: 'fadeIn 0.2s ease-out' }}>
-            <div className="context-menu-content" onClick={e => e.stopPropagation()}>
+            <div className="context-menu-content" role="dialog" aria-modal="true" aria-label="Opciones de la canción" onClick={e => e.stopPropagation()}>
 
                 {feedback ? (
                     <div style={{ padding: '30px', textAlign: 'center', color: 'white' }}>
@@ -847,7 +857,7 @@ export default function Search() {
     const searchCacheRef = useRef({});
 
     // Use persistence scroll
-    useScrollPersistence(searchContainerRef, 'search-scroll');
+    useScrollPersistence('search', searchContainerRef);
 
     // Estados
     const [query, setQuery] = useState('');

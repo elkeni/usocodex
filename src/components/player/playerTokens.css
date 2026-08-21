@@ -1,5 +1,3 @@
-@import url('https://fonts.googleapis.com/css2?family=Roboto:wght@400;500;600;700&display=swap');
-
 /**
  * ================================================
  * PLAYER TOKENS - YouTube Music Design System
@@ -84,7 +82,7 @@
     /* ==========================================
        TYPOGRAPHY - Clean & Readable
        ========================================== */
-    --ytm-font-family: 'Roboto', -apple-system, BlinkMacSystemFont, 'Segoe UI', sans-serif;
+    --ytm-font-family: var(--font-family-primary, -apple-system, BlinkMacSystemFont, 'Segoe UI', sans-serif);
 
     --ytm-font-size-xs: 11px;
     --ytm-font-size-sm: 13px;

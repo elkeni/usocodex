@@ -7,7 +7,7 @@ import { HiCloudDownload } from "react-icons/hi";
 
 export default function Sidebar() {
   return (
-    <div className="sidebar-container">
+    <nav className="sidebar-container" aria-label="Navegación principal">
       <div className="sidebar-group">
         <div className="group-title">MENÚ</div>
         <SidebarButton title="Descubrir" to="/feed" icon={<MdSpaceDashboard />} />
@@ -19,6 +19,6 @@ export default function Sidebar() {
         <SidebarButton title="Biblioteca" to="/library" icon={<MdLibraryMusic />} />
         <SidebarButton title="Importar" to="/import" icon={<HiCloudDownload />} />
       </div>
-    </div>
+    </nav>
   );
 }

@@ -30,6 +30,8 @@ import './playlist.css';
 
 import { playlistGetInfo, searchGlobal, artistGetTopTracks, getRelatedArtists } from '../../services/unifiedService';
 import { getGenrePlaylist, isGenrePlaylistId } from '../../services/genrePlaylistService';
+import PageState from '../../components/shared/PageState';
+import useBodyScrollLock from '../../hooks/useBodyScrollLock';
 
 const DEFAULT_IMAGE = 'https://images.unsplash.com/photo-1470225620780-dba8ba36b745?auto=format&fit=crop&w=500&q=60';
 
@@ -79,6 +81,9 @@ export default function Playlist() {
     const [showDeleteConfirm, setShowDeleteConfirm] = useState(false);
     const [showDeleteTrackConfirm, setShowDeleteTrackConfirm] = useState(null);
     const [showAddToPlaylistModal, setShowAddToPlaylistModal] = useState(null); // track a añadir
+    useBodyScrollLock(Boolean(
+        showAddTrack || showDeleteConfirm || showDeleteTrackConfirm || showAddToPlaylistModal
+    ));
     const [notification, setNotification] = useState(null);
     const [recommendedTracks, setRecommendedTracks] = useState([]);
     const [isLoadingRecommendations, setIsLoadingRecommendations] = useState(false);
@@ -101,6 +106,20 @@ export default function Playlist() {
         document.addEventListener('mousedown', handleClickOutside);
         return () => document.removeEventListener('mousedown', handleClickOutside);
     }, []);
+
+    useEffect(() => {
+        const hasModal = showAddTrack || showDeleteConfirm || showDeleteTrackConfirm || showAddToPlaylistModal;
+        if (!hasModal) return undefined;
+        const closeOnEscape = (event) => {
+            if (event.key !== 'Escape') return;
+            setShowAddTrack(false);
+            setShowDeleteConfirm(false);
+            setShowDeleteTrackConfirm(null);
+            setShowAddToPlaylistModal(null);
+        };
+        document.addEventListener('keydown', closeOnEscape);
+        return () => document.removeEventListener('keydown', closeOnEscape);
+    }, [showAddTrack, showDeleteConfirm, showDeleteTrackConfirm, showAddToPlaylistModal]);
 
     // Mostrar notificación
     const showNotification = useCallback((message, type = 'success') => {
@@ -781,21 +800,7 @@ export default function Playlist() {
 
     // Error State
     if (!playlist) {
-        return (
-            <div className="playlist-page">
-                <div className="playlist-bg-layer">
-                    <div className="playlist-bg-overlay" />
-                </div>
-                <div className="playlist-error-state">
-                    <FaMusic size={64} style={{ opacity: 0.2, marginBottom: 20 }} />
-                    <h3>Playlist no encontrada</h3>
-                    <p>Esta playlist no existe o fue eliminada</p>
-                    <button className="playlist-error-btn" onClick={() => navigate('/feed')}>
-                        Ir al Feed
-                    </button>
-                </div>
-            </div>
-        );
+        return <PageState variant="empty" icon={<FaMusic />} title="Playlist no encontrada" message="Esta playlist no existe, fue eliminada o el enlace dejó de ser válido." actionLabel="Ir a Descubrir" onAction={() => navigate('/feed', { replace: true })} secondaryLabel="Volver" onSecondary={() => navigate(-1)} />;
     }
 
     return (
@@ -1136,10 +1141,10 @@ export default function Playlist() {
             {/* Modal para añadir canciones */}
             {showAddTrack && (
                 <div className="add-track-modal-overlay" onClick={() => setShowAddTrack(false)}>
-                    <div className="add-track-modal" onClick={(e) => e.stopPropagation()}>
+                    <div className="add-track-modal" role="dialog" aria-modal="true" aria-labelledby="add-tracks-title" onClick={(e) => e.stopPropagation()}>
                         <div className="add-track-header">
-                            <h3>Añadir canciones</h3>
-                            <button className="add-track-close" onClick={() => setShowAddTrack(false)}>
+                            <h3 id="add-tracks-title">Añadir canciones</h3>
+                            <button className="add-track-close" onClick={() => setShowAddTrack(false)} aria-label="Cerrar búsqueda de canciones">
                                 <FaTimes />
                             </button>
                         </div>
@@ -1147,6 +1152,7 @@ export default function Playlist() {
                         <div className="add-track-search">
                             <FaSearch className="search-icon" />
                             <input
+                                aria-label="Buscar canciones para añadir"
                                 type="text"
                                 placeholder="Buscar canciones..."
                                 value={searchQuery}
@@ -1156,6 +1162,7 @@ export default function Playlist() {
                             {searchQuery && (
                                 <button
                                     className="search-clear"
+                                    aria-label="Limpiar búsqueda"
                                     onClick={() => {
                                         setSearchQuery('');
                                         setSearchResults([]);
@@ -1273,11 +1280,11 @@ export default function Playlist() {
             {/* Modal de confirmación para eliminar playlist */}
             {showDeleteConfirm && (
                 <div className="confirm-modal-overlay" onClick={() => setShowDeleteConfirm(false)}>
-                    <div className="confirm-modal" onClick={(e) => e.stopPropagation()}>
+                    <div className="confirm-modal" role="alertdialog" aria-modal="true" aria-labelledby="delete-playlist-title" onClick={(e) => e.stopPropagation()}>
                         <div className="confirm-modal-icon danger">
                             <FaExclamationTriangle />
                         </div>
-                        <h3>¿Eliminar playlist?</h3>
+                        <h3 id="delete-playlist-title">¿Eliminar playlist?</h3>
                         <p>Esta acción no se puede deshacer. Se eliminará "{playlist.name || playlist.title}" permanentemente.</p>
                         <div className="confirm-modal-actions">
                             <button className="confirm-btn cancel" onClick={() => setShowDeleteConfirm(false)}>
@@ -1294,11 +1301,11 @@ export default function Playlist() {
             {/* Modal de confirmación para eliminar canción */}
             {showDeleteTrackConfirm && (
                 <div className="confirm-modal-overlay" onClick={() => setShowDeleteTrackConfirm(null)}>
-                    <div className="confirm-modal" onClick={(e) => e.stopPropagation()}>
+                    <div className="confirm-modal" role="alertdialog" aria-modal="true" aria-labelledby="remove-track-title" onClick={(e) => e.stopPropagation()}>
                         <div className="confirm-modal-icon warning">
                             <FaTrash />
                         </div>
-                        <h3>¿Quitar canción?</h3>
+                        <h3 id="remove-track-title">¿Quitar canción?</h3>
                         <p>Se eliminará "{showDeleteTrackConfirm.name || showDeleteTrackConfirm.title}" de esta playlist.</p>
                         <div className="confirm-modal-actions">
                             <button className="confirm-btn cancel" onClick={() => setShowDeleteTrackConfirm(null)}>
@@ -1315,10 +1322,10 @@ export default function Playlist() {
             {/* Modal para añadir a otra playlist */}
             {showAddToPlaylistModal && (
                 <div className="confirm-modal-overlay" onClick={() => setShowAddToPlaylistModal(null)}>
-                    <div className="add-to-playlist-modal" onClick={(e) => e.stopPropagation()}>
+                    <div className="add-to-playlist-modal" role="dialog" aria-modal="true" aria-labelledby="add-to-playlist-title" onClick={(e) => e.stopPropagation()}>
                         <div className="add-to-playlist-header">
-                            <h3>Añadir a playlist</h3>
-                            <button className="add-track-close" onClick={() => setShowAddToPlaylistModal(null)}>
+                            <h3 id="add-to-playlist-title">Añadir a playlist</h3>
+                            <button className="add-track-close" onClick={() => setShowAddToPlaylistModal(null)} aria-label="Cerrar selección de playlist">
                                 <FaTimes />
                             </button>
                         </div>

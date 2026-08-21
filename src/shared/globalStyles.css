@@ -1,10 +1,7 @@
 /* =============================================================================
-   MUSICALOL DESIGN SYSTEM - SINGLE SOURCE OF TRUTH
-   Version: 2.0
-   Last Updated: 2025-12-25
+   PARADISQUO DESIGN SYSTEM - SINGLE SOURCE OF TRUTH
+   Version: 3.0 - Mobile first
    ============================================================================= */
-@import url('https://fonts.googleapis.com/css2?family=Inter:wght@300;400;500;600;700;800;900&display=swap');
-
 :root {
    /* ================================================================
        🎨 COLOR SYSTEM
@@ -217,6 +214,10 @@
    --player-height: 64px;
    --header-height: 56px;
    --total-bottom-stack: calc(var(--mobile-nav-height) + var(--player-height) + var(--safe-bottom));
+   --mobile-content-x: clamp(14px, 4.5vw, 22px);
+   --mobile-card-gap: clamp(10px, 3vw, 16px);
+   --touch-target: 44px;
+   --surface-nav: rgba(10, 10, 13, 0.94);
 
    /* ================================================================
        🎚️ Z-INDEX SYSTEM (Ordered Layers)
@@ -271,6 +272,16 @@ body {
 button {
    font-family: inherit;
    cursor: pointer;
+   touch-action: manipulation;
+}
+
+body.app-scroll-locked {
+  overflow: hidden !important;
+  overscroll-behavior: none;
+}
+
+img {
+   max-width: 100%;
 }
 
 /* ================================================================
@@ -464,4 +475,14 @@ a:focus-visible {
    outline: 2px solid var(--color-accent);
    outline-offset: 2px;
    border-radius: 2px;
+}
+
+@media (prefers-reduced-motion: reduce) {
+   html:focus-within { scroll-behavior: auto; }
+   *, *::before, *::after {
+      scroll-behavior: auto !important;
+      animation-duration: 0.01ms !important;
+      animation-iteration-count: 1 !important;
+      transition-duration: 0.01ms !important;
+   }
 }

@@ -4,6 +4,7 @@ import { FaPlay, FaChevronRight, FaEllipsisH, FaArrowLeft, FaCheck, FaPlus, FaRa
 
 import { usePlayer } from '../../context/playerContext';
 import { useUser } from '../../context/userContext';
+import PageState from '../../components/shared/PageState';
 import {
     getArtistInfo,
     getArtistAlbums,
@@ -55,6 +56,8 @@ export default function ArtistDetail() {
     const [topAlbums, setTopAlbums] = useState([]);
     const [topTracks, setTopTracks] = useState([]);
     const [loading, setLoading] = useState(true);
+    const [loadError, setLoadError] = useState(null);
+    const [retryKey, setRetryKey] = useState(0);
     const [playingTrackId, setPlayingTrackId] = useState(null);
     const [isScrolled, setIsScrolled] = useState(false);
 
@@ -74,6 +77,7 @@ export default function ArtistDetail() {
     useEffect(() => {
         const fetchData = async () => {
             setLoading(true);
+            setLoadError(null);
             const safeName = decodeURIComponent(name);
 
             try {
@@ -88,8 +92,7 @@ export default function ArtistDetail() {
                 if (artistRes.status === 'fulfilled' && artistRes.value) {
                     setArtistInfo(artistRes.value);
                 } else {
-                    // Fallback: al menos mostrar el nombre
-                    setArtistInfo({ name: safeName });
+                    setArtistInfo(null);
                 }
 
                 // Top Tracks: Sin cambios, ya funciona correctamente
@@ -107,15 +110,20 @@ export default function ArtistDetail() {
                     setTopAlbums(validAlbums);
                 }
 
+                const hasUsefulData = artistRes.value || tracksRes.value?.toptracks?.track?.length || albumsRes.value?.length;
+                if (!hasUsefulData) setLoadError('No encontramos información disponible para este artista.');
+
             } catch (e) {
                 console.error("[ArtistDetail] Error cargando perfil del artista:", e);
+                setArtistInfo(null);
+                setLoadError('No pudimos cargar el artista. Revisa tu conexión e inténtalo otra vez.');
             } finally {
                 setLoading(false);
             }
         };
 
         if (name) fetchData();
-    }, [name]);
+    }, [name, retryKey]);
 
     // ⭐ Función para reproducir una canción
     const handlePlayTrack = useCallback(async (track) => {
@@ -171,18 +179,9 @@ export default function ArtistDetail() {
 
     // --- RENDERIZADO ---
 
-    if (loading) return (
-        <div className="artist-loading-screen">
-            <div className="spinner-loader"></div>
-        </div>
-    );
+    if (loading) return <PageState variant="loading" title="Cargando artista" />;
 
-    if (!artistInfo) return (
-        <div className="artist-error-screen">
-            <h2>Artista no encontrado</h2>
-            <button className="back-btn-simple" onClick={() => navigate(-1)}>Volver</button>
-        </div>
-    );
+    if (!artistInfo) return <PageState variant="error" title="Artista no encontrado" message={loadError} actionLabel="Reintentar" onAction={() => setRetryKey(key => key + 1)} secondaryLabel="Volver" onSecondary={() => navigate(-1)} />;
 
     const heroImage = getBestImage(artistInfo.image) || DEFAULT_IMAGE;
     const latestAlbum = topAlbums[0];
