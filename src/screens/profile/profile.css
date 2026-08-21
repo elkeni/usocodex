@@ -229,6 +229,10 @@
 }
 
 .profile-setting {
+    width: 100%;
+    color: inherit;
+    font: inherit;
+    text-align: left;
     display: flex;
     align-items: center;
     /* Reduced padding and height for "List Row" feel */
@@ -239,6 +243,8 @@
     border-radius: 12px;
     transition: background 0.2s;
 }
+
+.profile-setting.clickable { cursor: pointer; }
 
 .profile-setting.clickable:hover {
     background: var(--glass-hover);

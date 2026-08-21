@@ -209,6 +209,7 @@ export const PlayerProvider = ({ children }) => {
 
     // [FIX LOOP] Memoria de tracks que ya fallaron - evita reintentos infinitos
     const failedTracksRef = useRef(new Set());
+    const errorTimeoutRef = useRef(null);
 
 
 
@@ -217,9 +218,11 @@ export const PlayerProvider = ({ children }) => {
     // =========================
     const showError = useCallback((msg) => {
         setErrorMsg(msg);
-        window.clearTimeout(showError._t);
-        showError._t = window.setTimeout(() => setErrorMsg(null), 2500);
+        window.clearTimeout(errorTimeoutRef.current);
+        errorTimeoutRef.current = window.setTimeout(() => setErrorMsg(null), 4000);
     }, []);
+
+    useEffect(() => () => window.clearTimeout(errorTimeoutRef.current), []);
 
     // Helper para limpiar prefetch (evita repetición)
     const clearPrefetch = useCallback(() => {

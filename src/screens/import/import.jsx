@@ -474,9 +474,9 @@ export default function Import() {
                 <div className="hero-icon">
                     <HiSparkles />
                 </div>
-                <h2>Trae toda tu música en segundos</h2>
+                <h2>Trae tu biblioteca a ParadisQuo</h2>
                 <p>
-                    Conecta tu cuenta y reconstruiremos tu biblioteca automáticamente.
+                    Elige una fuente e importa los datos compatibles a tu biblioteca.
                     <br />
                     <span className="privacy-note">
                         <FaCheck /> Solo importamos metadatos, nunca audio.
@@ -513,16 +513,6 @@ export default function Import() {
                     <FaChevronRight className="platform-arrow" />
                 </button>
 
-                <div className="platform-card disabled">
-                    <div className="platform-icon apple">
-                        <span>🍎</span>
-                    </div>
-                    <div className="platform-info">
-                        <h3>Apple Music</h3>
-                        <p>Próximamente</p>
-                    </div>
-                    <span className="coming-soon-badge">Pronto</span>
-                </div>
             </div>
 
             <div className="import-footer">

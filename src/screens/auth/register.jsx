@@ -170,13 +170,12 @@ export default function Register() {
                 {/* Welcome Section */}
                 <div className="welcome-section">
                     <div className="welcome-badge">
-                        <span>Únete a miles de amantes de la música</span>
+                        <span>Tu biblioteca empieza aquí</span>
                     </div>
                     <div className="subtitle">COMIENZA TU VIAJE MUSICAL</div>
                     <h1 className="title">Crea tu cuenta</h1>
                     <p className="welcome-description">
-                        Descubre un universo de música sin límites. Playlists personalizadas,
-                        millones de canciones y una experiencia diseñada para ti.
+                        Guarda tus canciones, crea playlists y descubre música basada en los artistas que eliges.
                     </p>
                 </div>
 
@@ -197,7 +196,9 @@ export default function Register() {
 
                     {/* Username Input */}
                     <div className="glass-input-group">
+                        <label className="glass-input-label" htmlFor="register-username">Nombre de usuario</label>
                         <input
+                            id="register-username"
                             type="text"
                             name="username"
                             placeholder="Nombre de usuario"
@@ -207,7 +208,6 @@ export default function Register() {
                             disabled={isLoading || success}
                             maxLength={20}
                             autoComplete="username"
-                            aria-label="Nombre de usuario"
                             aria-describedby="username-hint"
                             required
                         />
@@ -216,7 +216,9 @@ export default function Register() {
 
                     {/* Email Input */}
                     <div className="glass-input-group">
+                        <label className="glass-input-label" htmlFor="register-email">Correo electrónico</label>
                         <input
+                            id="register-email"
                             type="email"
                             name="email"
                             placeholder="Correo electrónico"
@@ -225,7 +227,6 @@ export default function Register() {
                             onChange={handleChange}
                             disabled={isLoading || success}
                             autoComplete="email"
-                            aria-label="Correo electrónico"
                             aria-invalid={Boolean(emailWarning || error)}
                             required
                         />
@@ -236,7 +237,9 @@ export default function Register() {
 
                     {/* Password Input (Simple) */}
                     <div className="glass-input-group">
+                        <label className="glass-input-label" htmlFor="register-password">Contraseña</label>
                         <input
+                            id="register-password"
                             type="password"
                             name="password"
                             placeholder="Contraseña"
@@ -245,7 +248,6 @@ export default function Register() {
                             onChange={handleChange}
                             disabled={isLoading || success}
                             autoComplete="new-password"
-                            aria-label="Contraseña"
                             aria-describedby="password-hint"
                             aria-invalid={Boolean(error)}
                             minLength={6}
@@ -268,21 +270,21 @@ export default function Register() {
                 <div className="features-section">
                     <div className="feature-item">
                         <FaMusic className="feature-icon" />
-                        <span>Millones de canciones</span>
+                        <span>Descubre música</span>
                     </div>
                     <div className="feature-item">
                         <FaHeadphones className="feature-icon" />
-                        <span>Calidad premium</span>
+                        <span>Escucha continua</span>
                     </div>
                     <div className="feature-item">
                         <FaHeart className="feature-icon" />
-                        <span>Playlists personalizadas</span>
+                        <span>Playlists personales</span>
                     </div>
                 </div>
 
-                <span className="auth-switch" onClick={() => !isLoading && navigate('/login')}>
+                <button type="button" className="auth-switch" onClick={() => !isLoading && navigate('/login')} disabled={isLoading || Boolean(success)}>
                     ¿Ya tienes cuenta? <strong>Inicia sesión</strong>
-                </span>
+                </button>
             </main>
         </div>
     );

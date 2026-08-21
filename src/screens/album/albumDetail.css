@@ -299,6 +299,10 @@
 }
 
 .album-artist-apple {
+    border: 0;
+    padding: 0;
+    background: transparent;
+    font: inherit;
     font-size: 1.2rem;
     font-weight: 600;
     color: var(--apple-red);

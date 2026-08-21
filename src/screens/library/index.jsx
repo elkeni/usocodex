@@ -6,11 +6,12 @@ import { useNavigate } from 'react-router-dom';
 import {
     FaPlus, FaPlay, FaMusic, FaCompactDisc, FaTimes, FaTrash,
     FaHeart, FaUser, FaListAlt, FaArrowLeft, FaRandom, FaEllipsisH,
-    FaChevronRight, FaDownload, FaSortAmountDown, FaSortAlphaDown
+    FaChevronRight, FaSortAmountDown, FaSortAlphaDown
 } from 'react-icons/fa';
 import { MdLibraryMusic } from "react-icons/md";
 import { usePlayer } from '../../context/playerContext';
 import { useUser } from '../../context/userContext';
+import { useFeedback } from '../../context/feedbackContext';
 
 // ⭐ Sistema de caché en memoria para persistencia entre navegaciones
 import screenStateCache, { useScrollPersistence } from '../../services/screenStateCache';
@@ -28,6 +29,7 @@ const DEFAULT_IMAGE = 'https://images.unsplash.com/photo-1470225620780-dba8ba36b
 // =============================================================================
 export default function Library() {
     const { playTrack } = usePlayer();
+    const { notify, confirm } = useFeedback();
     const navigate = useNavigate();
     const containerRef = useRef(null);
 
@@ -168,7 +170,7 @@ export default function Library() {
                 });
 
                 if (!generated || !generated.tracks || generated.tracks.length === 0) {
-                    alert('No pudimos encontrar canciones para este vibe. Intenta con otro término.');
+                    notify('No encontramos canciones para ese ambiente. Prueba con otra descripción.', { type: 'warning' });
                     setIsCreating(false);
                     return;
                 }
@@ -193,11 +195,11 @@ export default function Library() {
             }
         } catch (error) {
             console.error('Error creating playlist:', error);
-            alert('Error al crear la playlist: ' + error.message);
+            notify(error.message || 'No se pudo crear la playlist.', { type: 'error' });
         } finally {
             setIsCreating(false);
         }
-    }, [newPlaylistName, newPlaylistDesc, createPlaylist, navigate, activeSection, user, favorites, setActiveSection]);
+    }, [newPlaylistName, newPlaylistDesc, createPlaylist, navigate, activeSection, user, favorites, setActiveSection, notify]);
 
     // Cerrar modal y limpiar
     const onCloseModal = useCallback(() => {
@@ -208,11 +210,19 @@ export default function Library() {
 
     const handleDeletePlaylist = async (playlistId, e) => {
         e.stopPropagation();
-        if (window.confirm('¿Estás seguro de eliminar esta playlist permanentemente?')) {
+        const accepted = await confirm({
+            title: 'Eliminar playlist',
+            message: 'Esta playlist se eliminará de tu biblioteca. Esta acción no se puede deshacer.',
+            confirmLabel: 'Eliminar',
+            tone: 'danger',
+        });
+        if (accepted) {
             try {
                 await deletePlaylist(playlistId);
+                notify('Playlist eliminada.', { type: 'success' });
             } catch (error) {
                 console.error('Error deleting playlist:', error);
+                notify('No se pudo eliminar la playlist.', { type: 'error' });
             }
         }
     };
@@ -368,20 +378,6 @@ export default function Library() {
                         <FaChevronRight className="main-btn-arrow" />
                     </button>
 
-                    {/* Descargas (placeholder para futura funcionalidad) */}
-                    <button
-                        className="library-main-btn disabled"
-                        disabled
-                    >
-                        <div className="main-btn-icon downloads">
-                            <FaDownload />
-                        </div>
-                        <div className="main-btn-content">
-                            <span className="main-btn-title">Descargas</span>
-                            <span className="main-btn-count">Próximamente</span>
-                        </div>
-                        <FaChevronRight className="main-btn-arrow" />
-                    </button>
                 </section>
 
                 {/* Quick Preview - Añadidas Recientemente */}
@@ -490,22 +486,22 @@ export default function Library() {
                 {/* Sort Menu Dropdown */}
                 {showSortMenu && (
                     <div className="library-sort-menu">
-                        <div className="sort-option" onClick={() => { setSortOrder('added-desc'); setShowSortMenu(false); }}>
+                        <button type="button" className="sort-option" onClick={() => { setSortOrder('added-desc'); setShowSortMenu(false); }}>
                             <span>Recientes primero</span>
                             {sortOrder === 'added-desc' && <div className="sort-check" />}
-                        </div>
-                        <div className="sort-option" onClick={() => { setSortOrder('added-asc'); setShowSortMenu(false); }}>
+                        </button>
+                        <button type="button" className="sort-option" onClick={() => { setSortOrder('added-asc'); setShowSortMenu(false); }}>
                             <span>Antiguas primero</span>
                             {sortOrder === 'added-asc' && <div className="sort-check" />}
-                        </div>
-                        <div className="sort-option" onClick={() => { setSortOrder('alpha-asc'); setShowSortMenu(false); }}>
+                        </button>
+                        <button type="button" className="sort-option" onClick={() => { setSortOrder('alpha-asc'); setShowSortMenu(false); }}>
                             <span>Alfabético (A-Z)</span>
                             {sortOrder === 'alpha-asc' && <div className="sort-check" />}
-                        </div>
-                        <div className="sort-option" onClick={() => { setSortOrder('alpha-desc'); setShowSortMenu(false); }}>
+                        </button>
+                        <button type="button" className="sort-option" onClick={() => { setSortOrder('alpha-desc'); setShowSortMenu(false); }}>
                             <span>Alfabético (Z-A)</span>
                             {sortOrder === 'alpha-desc' && <div className="sort-check" />}
-                        </div>
+                        </button>
                     </div>
                 )}
             </div>
@@ -705,22 +701,22 @@ export default function Library() {
                     </button>
                     {showSortMenu && (
                         <div className="library-sort-menu">
-                            <div className="sort-option" onClick={() => { setAlbumSortOrder('added-desc'); setShowSortMenu(false); }}>
+                            <button type="button" className="sort-option" onClick={() => { setAlbumSortOrder('added-desc'); setShowSortMenu(false); }}>
                                 <span>Recientes primero</span>
                                 {albumSortOrder === 'added-desc' && <div className="sort-check" />}
-                            </div>
-                            <div className="sort-option" onClick={() => { setAlbumSortOrder('added-asc'); setShowSortMenu(false); }}>
+                            </button>
+                            <button type="button" className="sort-option" onClick={() => { setAlbumSortOrder('added-asc'); setShowSortMenu(false); }}>
                                 <span>Antiguas primero</span>
                                 {albumSortOrder === 'added-asc' && <div className="sort-check" />}
-                            </div>
-                            <div className="sort-option" onClick={() => { setAlbumSortOrder('alpha-asc'); setShowSortMenu(false); }}>
+                            </button>
+                            <button type="button" className="sort-option" onClick={() => { setAlbumSortOrder('alpha-asc'); setShowSortMenu(false); }}>
                                 <span>Alfabético (A-Z)</span>
                                 {albumSortOrder === 'alpha-asc' && <div className="sort-check" />}
-                            </div>
-                            <div className="sort-option" onClick={() => { setAlbumSortOrder('alpha-desc'); setShowSortMenu(false); }}>
+                            </button>
+                            <button type="button" className="sort-option" onClick={() => { setAlbumSortOrder('alpha-desc'); setShowSortMenu(false); }}>
                                 <span>Alfabético (Z-A)</span>
                                 {albumSortOrder === 'alpha-desc' && <div className="sort-check" />}
-                            </div>
+                            </button>
                         </div>
                     )}
                 </div>
@@ -782,22 +778,22 @@ export default function Library() {
                     </button>
                     {showSortMenu && (
                         <div className="library-sort-menu">
-                            <div className="sort-option" onClick={() => { setArtistSortOrder('added-desc'); setShowSortMenu(false); }}>
+                            <button type="button" className="sort-option" onClick={() => { setArtistSortOrder('added-desc'); setShowSortMenu(false); }}>
                                 <span>Recientes primero</span>
                                 {artistSortOrder === 'added-desc' && <div className="sort-check" />}
-                            </div>
-                            <div className="sort-option" onClick={() => { setArtistSortOrder('added-asc'); setShowSortMenu(false); }}>
+                            </button>
+                            <button type="button" className="sort-option" onClick={() => { setArtistSortOrder('added-asc'); setShowSortMenu(false); }}>
                                 <span>Antiguas primero</span>
                                 {artistSortOrder === 'added-asc' && <div className="sort-check" />}
-                            </div>
-                            <div className="sort-option" onClick={() => { setArtistSortOrder('alpha-asc'); setShowSortMenu(false); }}>
+                            </button>
+                            <button type="button" className="sort-option" onClick={() => { setArtistSortOrder('alpha-asc'); setShowSortMenu(false); }}>
                                 <span>Alfabético (A-Z)</span>
                                 {artistSortOrder === 'alpha-asc' && <div className="sort-check" />}
-                            </div>
-                            <div className="sort-option" onClick={() => { setArtistSortOrder('alpha-desc'); setShowSortMenu(false); }}>
+                            </button>
+                            <button type="button" className="sort-option" onClick={() => { setArtistSortOrder('alpha-desc'); setShowSortMenu(false); }}>
                                 <span>Alfabético (Z-A)</span>
                                 {artistSortOrder === 'alpha-desc' && <div className="sort-check" />}
-                            </div>
+                            </button>
                         </div>
                     )}
                 </div>

@@ -103,14 +103,16 @@ export default function Login() {
 
         <form className="auth-form" onSubmit={handleLogin}>
           {error && (
-            <div className="auth-error" role="alert" aria-live="assertive">
+            <div id="login-error" className="auth-error" role="alert" aria-live="assertive">
               <FaTimes className="error-icon" />
               {error}
             </div>
           )}
 
           <div className="glass-input-group">
+            <label className="glass-input-label" htmlFor="login-email">Correo electrónico</label>
             <input
+              id="login-email"
               type="email"
               name="email"
               placeholder="Correo electrónico"
@@ -119,14 +121,16 @@ export default function Login() {
               onChange={handleChange}
               disabled={isLoading}
               autoComplete="email"
-              aria-label="Correo electrónico"
               aria-invalid={Boolean(error)}
+              aria-describedby={error ? 'login-error' : undefined}
               required
             />
           </div>
 
           <div className="glass-input-group">
+            <label className="glass-input-label" htmlFor="login-password">Contraseña</label>
             <input
+              id="login-password"
               type="password"
               name="password"
               placeholder="Contraseña"
@@ -135,8 +139,8 @@ export default function Login() {
               onChange={handleChange}
               disabled={isLoading}
               autoComplete="current-password"
-              aria-label="Contraseña"
               aria-invalid={Boolean(error)}
+              aria-describedby={error ? 'login-error' : undefined}
               required
             />
           </div>
@@ -154,9 +158,9 @@ export default function Login() {
         {/* Features Section */}
 
 
-        <span className="auth-switch" onClick={() => !isLoading && navigate('/register')}>
+        <button type="button" className="auth-switch" onClick={() => !isLoading && navigate('/register')} disabled={isLoading}>
           ¿No tienes cuenta? <strong>Regístrate aquí</strong>
-        </span>
+        </button>
       </main>
     </div>
   );

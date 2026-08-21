@@ -1,0 +1,30 @@
+.app-error-state {
+  min-height: 100dvh;
+  display: grid;
+  place-content: center;
+  justify-items: center;
+  gap: 14px;
+  padding: 28px;
+  color: #fff;
+  background: radial-gradient(circle at 50% 30%, #272134, #09090b 55%);
+  text-align: center;
+}
+
+.app-error-state__icon { color: #ffbf69; font-size: 2rem; }
+.app-error-state h1 { margin: 0; font-size: clamp(1.5rem, 4vw, 2.25rem); }
+.app-error-state p { max-width: 430px; margin: 0; color: rgba(255, 255, 255, 0.7); line-height: 1.55; }
+.app-error-state button {
+  min-height: 46px;
+  display: inline-flex;
+  align-items: center;
+  gap: 9px;
+  margin-top: 8px;
+  padding: 0 20px;
+  border: 0;
+  border-radius: 999px;
+  color: #0b0b0c;
+  background: #fff;
+  font-weight: 750;
+  cursor: pointer;
+}
+

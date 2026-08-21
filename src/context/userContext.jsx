@@ -2,6 +2,7 @@ import { createContext, useContext, useEffect, useState, useMemo, useCallback, u
 import { doc, onSnapshot, setDoc, getDoc } from 'firebase/firestore';
 import { auth, db } from '../firebase/config';
 import { onAuthStateChanged } from 'firebase/auth';
+import { useFeedback } from './feedbackContext';
 
 // =============================================================================
 // VALIDACIÓN DE TRACKS (obligatoria antes de guardar)
@@ -65,6 +66,7 @@ const UserContext = createContext();
 export const useUser = () => useContext(UserContext);
 
 export const UserProvider = ({ children }) => {
+    const { notify } = useFeedback();
     const [user, setUser] = useState(null);
     const [favorites, setFavorites] = useState([]);
     const [playlists, setPlaylists] = useState([]);
@@ -177,7 +179,7 @@ export const UserProvider = ({ children }) => {
     // ACCIONES DE FAVORITOS (Canciones)
     // ==========================================================================
     const toggleFavorite = useCallback(async (track) => {
-        if (!user) return alert("Inicia sesión para guardar música");
+        if (!user) return notify("Inicia sesión para guardar música", { type: 'warning' });
 
         const userRef = doc(db, "users", user.uid);
         // Normalizar claves para comparación
@@ -213,7 +215,7 @@ export const UserProvider = ({ children }) => {
 
             return newFavorites;
         });
-    }, [user, safeUpdateDoc]);
+    }, [user, safeUpdateDoc, notify]);
 
     // Helper para verificar si una canción está en favoritos
     const isFavorite = useCallback((track) => {
@@ -227,7 +229,7 @@ export const UserProvider = ({ children }) => {
     // ACCIONES DE ARTISTAS GUARDADOS
     // ==========================================================================
     const toggleSaveArtist = useCallback(async (artist) => {
-        if (!user) return alert("Inicia sesión para seguir artistas");
+        if (!user) return notify("Inicia sesión para seguir artistas", { type: 'warning' });
 
         const userRef = doc(db, "users", user.uid);
         const artistName = typeof artist === 'string' ? artist : (artist.name || artist.title);
@@ -262,7 +264,7 @@ export const UserProvider = ({ children }) => {
 
             return newArtists;
         });
-    }, [user, safeUpdateDoc]);
+    }, [user, safeUpdateDoc, notify]);
 
     // Helper para verificar si un artista está guardado
     const isArtistSaved = useCallback((artistName) => {
@@ -275,7 +277,7 @@ export const UserProvider = ({ children }) => {
     // ACCIONES DE ÁLBUMES GUARDADOS
     // ==========================================================================
     const toggleSaveAlbum = useCallback(async (album) => {
-        if (!user) return alert("Inicia sesión para guardar álbumes");
+        if (!user) return notify("Inicia sesión para guardar álbumes", { type: 'warning' });
 
         const userRef = doc(db, "users", user.uid);
         const albumName = album.name || album.title;
@@ -313,7 +315,7 @@ export const UserProvider = ({ children }) => {
 
             return newAlbums;
         });
-    }, [user, safeUpdateDoc]);
+    }, [user, safeUpdateDoc, notify]);
 
     // Helper para verificar si un álbum está guardado
     const isAlbumSaved = useCallback((albumName, artistName) => {
@@ -328,7 +330,7 @@ export const UserProvider = ({ children }) => {
     // ACCIONES DE PLAYLISTS EXTERNAS GUARDADAS
     // ==========================================================================
     const toggleSavePlaylist = useCallback(async (playlist) => {
-        if (!user) return alert("Inicia sesión para guardar playlists");
+        if (!user) return notify("Inicia sesión para guardar playlists", { type: 'warning' });
 
         const userRef = doc(db, "users", user.uid);
         const playlistId = playlist.id?.toString();
@@ -366,7 +368,7 @@ export const UserProvider = ({ children }) => {
 
             return newPlaylists;
         });
-    }, [user, safeUpdateDoc]);
+    }, [user, safeUpdateDoc, notify]);
 
     // Helper para verificar si una playlist está guardada
     const isPlaylistSaved = useCallback((playlistId) => {
@@ -474,56 +476,47 @@ export const UserProvider = ({ children }) => {
 
     // --- AÑADIR CANCIÓN A PLAYLIST ---
     const addTrackToPlaylist = useCallback(async (playlistId, track) => {
-        if (!user) return alert("Inicia sesión para añadir canciones a playlists");
+        if (!user) return notify("Inicia sesión para añadir canciones a playlists", { type: 'warning' });
 
         const userRef = doc(db, "users", user.uid);
+        const playlist = playlists.find(p => p.id === playlistId);
 
-        setPlaylists(currentPlaylists => {
-            const playlist = currentPlaylists.find(p => p.id === playlistId);
+        if (!playlist) {
+            notify("La playlist ya no está disponible", { type: 'error' });
+            return false;
+        }
 
-            if (!playlist) {
-                alert("Playlist no encontrada");
-                return currentPlaylists;
-            }
+        const trackData = {
+            id: track.id || `track-${Date.now()}-${Math.random().toString(36).substr(2, 9)}`,
+            title: track.name || track.title,
+            name: track.name || track.title,
+            artist: typeof track.artist === 'object' ? (track.artist.name || track.artist['#text']) : track.artist,
+            image: track.image || '',
+            album: track.album || '',
+            duration: track.duration || 0,
+            addedAt: Date.now(),
+            resolved: null
+        };
 
-            // Formato track nativo
-            const trackData = {
-                id: track.id || `track-${Date.now()}-${Math.random().toString(36).substr(2, 9)}`,
-                title: track.name || track.title,
-                name: track.name || track.title, // Alias para compatibilidad
-                artist: typeof track.artist === 'object' ? (track.artist.name || track.artist['#text']) : track.artist,
-                image: track.image || '',
-                album: track.album || '',
-                duration: track.duration || 0,
-                addedAt: Date.now(),
-                resolved: null // Se resuelve lazy
-            };
+        const exists = playlist.tracks?.some(t =>
+            (t.name === trackData.name || t.title === trackData.title) && t.artist === trackData.artist
+        );
 
-            const exists = playlist.tracks?.some(t =>
-                (t.name === trackData.name || t.title === trackData.title) && t.artist === trackData.artist
-            );
+        if (exists) {
+            notify("Esta canción ya está en la playlist", { type: 'info' });
+            return false;
+        }
 
-            if (exists) {
-                alert("Esta canción ya está en la playlist");
-                return currentPlaylists;
-            }
+        const updatedPlaylists = playlists.map(p => p.id === playlistId ? {
+            ...p,
+            tracks: [...(p.tracks || []), trackData],
+            updatedAt: Date.now()
+        } : p);
 
-            const updatedPlaylists = currentPlaylists.map(p => {
-                if (p.id === playlistId) {
-                    return {
-                        ...p,
-                        tracks: [...(p.tracks || []), trackData],
-                        updatedAt: Date.now()
-                    };
-                }
-                return p;
-            });
-
-            safeUpdateDoc(userRef, { playlists: updatedPlaylists }).catch(console.error);
-            console.log(`[Library] ✅ Track añadido a playlist: ${trackData.title}`);
-            return updatedPlaylists;
-        });
-    }, [user, safeUpdateDoc]);
+        setPlaylists(updatedPlaylists);
+        await safeUpdateDoc(userRef, { playlists: updatedPlaylists });
+        return true;
+    }, [user, playlists, safeUpdateDoc, notify]);
 
     // --- QUITAR CANCIÓN DE PLAYLIST ---
     const removeTrackFromPlaylist = useCallback(async (playlistId, trackId) => {

@@ -1654,6 +1654,11 @@ body.modal-open {
 }
 
 .sort-option {
+    width: 100%;
+    border: 0;
+    color: inherit;
+    font: inherit;
+    text-align: left;
     display: flex;
     align-items: center;
     justify-content: space-between;

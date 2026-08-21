@@ -1,4 +1,4 @@
-import { Routes, Route, useLocation, useNavigate, Navigate } from 'react-router-dom';
+import { Routes, Route, useLocation, useNavigate, Navigate, Link } from 'react-router-dom';
 import Library from '../library';
 import Feed from '../feed/feed';
 import Sidebar from '../../components/sidebar';
@@ -34,26 +34,26 @@ export default function Home() {
 
       {/* Glass Navbar */}
       <nav className="glass-navbar">
-        <div className="nav-logo" onClick={() => navigate('/feed')} style={{ cursor: 'pointer' }}>
+        <Link className="nav-logo" to="/feed" aria-label="Ir a Descubrir">
           <span className="nav-logo-icon"></span>
           PARADISQUO
-        </div>
+        </Link>
 
-        <div
+        <button type="button"
           className={`nav-profile ${isProfilePage ? 'active' : ''}`}
           onClick={() => navigate('/profile')}
-          title="Mi Perfil"
+          aria-label="Abrir mi perfil"
         >
           {userAvatar ? (
             <img
               src={userAvatar}
-              alt="Profile"
+              alt="Mi perfil"
               style={{ width: '100%', height: '100%', borderRadius: '50%', objectFit: 'cover' }}
             />
           ) : (
             <FaUserCircle color="white" size={24} />
           )}
-        </div>
+        </button>
       </nav>
 
       {/* Content Wrapper (Sidebar + Main Content) */}

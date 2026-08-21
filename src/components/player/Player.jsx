@@ -21,6 +21,7 @@ import {
 import { useNavigate } from 'react-router-dom';
 import { usePlayer } from '../../context/playerContext';
 import { useUser } from '../../context/userContext';
+import { useFeedback } from '../../context/feedbackContext';
 import { fetchLyrics, getArtistInfo, getAlbumDetails, artistGetTopTracks } from '../../services/unifiedService';
 
 import './Player.css';
@@ -238,9 +239,9 @@ const calculateSeekFraction = (e) => {
 const LyricLine = memo(({ line, isActive, isPast, onClick }) => {
     const className = `ytm-lyrics__line${isActive ? ' active' : ''}${isPast ? ' past' : ''}`;
     return (
-        <p className={className} onClick={onClick}>
+        <button type="button" className={className} onClick={onClick}>
             {line.text}
-        </p>
+        </button>
     );
 });
 
@@ -253,9 +254,10 @@ const QueueItem = memo(({ track, isCurrent, onClick }) => {
     const artist = getTrackArtist(track) || 'Artista desconocido';
 
     return (
-        <div
+        <button type="button"
             className={`ytm-queue-item${isCurrent ? ' current' : ''}`}
             onClick={onClick}
+            aria-current={isCurrent ? 'true' : undefined}
         >
             <div className="ytm-queue-item__artwork">
                 {image ? (
@@ -273,7 +275,7 @@ const QueueItem = memo(({ track, isCurrent, onClick }) => {
                     <Icons.Equalizer />
                 </div>
             )}
-        </div>
+        </button>
     );
 });
 
@@ -283,6 +285,7 @@ const QueueItem = memo(({ track, isCurrent, onClick }) => {
 
 export default function Player() {
     const navigate = useNavigate();
+    const { notify } = useFeedback();
 
     // ========================================================================
     // CONTEXTO DEL PLAYER
@@ -291,6 +294,8 @@ export default function Player() {
         currentTrack,
         isPlaying,
         isLoading,
+        isBuffering,
+        errorMsg,
         played,
         duration,
         queue,
@@ -568,13 +573,13 @@ export default function Player() {
         setMenuView('playlists');
     }, []);
 
-    const handleSelectPlaylist = useCallback((playlist) => {
+    const handleSelectPlaylist = useCallback(async (playlist) => {
         if (currentTrack) {
-            addTrackToPlaylist(playlist.id, currentTrack);
-            alert(`Añadida a ${playlist.name}`); // Simple feedback for now
+            const added = await addTrackToPlaylist(playlist.id, currentTrack);
+            if (added) notify(`Añadida a ${playlist.name}`, { type: 'success' });
             handleMenuClose();
         }
-    }, [currentTrack, addTrackToPlaylist, handleMenuClose]);
+    }, [currentTrack, addTrackToPlaylist, handleMenuClose, notify]);
 
     const handleQueueOpen = useCallback(() => {
         setIsQueueOpen(true);
@@ -683,7 +688,8 @@ export default function Player() {
             {/* ============================================================
                 DOCK - Barra inferior minimizada
                 ============================================================ */}
-            <div className="ytm-dock" onClick={openFullscreen}>
+            <div className="ytm-dock">
+                <button type="button" className="ytm-dock__open" onClick={openFullscreen} aria-label={`Abrir reproductor: ${trackTitle} de ${trackArtist}`}>
                 <div className="ytm-dock__artwork">
                     {trackImage ? (
                         <img src={trackImage} alt="" />
@@ -696,6 +702,7 @@ export default function Player() {
                     <div className="ytm-dock__title">{trackTitle}</div>
                     <div className="ytm-dock__artist">{trackArtist}</div>
                 </div>
+                </button>
 
                 <div className="ytm-dock__controls">
                     <button
@@ -720,6 +727,11 @@ export default function Player() {
                         <Icons.Next />
                     </button>
                 </div>
+                {(isLoading || isBuffering || errorMsg) && (
+                    <div className={`ytm-dock__status${errorMsg ? ' is-error' : ''}`} role={errorMsg ? 'alert' : 'status'} aria-live="polite">
+                        {errorMsg || (isBuffering ? 'Recuperando conexión…' : 'Preparando audio…')}
+                    </div>
+                )}
             </div>
 
             {/* ============================================================
@@ -822,6 +834,12 @@ export default function Player() {
                             </span>
                         </div>
                     </div>
+
+                    {(isLoading || isBuffering || errorMsg) && (
+                        <div className={`ytm-playback-notice${errorMsg ? ' is-error' : ''}`} role={errorMsg ? 'alert' : 'status'} aria-live="polite">
+                            {errorMsg || (isBuffering ? 'La conexión está lenta. Recuperando el audio…' : 'Preparando la canción…')}
+                        </div>
+                    )}
 
                     {/* Controls */}
                     <div className="ytm-controls">
@@ -1042,7 +1060,9 @@ export default function Player() {
                 </div>
 
                 <div className="ytm-queue-sheet__list">
-                    {queue.map((track, index) => (
+                    {queue.length === 0 ? (
+                        <p className="ytm-queue-sheet__empty">Tu cola está vacía. Reproduce una canción para comenzar.</p>
+                    ) : queue.map((track, index) => (
                         <QueueItem
                             key={`${track.id || 'unknown'}-${index}`}
                             track={track}
@@ -1086,7 +1106,7 @@ export default function Player() {
                         <div className="ytm-menu-scroll" style={{ maxHeight: '300px', overflowY: 'auto' }}>
                             {playlists && playlists.length > 0 ? (
                                 playlists.map(p => (
-                                    <div key={p.id} className="ytm-menu-item" onClick={() => handleSelectPlaylist(p)}>
+                                    <button type="button" key={p.id} className="ytm-menu-item" onClick={() => handleSelectPlaylist(p)}>
                                         <div className="ytm-menu-item__icon">
                                             {p.image ? (
                                                 <img src={p.image} alt="" style={{ width: '24px', height: '24px', borderRadius: '4px', objectFit: 'cover' }} />
@@ -1095,7 +1115,7 @@ export default function Player() {
                                             )}
                                         </div>
                                         <div className="ytm-menu-item__text">{p.name}</div>
-                                    </div>
+                                    </button>
                                 ))
                             ) : (
                                 <div style={{ padding: '20px', textAlign: 'center', color: '#888' }}>
@@ -1107,21 +1127,21 @@ export default function Player() {
                 ) : (
                     // VISTA: MENU PRINCIPAL
                     <>
-                        <div className="ytm-menu-item" onClick={handleAddToPlaylist}>
+                        <button type="button" className="ytm-menu-item" onClick={handleAddToPlaylist}>
                             <div className="ytm-menu-item__icon"><Icons.PlaylistAdd /></div>
                             <div className="ytm-menu-item__text">Añadir a playlist</div>
-                        </div>
+                        </button>
 
-                        <div className="ytm-menu-item" onClick={handleViewArtist}>
+                        <button type="button" className="ytm-menu-item" onClick={handleViewArtist}>
                             <div className="ytm-menu-item__icon"><Icons.Person /></div>
                             <div className="ytm-menu-item__text">Ver artista</div>
-                        </div>
+                        </button>
 
                         {currentTrack?.album && (
-                            <div className="ytm-menu-item" onClick={handleViewAlbum}>
+                            <button type="button" className="ytm-menu-item" onClick={handleViewAlbum}>
                                 <div className="ytm-menu-item__icon"><Icons.Album /></div>
                                 <div className="ytm-menu-item__text">Ver álbum</div>
-                            </div>
+                            </button>
                         )}
 
 
@@ -1180,7 +1200,7 @@ export default function Player() {
                                     </div>
                                     <div className="ytm-stat-divider" />
                                     <div className="ytm-stat-item">
-                                        <span className="ytm-stat-value">{artistInfo.fans?.toLocaleString()}</span>
+                                        <span className="ytm-stat-value">{artistInfo.fans ? artistInfo.fans.toLocaleString() : '—'}</span>
                                         <span className="ytm-stat-label">Seguidores</span>
                                     </div>
                                 </div>
@@ -1189,23 +1209,13 @@ export default function Player() {
                                 <div className="ytm-sheet-section">
                                     <h3 className="ytm-sheet-section-title">Acerca de</h3>
                                     <p className="ytm-artist-sheet__bio">
-                                        {artistInfo.name} es un artista destacado con una trayectoria impresionante.
-                                        Con {artistInfo.albumCount || 'varios'} álbumes lanzados y millones de oyentes mensuales,
-                                        ha logrado conectar con audiencias de todo el mundo.
+                                        Explora las canciones populares y los lanzamientos disponibles de {artistInfo.name}.
                                     </p>
 
                                     <div className="ytm-sheet-facts">
                                         <div className="ytm-fact-chip">
                                             <Icons.Album />
-                                            <span>{artistInfo.albumCount || 5} Lanzamientos</span>
-                                        </div>
-                                        <div className="ytm-fact-chip">
-                                            <Icons.TrendingUp />
-                                            <span>Top 10 Global</span>
-                                        </div>
-                                        <div className="ytm-fact-chip">
-                                            <Icons.Globe />
-                                            <span>Escuchado en 85 países</span>
+                                            <span>{artistInfo.albumCount ? `${artistInfo.albumCount} lanzamientos` : 'Discografía disponible'}</span>
                                         </div>
                                     </div>
                                 </div>
@@ -1221,7 +1231,7 @@ export default function Player() {
                                         </div>
                                         <div className="ytm-sheet-top-songs__list">
                                             {artistTracks.slice(0, 4).map((track, i) => (
-                                                <div
+                                                <button type="button"
                                                     key={i}
                                                     className="ytm-sheet-song"
                                                     onClick={() => handlePlayMoreAbout(track)}
@@ -1232,11 +1242,9 @@ export default function Player() {
                                                     </div>
                                                     <div className="ytm-sheet-song__info">
                                                         <div className="ytm-sheet-song__title">{track.name}</div>
-                                                        <div className="ytm-sheet-song__plays">
-                                                            {(Math.floor(Math.random() * 500) + 100)}k reproducciones
-                                                        </div>
+                                                        <div className="ytm-sheet-song__plays">Reproducir canción</div>
                                                     </div>
-                                                </div>
+                                                </button>
                                             ))}
                                         </div>
                                     </div>

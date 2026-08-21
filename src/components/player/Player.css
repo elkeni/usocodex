@@ -54,7 +54,6 @@
     border-top: 1px solid var(--ytm-border-subtle);
     box-shadow: var(--ytm-shadow-dock);
 
-    cursor: pointer;
     touch-action: manipulation;
     -webkit-tap-highlight-color: transparent;
     user-select: none;
@@ -1101,6 +1100,11 @@
 
 /* Queue Item */
 .ytm-queue-item {
+    width: 100%;
+    border: 0;
+    color: inherit;
+    font: inherit;
+    text-align: left;
     display: flex;
     align-items: center;
     gap: var(--ytm-space-md);
@@ -1492,6 +1496,11 @@ body.ytm-fullscreen-open {
 }
 
 .ytm-menu-item {
+    width: 100%;
+    border: 0;
+    color: inherit;
+    font: inherit;
+    text-align: left;
     display: flex;
     align-items: center;
     gap: var(--ytm-space-md);
@@ -1595,6 +1604,11 @@ body.ytm-fullscreen-open {
 }
 
 .ytm-sheet-song {
+    width: 100%;
+    border: 0;
+    color: inherit;
+    font: inherit;
+    text-align: left;
     display: flex;
     align-items: center;
     gap: var(--ytm-space-md);
@@ -1944,4 +1958,64 @@ body.ytm-fullscreen-open {
     height: 100%;
     background: #fff;
     border-radius: 2px;
+}
+
+.ytm-dock__open {
+    display: flex;
+    align-items: center;
+    gap: var(--ytm-dock-gap);
+    min-width: 0;
+    flex: 1;
+    height: 100%;
+    padding: 0;
+    border: 0;
+    color: inherit;
+    background: transparent;
+    text-align: left;
+    cursor: pointer;
+}
+
+.ytm-dock__status {
+    position: absolute;
+    left: var(--ytm-dock-padding);
+    right: var(--ytm-dock-padding);
+    bottom: 2px;
+    overflow: hidden;
+    color: var(--ytm-text-secondary);
+    font-size: 0.68rem;
+    line-height: 1;
+    text-overflow: ellipsis;
+    white-space: nowrap;
+    pointer-events: none;
+}
+
+.ytm-dock__status.is-error { color: #ff8a8a; }
+
+.ytm-playback-notice {
+    margin: -4px var(--ytm-space-lg) var(--ytm-space-md);
+    padding: 10px 14px;
+    border-radius: var(--ytm-radius-md);
+    color: var(--ytm-text-secondary);
+    background: rgba(255, 255, 255, 0.06);
+    font-size: var(--ytm-font-size-sm);
+    text-align: center;
+}
+
+.ytm-playback-notice.is-error {
+    color: #ffb0b0;
+    background: rgba(255, 70, 70, 0.1);
+}
+
+.ytm-queue-sheet__empty {
+    margin: 28px 20px;
+    color: var(--ytm-text-secondary);
+    line-height: 1.5;
+    text-align: center;
+}
+
+.ytm-lyrics__line {
+    width: 100%;
+    border: 0;
+    font: inherit;
+    text-align: left;
 }

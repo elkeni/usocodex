@@ -298,9 +298,9 @@ export default function AlbumDetail() {
 
                 <div className="album-info-section">
                     <h1 className="album-title-apple">{albumInfo.name}</h1>
-                    <p className="album-artist-apple" onClick={() => navigate(`/artist/${encodeURIComponent(albumInfo.artist)}`)}>
+                    <button type="button" className="album-artist-apple" onClick={() => navigate(`/artist/${encodeURIComponent(albumInfo.artist)}`)}>
                         {albumInfo.artist}
-                    </p>
+                    </button>
                     <p className="album-meta-apple">
                         {albumInfo.type || 'Álbum'}
                         {albumInfo.releaseDate && ` · ${new Date(albumInfo.releaseDate).getFullYear()}`}

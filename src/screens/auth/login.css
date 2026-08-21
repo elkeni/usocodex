@@ -167,6 +167,14 @@ html {
     position: relative;
 }
 
+.glass-input-label {
+    display: block;
+    margin: 0 0 7px 4px;
+    color: rgba(255, 255, 255, 0.82);
+    font-size: 0.78rem;
+    font-weight: 600;
+}
+
 .glass-input {
     width: 100%;
     background: var(--input-bg);
@@ -238,6 +246,9 @@ html {
 
 /* --- Switcher --- */
 .auth-switch {
+    border: 0;
+    background: transparent;
+    font-family: inherit;
     font-size: 0.85rem;
     color: var(--text-secondary);
     cursor: pointer;
@@ -336,3 +347,11 @@ html {
         padding: 1.2rem;
     }
 }
+
+.auth-switch:hover:not(:disabled) strong,
+.auth-switch:focus-visible strong {
+    text-decoration: underline;
+    text-underline-offset: 3px;
+}
+
+.auth-switch:disabled { cursor: default; opacity: 0.55; }

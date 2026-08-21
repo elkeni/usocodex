@@ -121,6 +121,13 @@ export default function Card({
         if (onPlay) onPlay(item);
     }, [onPlay, item]);
 
+    const handleKeyDown = useCallback((e) => {
+        if (e.key === 'Enter' || e.key === ' ') {
+            e.preventDefault();
+            handleClick(e);
+        }
+    }, [handleClick]);
+
     // =========================================================================
     // RENDERING
     // =========================================================================
@@ -147,10 +154,12 @@ export default function Card({
 
     // 2. LOADED STATE
     return (
-        <button
-            type="button"
+        <div
+            role="button"
+            tabIndex={0}
             className={`app-card variant-${effectiveVariant} ${isPlaying ? 'playing' : ''} ${className}`}
             onClick={handleClick}
+            onKeyDown={handleKeyDown}
             title={displayTitle}
         >
             {/* Image Container */}
@@ -177,9 +186,9 @@ export default function Card({
                 {/* Play Overlay (Only if onPlay is provided) */}
                 {onPlay && (
                     <div className="app-card-play-overlay">
-                        <div className="app-card-play-button" onClick={handlePlayClick}>
+                        <button type="button" className="app-card-play-button" onClick={handlePlayClick} aria-label={`Reproducir ${displayTitle}`}>
                             <FaPlay />
-                        </div>
+                        </button>
                     </div>
                 )}
             </div>
@@ -189,6 +198,6 @@ export default function Card({
                 <div className="app-card-title">{displayTitle}</div>
                 <div className="app-card-subtitle">{displaySubtitle}</div>
             </div>
-        </button>
+        </div>
     );
 }

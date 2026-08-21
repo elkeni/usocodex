@@ -13,6 +13,7 @@ import {
 
 import './profile.css';
 import { useUser } from '../../context/userContext';
+import { useFeedback } from '../../context/feedbackContext';
 import { AuthService } from '../../services/authService';
 import PageHeader from '../../components/shared/PageHeader';
 import { auth, storage, db } from '../../firebase/config';
@@ -23,6 +24,7 @@ import { doc, updateDoc, getDoc, setDoc } from 'firebase/firestore';
 const Profile = () => {
     const navigate = useNavigate();
     const { user, favorites, playlists, loading: userLoading } = useUser();
+    const { notify, confirm } = useFeedback();
     const fileInputRef = useRef(null);
 
     // Estados UI
@@ -34,9 +36,6 @@ const Profile = () => {
     const [editedName, setEditedName] = useState('');
     const [isUploadingPhoto, setIsUploadingPhoto] = useState(false);
     const [isSavingName, setIsSavingName] = useState(false);
-
-    // Estados de notificación
-    const [notification, setNotification] = useState(null);
 
     // Estado de privacidad persistente
     const [isProfilePublic, setIsProfilePublic] = useState(true);
@@ -71,23 +70,28 @@ const Profile = () => {
         }
     }, [user?.displayName]);
 
-    // Mostrar notificación
     const showNotification = useCallback((message, type = 'success') => {
-        setNotification({ message, type });
-        setTimeout(() => setNotification(null), 3000);
-    }, []);
+        notify(message, { type });
+    }, [notify]);
 
     // Handlers
     const handleClose = () => navigate(-1);
 
     const handleSignOut = async () => {
         const userName = user?.displayName || user?.email || 'tu cuenta';
-        if (window.confirm(`¿Cerrar sesión de ${userName}?`)) {
+        const accepted = await confirm({
+            title: 'Cerrar sesión',
+            message: `¿Quieres cerrar la sesión de ${userName}?`,
+            confirmLabel: 'Cerrar sesión',
+            tone: 'danger',
+        });
+        if (accepted) {
             try {
                 await AuthService.logout();
                 navigate('/login');
             } catch (error) {
                 console.error('Error al cerrar sesión:', error);
+                notify('No se pudo cerrar la sesión. Intenta nuevamente.', { type: 'error' });
             }
         }
     };
@@ -394,14 +398,6 @@ const Profile = () => {
 
     return createPortal(
         <div className="profile-wrapper">
-            {/* Notification Toast */}
-            {notification && (
-                <div className={`profile-notification ${notification.type}`}>
-                    {notification.type === 'success' ? <FaCheck /> : <FaTimes />}
-                    <span>{notification.message}</span>
-                </div>
-            )}
-
             {/* Header */}
             <PageHeader
                 title="Perfil"
@@ -551,7 +547,7 @@ const Profile = () => {
 
                             <div className="profile-settings-list">
                                 {/* Editar Perfil (Activa modo edición para nombre y foto) */}
-                                <div className="profile-setting clickable" onClick={handleStartEditName}>
+                                <button type="button" className="profile-setting clickable" onClick={handleStartEditName}>
                                     <div className="profile-setting-header">
                                         <div className="profile-setting-icon">
                                             <FaEdit />
@@ -564,14 +560,14 @@ const Profile = () => {
                                         </div>
                                         <FaEdit className="profile-setting-action" />
                                     </div>
-                                </div>
+                                </button>
                             </div>
 
                             {/* Zona de Peligro / Sesión */}
                             <h3 className="profile-section-title" style={{ marginTop: '32px', color: 'var(--profile-danger)' }}>Sesión</h3>
 
                             <div className="profile-settings-list">
-                                <div className="profile-setting clickable" onClick={handleSignOut} style={{ border: '1px solid var(--profile-danger)' }}>
+                                <button type="button" className="profile-setting clickable" onClick={handleSignOut} style={{ border: '1px solid var(--profile-danger)' }}>
                                     <div className="profile-setting-header">
                                         <div className="profile-setting-icon" style={{ color: 'var(--profile-danger)', background: 'rgba(231, 76, 60, 0.1)' }}>
                                             <FaSignOutAlt />
@@ -583,7 +579,7 @@ const Profile = () => {
                                             </p>
                                         </div>
                                     </div>
-                                </div>
+                                </button>
                             </div>
                         </section>
                     </div>

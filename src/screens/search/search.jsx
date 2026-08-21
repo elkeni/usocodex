@@ -11,7 +11,6 @@ import {
     FaHistory,
     FaHeart,
     FaPlus,
-    FaShareAlt,
     FaCheck
 } from 'react-icons/fa';
 import './search.css';
@@ -613,19 +612,9 @@ const LongPressMenu = ({ track, onClose }) => {
         showFeedback(isLiked ? 'Eliminada de Me gusta' : 'Agregada a Me gusta');
     };
 
-    const handleShare = async () => {
-        const link = `https://musicalol.app/track/${track.id}`; // Ejemplo de link ficticio o real
-        try {
-            await navigator.clipboard.writeText(`${track.name} by ${track.artist} \n${link}`);
-            showFeedback('Enlace copiado');
-        } catch (err) {
-            showFeedback('No se pudo copiar');
-        }
-    };
-
-    const handlePlaylistClick = (playlist) => {
-        addTrackToPlaylist(playlist.id, track);
-        showFeedback(`Agregada a ${playlist.name}`);
+    const handlePlaylistClick = async (playlist) => {
+        const added = await addTrackToPlaylist(playlist.id, track);
+        if (added) showFeedback(`Agregada a ${playlist.name}`);
     };
 
     // Renderizado del contenido según la vista
@@ -704,9 +693,6 @@ const LongPressMenu = ({ track, onClose }) => {
                             <button className={`context-menu-item like ${isLiked ? 'active-like' : ''}`} onClick={handleLike}>
                                 <FaHeart color={isLiked ? '#E91E63' : 'inherit'} /> {isLiked ? 'Eliminar de Me gusta' : 'Me gusta'}
                             </button>
-                            <button className="context-menu-item share" onClick={handleShare}>
-                                <FaShareAlt /> Compartir
-                            </button>
                         </div>
 
                         <button className="context-menu-cancel" onClick={onClose}>
@@ -754,7 +740,7 @@ const TrackRow = ({ track, isLoading, onPlay, showRank = false, index = 0, onLon
     }, [onPlay, track]);
 
     return (
-        <div
+        <button type="button"
             className="track-row"
             onClick={handleClick}
             onMouseDown={startPress}
@@ -812,7 +798,7 @@ const TrackRow = ({ track, isLoading, onPlay, showRank = false, index = 0, onLon
                     {duration}
                 </div>
             )}
-        </div>
+        </button>
     );
 };
 

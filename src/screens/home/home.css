@@ -205,6 +205,7 @@ html {
     gap: 0.75rem;
     color: var(--text-primary);
     text-transform: uppercase;
+    text-decoration: none;
 }
 
 .nav-logo-icon {
