@@ -1,0 +1,54 @@
+{
+  "name": "ParadisQuo",
+  "short_name": "ParadisQuo",
+  "description": "Tu reproductor de música personal con streaming de alta calidad",
+  "start_url": "/",
+  "display": "standalone",
+  "orientation": "portrait-primary",
+  "theme_color": "#000000",
+  "background_color": "#000000",
+  "scope": "/",
+  "lang": "es",
+  "categories": [
+    "music",
+    "entertainment"
+  ],
+  "icons": [
+    {
+      "src": "iconapp.png",
+      "sizes": "192x192 512x512",
+      "type": "image/png",
+      "purpose": "any maskable"
+    }
+  ],
+  "shortcuts": [
+    {
+      "name": "Buscar Música",
+      "short_name": "Buscar",
+      "description": "Busca canciones, artistas y álbumes",
+      "url": "/search",
+      "icons": [
+        {
+          "src": "iconapp.png",
+          "sizes": "192x192 512x512",
+          "type": "image/png"
+        }
+      ]
+    },
+    {
+      "name": "Favoritos",
+      "short_name": "Favoritos",
+      "description": "Ver tus canciones favoritas",
+      "url": "/favorites",
+      "icons": [
+        {
+          "src": "iconapp.png",
+          "sizes": "192x192 512x512",
+          "type": "image/png"
+        }
+      ]
+    }
+  ],
+  "related_applications": [],
+  "prefer_related_applications": false
+}

@@ -1,0 +1,120 @@
+/* PageHeader Styles */
+
+.app-page-header {
+    width: 100%;
+    padding: var(--space-md) var(--space-lg);
+    background: transparent;
+    transition: background-color 0.3s ease, border-bottom 0.3s ease, backdrop-filter 0.3s ease;
+    z-index: var(--z-navbar);
+    display: flex;
+    flex-direction: column;
+    gap: var(--space-sm);
+}
+
+/* Sticky Variant */
+.app-page-header.is-sticky {
+    position: sticky;
+    top: 0;
+}
+
+/* Scrolled State */
+.app-page-header.is-scrolled {
+    background: rgba(0, 0, 0, 0.85);
+    backdrop-filter: blur(20px);
+    -webkit-backdrop-filter: blur(20px);
+    border-bottom: 1px solid var(--glass-border);
+    box-shadow: 0 4px 24px rgba(0, 0, 0, 0.4);
+}
+
+/* Flex Layouts */
+.app-header-main-row {
+    display: flex;
+    align-items: center;
+    justify-content: space-between;
+    min-height: 20px;
+}
+
+.app-header-left {
+    display: flex;
+    align-items: center;
+    gap: var(--space-md);
+    flex: 1;
+    min-width: 0;
+}
+
+.app-header-right {
+    display: flex;
+    align-items: center;
+    gap: var(--space-md);
+    flex-shrink: 0;
+}
+
+.app-header-content-row {
+    width: 100%;
+}
+
+/* Buttons */
+.app-header-nav-btn {
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    width: 40px;
+    height: 40px;
+    border-radius: 50%;
+    background: rgba(255, 255, 255, 0.1);
+    color: var(--text-primary);
+    border: none;
+    cursor: pointer;
+    transition: all 0.2s ease;
+}
+
+.app-header-nav-btn:hover {
+    background: rgba(255, 255, 255, 0.2);
+    transform: scale(1.05);
+}
+
+.app-header-nav-btn:active {
+    transform: scale(0.95);
+}
+
+/* Titles */
+.app-header-titles {
+    display: flex;
+    flex-direction: column;
+    justify-content: center;
+    min-width: 0;
+}
+
+.app-header-title {
+    font-size: 1.1rem;
+    font-weight: 700;
+    color: var(--text-primary);
+    margin: 0;
+    white-space: nowrap;
+    overflow: hidden;
+    text-overflow: ellipsis;
+}
+
+.app-header-subtitle {
+    font-size: 0.8rem;
+    font-weight: 500;
+    color: var(--text-muted);
+    margin: 0;
+    white-space: nowrap;
+    overflow: hidden;
+    text-overflow: ellipsis;
+}
+
+/* Optional: Fade in titles only on scroll (common pattern) */
+/* .app-header-titles.fade-in { ... } if desired behavior */
+
+/* Responsive Adjustments */
+@media (max-width: 768px) {
+    .app-page-header {
+        padding: var(--space-md) var(--space-lg);
+        padding-top: calc(var(--safe-top) + 24px);
+        /* Increased by roughly 12px */
+        margin-left: 10px;
+        /* Slight push from left */
+    }
+}

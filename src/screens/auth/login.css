@@ -1,0 +1,338 @@
+@import url('https://fonts.googleapis.com/css2?family=Inter:wght@400;500;600;700&display=swap');
+
+:root {
+    --text-primary: #ffffff;
+    --text-secondary: rgba(255, 255, 255, 0.65);
+    --primary-color: #1ed760;
+    /* Spotify-ish green or custom accent */
+    --accent-color: #ffffff;
+    --glass-bg: rgba(20, 20, 20, 0.6);
+    --glass-border: rgba(255, 255, 255, 0.08);
+    --input-bg: rgba(255, 255, 255, 0.08);
+}
+
+* {
+    box-sizing: border-box;
+}
+
+body,
+html {
+    margin: 0;
+    padding: 0;
+    height: 100%;
+    font-family: 'Inter', -apple-system, sans-serif;
+    background: #000;
+    color: white;
+    -webkit-font-smoothing: antialiased;
+}
+
+.login-container {
+    position: relative;
+    width: 100%;
+    height: 100vh;
+    display: flex;
+    flex-direction: column;
+    overflow: hidden;
+}
+
+/* --- Background --- */
+.video-background {
+    position: absolute;
+    top: 0;
+    left: 0;
+    width: 100%;
+    height: 100%;
+    z-index: 0;
+}
+
+.video-background video {
+    width: 100%;
+    height: 100%;
+    object-fit: cover;
+    opacity: 0.5;
+    /* Slightly darker for better mobile contrast */
+}
+
+/* --- Navbar (Relative Flow Layout) --- */
+.navbar {
+    position: relative;
+    /* FIX: Relative positioning prevents overlap */
+    width: 100%;
+    padding: 1.5rem 2rem;
+    display: flex;
+    justify-content: flex-start;
+    /* Left aligned by default */
+    z-index: 10;
+    flex-shrink: 0;
+    /* Ensures navbar keeps its height */
+}
+
+.logo {
+    font-size: 1rem;
+    font-weight: 700;
+    letter-spacing: 0.1em;
+    display: flex;
+    align-items: center;
+    gap: 10px;
+    text-transform: uppercase;
+}
+
+.logo-icon {
+    width: 20px;
+    height: 20px;
+    background: white;
+    border-radius: 50%;
+    display: block;
+}
+
+/* --- Main Content --- */
+.hero-content {
+    position: relative;
+    z-index: 5;
+    flex: 1;
+    /* Takes remaining space below navbar */
+    display: flex;
+    flex-direction: column;
+    justify-content: center;
+    /* Vertically center in remaining space */
+    padding: 1.5rem;
+    padding-bottom: 2rem;
+    max-width: 100%;
+    margin: 0 auto;
+    width: 100%;
+}
+
+.hero-content.register-view {
+    justify-content: center;
+    padding-top: 1rem;
+}
+
+/* Text & Headings */
+.welcome-badge {
+    align-self: flex-start;
+    background: rgba(255, 255, 255, 0.12);
+    backdrop-filter: blur(4px);
+    padding: 6px 12px;
+    border-radius: 20px;
+    margin-bottom: 1rem;
+    border: 1px solid rgba(255, 255, 255, 0.1);
+}
+
+.welcome-badge span {
+    font-size: 0.7rem;
+    font-weight: 600;
+    letter-spacing: 0.02em;
+    color: white;
+}
+
+.subtitle {
+    font-size: 0.7rem;
+    letter-spacing: 0.15em;
+    font-weight: 600;
+    color: var(--text-secondary);
+    margin-bottom: 0.5rem;
+    text-transform: uppercase;
+    text-align: left;
+}
+
+.title {
+    font-size: 2.5rem;
+    /* Mobile friendly size */
+    font-weight: 700;
+    line-height: 1.05;
+    margin: 0 0 0.8rem 0;
+    text-align: left;
+    letter-spacing: -0.03em;
+}
+
+.welcome-description {
+    font-size: 0.95rem;
+    line-height: 1.5;
+    color: var(--text-secondary);
+    margin-bottom: 1.5rem;
+    text-align: left;
+    max-width: 95%;
+}
+
+/* --- Form & Inputs --- */
+.auth-form {
+    width: 100%;
+    display: flex;
+    flex-direction: column;
+    gap: 14px;
+    margin-bottom: 1.5rem;
+}
+
+.glass-input-group {
+    position: relative;
+}
+
+.glass-input {
+    width: 100%;
+    background: var(--input-bg);
+    border: 1px solid var(--glass-border);
+    border-radius: 14px;
+    /* Softer corners */
+    padding: 16px;
+    font-size: 16px;
+    /* Prevents auto-zoom on iOS */
+    color: white;
+    outline: none;
+    transition: all 0.2s ease;
+    -webkit-appearance: none;
+    /* Remove iOS styles */
+}
+
+.glass-input:focus {
+    background: rgba(255, 255, 255, 0.15);
+    border-color: rgba(255, 255, 255, 0.4);
+}
+
+.glass-input::placeholder {
+    color: rgba(255, 255, 255, 0.4);
+}
+
+.input-hint {
+    display: block;
+    font-size: 0.75rem;
+    color: rgba(255, 255, 255, 0.4);
+    margin-top: 6px;
+    margin-left: 4px;
+}
+
+/* --- Button --- */
+.login-capsule {
+    width: 100%;
+    background: white;
+    color: black;
+    border: none;
+    padding: 16px;
+    border-radius: 100px;
+    font-size: 0.95rem;
+    font-weight: 700;
+    cursor: pointer;
+    display: flex;
+    justify-content: center;
+    align-items: center;
+    gap: 10px;
+    margin-top: 8px;
+    transition: transform 0.2s, background-color 0.2s;
+    touch-action: manipulation;
+    /* Improves touch response */
+}
+
+.login-capsule:active {
+    transform: scale(0.96);
+    background: rgba(255, 255, 255, 0.9);
+}
+
+.login-capsule:disabled {
+    opacity: 0.7;
+    cursor: not-allowed;
+}
+
+.icon-circle {
+    display: none;
+    /* Simplificado para limpieza */
+}
+
+/* --- Switcher --- */
+.auth-switch {
+    font-size: 0.85rem;
+    color: var(--text-secondary);
+    cursor: pointer;
+    text-align: center;
+    width: 100%;
+    padding: 10px;
+    /* Touchable area */
+    display: block;
+    margin-top: auto;
+    padding-bottom: env(safe-area-inset-bottom, 20px);
+    /* iPhone X+ safe area */
+}
+
+.auth-switch strong {
+    color: white;
+    font-weight: 600;
+}
+
+
+
+/* --- Errors --- */
+.auth-error {
+    background: rgba(255, 59, 48, 0.15);
+    color: #ff453a;
+    padding: 12px;
+    border-radius: 10px;
+    font-size: 0.85rem;
+    display: flex;
+    align-items: center;
+    gap: 8px;
+    border: 1px solid rgba(255, 69, 58, 0.3);
+}
+
+.overlay {
+    position: absolute;
+    top: 0;
+    left: 0;
+    width: 100%;
+    height: 100%;
+    background: linear-gradient(to bottom,
+            rgba(0, 0, 0, 0.3) 0%,
+            rgba(0, 0, 0, 0.7) 50%,
+            #000000 100%);
+    backdrop-filter: blur(3px);
+    z-index: 1;
+}
+
+/* --- Tablets & Desktop --- */
+@media (min-width: 768px) {
+    .video-background video {
+        opacity: 0.4;
+    }
+
+    .navbar {
+        padding: 2rem;
+        justify-content: center;
+        /* Center logo on desktop */
+    }
+
+    .hero-content {
+        justify-content: center;
+        background: rgba(20, 20, 20, 0.4);
+        /* Glass card */
+        backdrop-filter: blur(20px);
+        border-radius: 24px;
+        padding: 3rem;
+        margin-top: 5vh;
+        margin-bottom: 5vh;
+        max-width: 480px;
+        /* Constrain width */
+        border: 1px solid rgba(255, 255, 255, 0.05);
+        box-shadow: 0 40px 80px rgba(0, 0, 0, 0.5);
+    }
+
+    .title {
+        font-size: 3rem;
+        margin-bottom: 1rem;
+    }
+
+    .glass-input {
+        padding: 18px;
+        /* Larger on desktop */
+        font-size: 1rem;
+    }
+
+
+}
+
+/* Small phones / SE / Mini */
+@media (max-width: 380px) {
+    .title {
+        font-size: 2rem;
+    }
+
+    .hero-content {
+        padding: 1.2rem;
+    }
+}

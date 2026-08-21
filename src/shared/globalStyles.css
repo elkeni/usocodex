@@ -1,0 +1,467 @@
+/* =============================================================================
+   MUSICALOL DESIGN SYSTEM - SINGLE SOURCE OF TRUTH
+   Version: 2.0
+   Last Updated: 2025-12-25
+   ============================================================================= */
+@import url('https://fonts.googleapis.com/css2?family=Inter:wght@300;400;500;600;700;800;900&display=swap');
+
+:root {
+   /* ================================================================
+       🎨 COLOR SYSTEM
+       ================================================================ */
+
+   /* --- Background Colors --- */
+   --color-bg-primary: #000000;
+   --color-bg-secondary: #0a0a0a;
+   --color-bg-tertiary: #111111;
+
+   /* Glass / Translucent Surfaces */
+   --color-glass-subtle: rgba(255, 255, 255, 0.03);
+   --color-glass-base: rgba(255, 255, 255, 0.05);
+   --color-glass-medium: rgba(255, 255, 255, 0.08);
+   --color-glass-strong: rgba(255, 255, 255, 0.12);
+
+   /* Card Backgrounds */
+   --color-card-base: rgba(255, 255, 255, 0.04);
+   --color-card-hover: rgba(255, 255, 255, 0.07);
+   --color-card-active: rgba(255, 255, 255, 0.10);
+
+   /* Borders */
+   --color-border-subtle: rgba(255, 255, 255, 0.06);
+   --color-border-base: rgba(255, 255, 255, 0.08);
+   --color-border-medium: rgba(255, 255, 255, 0.10);
+   --color-border-strong: rgba(255, 255, 255, 0.15);
+
+   /* --- Text Colors --- */
+   --color-text-primary: #ffffff;
+   --color-text-secondary: rgba(255, 255, 255, 0.7);
+   --color-text-muted: rgba(255, 255, 255, 0.5);
+   --color-text-hint: rgba(255, 255, 255, 0.35);
+   --color-text-disabled: rgba(255, 255, 255, 0.25);
+
+   /* --- Accent Colors (ÚNICO - Pink/Red Musicalol) --- */
+   --color-accent: #E91E63;
+   --color-accent-hover: #F50057;
+   --color-accent-light: #FF4081;
+   --color-accent-dark: #C2185B;
+   --color-accent-subtle: rgba(233, 30, 99, 0.12);
+   --color-accent-soft: rgba(233, 30, 99, 0.15);
+   --color-accent-glow: rgba(233, 30, 99, 0.3);
+
+   /* --- Secondary Accent (Cyan) --- */
+   --color-secondary: #00e5ff;
+   --color-secondary-glow: rgba(0, 229, 255, 0.3);
+
+   /* --- Semantic Colors --- */
+   --color-success: #1db954;
+   --color-success-glow: rgba(29, 185, 84, 0.3);
+   --color-warning: #f39c12;
+   --color-warning-glow: rgba(243, 156, 18, 0.3);
+   --color-danger: #e74c3c;
+   --color-danger-glow: rgba(231, 76, 60, 0.3);
+   --color-info: #3498db;
+   --color-info-glow: rgba(52, 152, 219, 0.3);
+
+   /* ================================================================
+       📏 TYPOGRAPHY SYSTEM
+       ================================================================ */
+
+   /* --- Font Family --- */
+   --font-family-primary: 'Inter', -apple-system, BlinkMacSystemFont, 'Segoe UI', sans-serif;
+   --font-family-mono: 'SF Mono', Menlo, Monaco, Consolas, monospace;
+
+   /* --- Font Sizes (Modular Scale - Ratio 1.25) --- */
+   --font-size-xs: 0.75rem;
+   /* 12px */
+   --font-size-sm: 0.875rem;
+   /* 14px */
+   --font-size-base: 1rem;
+   /* 16px */
+   --font-size-lg: 1.125rem;
+   /* 18px */
+   --font-size-xl: 1.25rem;
+   /* 20px */
+   --font-size-2xl: 1.5rem;
+   /* 24px */
+   --font-size-3xl: 1.875rem;
+   /* 30px */
+   --font-size-4xl: 2.25rem;
+   /* 36px */
+   --font-size-5xl: 3rem;
+   /* 48px */
+   --font-size-6xl: 3.75rem;
+   /* 60px */
+
+   /* --- Font Weights --- */
+   --font-weight-light: 300;
+   --font-weight-normal: 400;
+   --font-weight-medium: 500;
+   --font-weight-semibold: 600;
+   --font-weight-bold: 700;
+   --font-weight-extrabold: 800;
+   --font-weight-black: 900;
+
+   /* --- Line Heights --- */
+   --line-height-none: 1;
+   --line-height-tight: 1.2;
+   --line-height-snug: 1.35;
+   --line-height-normal: 1.5;
+   --line-height-relaxed: 1.75;
+   --line-height-loose: 2;
+
+   /* --- Letter Spacing --- */
+   --letter-spacing-tight: -0.02em;
+   --letter-spacing-normal: 0;
+   --letter-spacing-wide: 0.02em;
+   --letter-spacing-wider: 0.05em;
+
+   /* ================================================================
+       📐 SPACING SYSTEM (Base 4px)
+       ================================================================ */
+   --space-0: 0;
+   --space-1: 0.25rem;
+   /* 4px */
+   --space-2: 0.5rem;
+   /* 8px */
+   --space-3: 0.75rem;
+   /* 12px */
+   --space-4: 1rem;
+   /* 16px */
+   --space-5: 1.25rem;
+   /* 20px */
+   --space-6: 1.5rem;
+   /* 24px */
+   --space-7: 1.75rem;
+   /* 28px */
+   --space-8: 2rem;
+   /* 32px */
+   --space-10: 2.5rem;
+   /* 40px */
+   --space-12: 3rem;
+   /* 48px */
+   --space-16: 4rem;
+   /* 64px */
+   --space-20: 5rem;
+   /* 80px */
+   --space-24: 6rem;
+   /* 96px */
+
+   /* ================================================================
+       🎯 BORDER RADIUS
+       ================================================================ */
+   --radius-none: 0;
+   --radius-sm: 0.5rem;
+   /* 8px */
+   --radius-md: 0.75rem;
+   /* 12px */
+   --radius-lg: 1rem;
+   /* 16px */
+   --radius-xl: 1.5rem;
+   /* 24px */
+   --radius-2xl: 2rem;
+   /* 32px */
+   --radius-full: 9999px;
+
+   /* ================================================================
+       💫 SHADOWS
+       ================================================================ */
+   --shadow-xs: 0 1px 2px rgba(0, 0, 0, 0.1);
+   --shadow-sm: 0 2px 8px rgba(0, 0, 0, 0.15);
+   --shadow-md: 0 4px 16px rgba(0, 0, 0, 0.2);
+   --shadow-lg: 0 8px 32px rgba(0, 0, 0, 0.3);
+   --shadow-xl: 0 16px 48px rgba(0, 0, 0, 0.4);
+   --shadow-2xl: 0 24px 64px rgba(0, 0, 0, 0.5);
+
+   /* Glass Shadows (with inset highlight) */
+   --shadow-glass-sm:
+      0 4px 16px rgba(0, 0, 0, 0.2),
+      inset 0 1px 0 rgba(255, 255, 255, 0.08);
+   --shadow-glass-md:
+      0 8px 32px rgba(0, 0, 0, 0.3),
+      inset 0 1px 0 rgba(255, 255, 255, 0.1);
+   --shadow-glass-lg:
+      0 16px 48px rgba(0, 0, 0, 0.4),
+      inset 0 1px 0 rgba(255, 255, 255, 0.12);
+
+   /* ================================================================
+       ⚡ TRANSITIONS & ANIMATIONS
+       ================================================================ */
+   --ease-in: cubic-bezier(0.4, 0, 1, 1);
+   --ease-out: cubic-bezier(0, 0, 0.2, 1);
+   --ease-in-out: cubic-bezier(0.4, 0, 0.2, 1);
+   --ease-smooth: cubic-bezier(0.4, 0, 0.2, 1);
+
+   --transition-fast: 0.15s ease;
+   --transition-base: 0.2s ease;
+   --transition-smooth: 0.3s var(--ease-smooth);
+   --transition-slow: 0.5s var(--ease-smooth);
+
+   /* Skeleton Loading Gradient */
+   --skeleton-gradient: linear-gradient(90deg,
+         rgba(255, 255, 255, 0.04) 25%,
+         rgba(255, 255, 255, 0.10) 37%,
+         rgba(255, 255, 255, 0.04) 63%);
+
+   /* ================================================================
+       📱 MOBILE SAFE AREAS
+       ================================================================ */
+   --safe-top: env(safe-area-inset-top, 0px);
+   --safe-bottom: env(safe-area-inset-bottom, 0px);
+   --safe-left: env(safe-area-inset-left, 0px);
+   --safe-right: env(safe-area-inset-right, 0px);
+
+   /* ================================================================
+       🏗️ LAYOUT ARCHITECTURE (Mobile Stacking)
+       ================================================================ */
+   --mobile-nav-height: 60px;
+   --player-height: 64px;
+   --header-height: 56px;
+   --total-bottom-stack: calc(var(--mobile-nav-height) + var(--player-height) + var(--safe-bottom));
+
+   /* ================================================================
+       🎚️ Z-INDEX SYSTEM (Ordered Layers)
+       ================================================================ */
+   --z-base: 0;
+   --z-dropdown: 1000;
+   --z-sticky: 2000;
+   --z-fixed: 3000;
+   --z-overlay-backdrop: 5000;
+   --z-overlay: 5500;
+   --z-navbar: 8000;
+   --z-player: 9000;
+   --z-modal-backdrop: 9500;
+   --z-modal: 10000;
+   --z-toast: 11000;
+   --z-tooltip: 12000;
+
+   /* ================================================================
+       📏 BREAKPOINTS (for reference in media queries)
+       ================================================================ */
+   --breakpoint-sm: 640px;
+   --breakpoint-md: 768px;
+   --breakpoint-lg: 1024px;
+   --breakpoint-xl: 1280px;
+   --breakpoint-2xl: 1536px;
+}
+
+/* ================================================================
+   🌐 GLOBAL RESETS & BASE STYLES
+   ================================================================ */
+html,
+body {
+   margin: 0;
+   padding: 0;
+   background-color: var(--color-bg-primary);
+   color: var(--color-text-primary);
+   font-family: var(--font-family-primary);
+   font-size: var(--font-size-base);
+   line-height: var(--line-height-normal);
+   -webkit-font-smoothing: antialiased;
+   -moz-osx-font-smoothing: grayscale;
+   overscroll-behavior: none;
+}
+
+*,
+*::before,
+*::after {
+   box-sizing: border-box;
+   -webkit-tap-highlight-color: transparent;
+}
+
+button {
+   font-family: inherit;
+   cursor: pointer;
+}
+
+/* ================================================================
+   📦 LAYOUT UTILITIES
+   ================================================================ */
+.screen-container {
+   width: 100%;
+   height: 100%;
+   overflow-y: auto;
+   overflow-x: hidden;
+   padding-bottom: var(--total-bottom-stack);
+   background: var(--color-bg-primary);
+   -webkit-overflow-scrolling: touch;
+   scroll-behavior: smooth;
+}
+
+/* ================================================================
+   🎯 UTILITY CLASSES
+   ================================================================ */
+
+/* --- Hide Scrollbar --- */
+.hide-scrollbar {
+   scrollbar-width: none;
+   -ms-overflow-style: none;
+}
+
+.hide-scrollbar::-webkit-scrollbar {
+   display: none;
+}
+
+/* --- Flexbox Utilities --- */
+.flex {
+   display: flex;
+}
+
+.flex-col {
+   display: flex;
+   flex-direction: column;
+}
+
+.flex-center {
+   display: flex;
+   align-items: center;
+   justify-content: center;
+}
+
+.flex-between {
+   display: flex;
+   align-items: center;
+   justify-content: space-between;
+}
+
+.items-center {
+   align-items: center;
+}
+
+.justify-center {
+   justify-content: center;
+}
+
+.gap-1 {
+   gap: var(--space-1);
+}
+
+.gap-2 {
+   gap: var(--space-2);
+}
+
+.gap-3 {
+   gap: var(--space-3);
+}
+
+.gap-4 {
+   gap: var(--space-4);
+}
+
+.gap-6 {
+   gap: var(--space-6);
+}
+
+.gap-8 {
+   gap: var(--space-8);
+}
+
+/* --- Text Utilities --- */
+.text-ellipsis {
+   white-space: nowrap;
+   overflow: hidden;
+   text-overflow: ellipsis;
+}
+
+.text-center {
+   text-align: center;
+}
+
+.text-primary {
+   color: var(--color-text-primary);
+}
+
+.text-secondary {
+   color: var(--color-text-secondary);
+}
+
+.text-muted {
+   color: var(--color-text-muted);
+}
+
+/* --- Skeleton Loading --- */
+.skeleton {
+   background: var(--skeleton-gradient);
+   background-size: 400% 100%;
+   animation: skeleton-loading 1.4s ease infinite;
+}
+
+@keyframes skeleton-loading {
+   0% {
+      background-position: 100% 0;
+   }
+
+   100% {
+      background-position: 0 0;
+   }
+}
+
+/* --- Fade-in Animation --- */
+.fade-in {
+   animation: fade-in 0.3s ease-out;
+}
+
+@keyframes fade-in {
+   from {
+      opacity: 0;
+   }
+
+   to {
+      opacity: 1;
+   }
+}
+
+/* --- Slide-up Animation --- */
+.slide-up {
+   animation: slide-up 0.4s var(--ease-out);
+}
+
+@keyframes slide-up {
+   from {
+      opacity: 0;
+      transform: translateY(20px);
+   }
+
+   to {
+      opacity: 1;
+      transform: translateY(0);
+   }
+}
+
+/* ================================================================
+   ♿ ACCESSIBILITY - FOCUS STATES
+   ================================================================ */
+
+/* Focus ring for keyboard navigation */
+*:focus {
+   outline: none;
+}
+
+*:focus-visible {
+   outline: 2px solid var(--color-accent);
+   outline-offset: 2px;
+   border-radius: 4px;
+}
+
+/* Focus for buttons */
+button:focus-visible,
+.btn:focus-visible {
+   outline: 2px solid var(--color-accent);
+   outline-offset: 2px;
+   box-shadow: 0 0 0 4px var(--color-accent-subtle);
+}
+
+/* Focus for inputs (futuro) */
+input:focus-visible,
+textarea:focus-visible,
+select:focus-visible {
+   outline: 2px solid var(--color-accent);
+   outline-offset: 0;
+   border-color: var(--color-accent);
+}
+
+/* Focus for links */
+a:focus-visible {
+   outline: 2px solid var(--color-accent);
+   outline-offset: 2px;
+   border-radius: 2px;
+}

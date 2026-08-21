@@ -1,0 +1,846 @@
+@import url('https://fonts.googleapis.com/css2?family=Inter:wght@300;400;500;600;700;800;900&display=swap');
+
+/* =============================================================================
+   APPLE MUSIC STYLE - ARTIST DETAIL
+   ============================================================================= */
+
+:root {
+    --apple-red: #FA2D48;
+    --apple-bg: #000000;
+    --text-primary: #ffffff;
+    --text-secondary: rgba(255, 255, 255, 0.6);
+    --text-muted: rgba(255, 255, 255, 0.4);
+    --card-bg: rgba(255, 255, 255, 0.05);
+    --transition-smooth: all 0.3s cubic-bezier(0.23, 1, 0.32, 1);
+}
+
+/* =============================================================================
+   CONTENEDOR PRINCIPAL
+   ============================================================================= */
+
+.artist-detail-apple {
+    position: relative;
+    width: 100%;
+    height: 100%;
+    background-color: var(--apple-bg);
+    font-family: 'Inter', -apple-system, BlinkMacSystemFont, sans-serif;
+    color: var(--text-primary);
+    overflow-y: auto;
+    overflow-x: hidden;
+    scrollbar-width: none;
+}
+
+.artist-detail-apple::-webkit-scrollbar {
+    display: none;
+}
+
+/* =============================================================================
+   STICKY HEADER (Aparece al scroll)
+   ============================================================================= */
+
+.artist-sticky-header {
+    position: fixed;
+    top: 0;
+    left: 0;
+    right: 0;
+    z-index: 100;
+    height: 60px;
+    background: rgba(0, 0, 0, 0.85);
+    backdrop-filter: blur(20px);
+    -webkit-backdrop-filter: blur(20px);
+    display: flex;
+    align-items: center;
+    justify-content: space-between;
+    padding: 0 16px;
+    transform: translateY(-100%);
+    opacity: 0;
+    transition: var(--transition-smooth);
+}
+
+.artist-sticky-header.visible {
+    transform: translateY(0);
+    opacity: 1;
+}
+
+.header-back-btn {
+    width: 36px;
+    height: 36px;
+    border-radius: 50%;
+    background: transparent;
+    border: none;
+    color: white;
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    cursor: pointer;
+}
+
+.header-artist-name {
+    font-size: 1.1rem;
+    font-weight: 600;
+    white-space: nowrap;
+    overflow: hidden;
+    text-overflow: ellipsis;
+    max-width: 50%;
+}
+
+.header-actions {
+    display: flex;
+    gap: 8px;
+}
+
+.header-action-btn {
+    width: 36px;
+    height: 36px;
+    border-radius: 50%;
+    background: transparent;
+    border: none;
+    color: white;
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    cursor: pointer;
+    transition: var(--transition-smooth);
+}
+
+.header-action-btn:hover {
+    background: rgba(255, 255, 255, 0.1);
+}
+
+.header-action-btn.saved {
+    color: var(--apple-red);
+}
+
+.header-action-btn.saved:hover {
+    background: rgba(250, 45, 72, 0.1);
+}
+
+/* =============================================================================
+   NAVIGATION OVERLAY (Sobre la imagen hero)
+   ============================================================================= */
+
+.artist-nav-overlay {
+    position: fixed;
+    top: 0;
+    left: 0;
+    right: 0;
+    z-index: 50;
+    display: flex;
+    justify-content: space-between;
+    align-items: center;
+    padding: 16px 20px;
+    padding-top: calc(16px + env(safe-area-inset-top, 0px));
+    background: linear-gradient(to bottom, rgba(0, 0, 0, 0.6) 0%, rgba(0, 0, 0, 0.3) 50%, transparent 100%);
+    pointer-events: none;
+}
+
+.artist-nav-overlay>* {
+    pointer-events: auto;
+}
+
+.nav-btn-circle {
+    width: 42px;
+    height: 42px;
+    border-radius: 50%;
+    background: rgba(0, 0, 0, 0.5);
+    backdrop-filter: blur(12px);
+    -webkit-backdrop-filter: blur(12px);
+    border: 1px solid rgba(255, 255, 255, 0.1);
+    color: white;
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    cursor: pointer;
+    transition: all 0.25s ease;
+    box-shadow: 0 4px 12px rgba(0, 0, 0, 0.3);
+}
+
+.nav-btn-circle:hover {
+    background: rgba(0, 0, 0, 0.75);
+    transform: scale(1.08);
+    border-color: rgba(255, 255, 255, 0.2);
+}
+
+.nav-btn-circle:active {
+    transform: scale(0.95);
+}
+
+/* Follow/Save Button - Saved State */
+.nav-btn-circle.saved,
+.nav-btn-circle.follow-btn.saved,
+.nav-btn-circle.save-btn.saved {
+    background: var(--apple-red);
+    border-color: var(--apple-red);
+    color: white;
+    box-shadow: 0 4px 16px rgba(250, 45, 72, 0.4);
+}
+
+.nav-btn-circle.saved:hover,
+.nav-btn-circle.follow-btn.saved:hover,
+.nav-btn-circle.save-btn.saved:hover {
+    background: #e02040;
+    transform: scale(1.1);
+    box-shadow: 0 6px 20px rgba(250, 45, 72, 0.5);
+}
+
+.nav-right-actions {
+    display: flex;
+    gap: 10px;
+}
+
+/* =============================================================================
+   1. HERO SECTION - IMAGEN INMERSIVA
+   ============================================================================= */
+
+.artist-hero-immersive {
+    position: relative;
+    width: 100%;
+    height: 60vh;
+    min-height: 400px;
+    overflow: hidden;
+}
+
+.artist-hero-image {
+    width: 100%;
+    height: 100%;
+    object-fit: cover;
+    object-position: center 20%;
+    /* Gradient mask - fade to black at bottom */
+    mask-image: linear-gradient(to bottom, black 50%, transparent 100%);
+    -webkit-mask-image: linear-gradient(to bottom, black 50%, transparent 100%);
+}
+
+.artist-hero-content {
+    position: absolute;
+    bottom: 0;
+    left: 0;
+    right: 0;
+    padding: 0 24px 24px;
+    /* Extra gradient overlay for text legibility */
+    background: linear-gradient(to top, rgba(0, 0, 0, 0.9) 0%, transparent 100%);
+}
+
+.artist-hero-name {
+    font-size: clamp(2.5rem, 10vw, 5rem);
+    font-weight: 800;
+    margin: 0 0 20px;
+    line-height: 1;
+    letter-spacing: -0.03em;
+    text-shadow: 0 4px 20px rgba(0, 0, 0, 0.5);
+}
+
+/* =============================================================================
+   ✅ NUEVA: BARRA DE ACCIONES PROMINENTE
+   ============================================================================= */
+
+.artist-action-bar {
+    display: flex;
+    align-items: center;
+    gap: 12px;
+    flex-wrap: wrap;
+}
+
+.artist-action-btn {
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    gap: 8px;
+    border: none;
+    border-radius: 50px;
+    font-weight: 600;
+    cursor: pointer;
+    transition: all 0.2s ease;
+    -webkit-tap-highlight-color: transparent;
+}
+
+.artist-action-btn:disabled {
+    opacity: 0.5;
+    cursor: not-allowed;
+}
+
+/* Botón Principal (Play) */
+.artist-action-btn.primary {
+    padding: 14px 32px;
+    min-height: 50px;
+    background: var(--apple-red);
+    color: white;
+    font-size: 15px;
+    box-shadow: 0 6px 24px rgba(250, 45, 72, 0.4);
+}
+
+.artist-action-btn.primary:hover:not(:disabled) {
+    background: #e02040;
+    transform: scale(1.03);
+    box-shadow: 0 8px 32px rgba(250, 45, 72, 0.5);
+}
+
+.artist-action-btn.primary:active:not(:disabled) {
+    transform: scale(0.97);
+}
+
+.artist-action-btn.primary svg {
+    margin-left: 2px;
+    /* Visual centering for play icon */
+}
+
+/* Botones Secundarios (Shuffle, Library) */
+.artist-action-btn.secondary {
+    width: 50px;
+    height: 50px;
+    padding: 0;
+    background: rgba(255, 255, 255, 0.15);
+    backdrop-filter: blur(12px);
+    -webkit-backdrop-filter: blur(12px);
+    color: white;
+    border: 1px solid rgba(255, 255, 255, 0.2);
+}
+
+.artist-action-btn.secondary:hover:not(:disabled) {
+    background: rgba(255, 255, 255, 0.25);
+    transform: scale(1.05);
+}
+
+.artist-action-btn.secondary:active:not(:disabled) {
+    transform: scale(0.95);
+}
+
+/* Estado guardado en biblioteca */
+.artist-action-btn.library-btn.saved {
+    background: var(--apple-red);
+    border-color: var(--apple-red);
+    color: white;
+    box-shadow: 0 4px 16px rgba(250, 45, 72, 0.35);
+}
+
+.artist-action-btn.library-btn.saved:hover:not(:disabled) {
+    background: #e02040;
+}
+
+/* =============================================================================
+   BOTÓN PLAY FLOTANTE
+   ============================================================================= */
+
+.artist-floating-play {
+    position: absolute;
+    bottom: -28px;
+    right: 24px;
+    width: 56px;
+    height: 56px;
+    border-radius: 50%;
+    background: var(--apple-red);
+    border: none;
+    color: white;
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    cursor: pointer;
+    box-shadow: 0 8px 30px rgba(250, 45, 72, 0.4);
+    transition: var(--transition-smooth);
+    z-index: 10;
+}
+
+.artist-floating-play:hover:not(:disabled) {
+    transform: scale(1.08);
+    box-shadow: 0 12px 40px rgba(250, 45, 72, 0.5);
+}
+
+.artist-floating-play:disabled {
+    opacity: 0.5;
+    cursor: not-allowed;
+}
+
+.artist-floating-play svg {
+    margin-left: 4px;
+    /* Visual centering for play icon */
+}
+
+/* =============================================================================
+   2. CONTENIDO PRINCIPAL
+   ============================================================================= */
+
+.artist-main-content {
+    position: relative;
+    padding: 40px 24px;
+    padding-bottom: 140px;
+    background: var(--apple-bg);
+    min-height: 50vh;
+}
+
+/* =============================================================================
+   LATEST RELEASE SECTION
+   ============================================================================= */
+
+.latest-release-section {
+    margin-bottom: 32px;
+}
+
+.latest-release-card {
+    display: flex;
+    align-items: center;
+    gap: 16px;
+    padding: 16px;
+    background: var(--card-bg);
+    border-radius: 12px;
+    cursor: pointer;
+    transition: var(--transition-smooth);
+}
+
+.latest-release-card:hover {
+    background: rgba(255, 255, 255, 0.08);
+}
+
+.latest-release-cover {
+    width: 80px;
+    height: 80px;
+    border-radius: 8px;
+    overflow: hidden;
+    flex-shrink: 0;
+}
+
+.latest-release-cover img {
+    width: 100%;
+    height: 100%;
+    object-fit: cover;
+}
+
+.latest-release-info {
+    display: flex;
+    flex-direction: column;
+    gap: 4px;
+    min-width: 0;
+}
+
+.release-date {
+    font-size: 0.7rem;
+    color: var(--text-muted);
+    text-transform: uppercase;
+    letter-spacing: 0.5px;
+    font-weight: 600;
+}
+
+.release-title {
+    font-size: 1.1rem;
+    font-weight: 600;
+    margin: 0;
+    white-space: nowrap;
+    overflow: hidden;
+    text-overflow: ellipsis;
+}
+
+.release-tracks {
+    font-size: 0.85rem;
+    color: var(--text-secondary);
+}
+
+/* =============================================================================
+   TOP TRACKS SECTION - LISTA NUMERADA
+   ============================================================================= */
+
+.top-tracks-section {
+    margin-bottom: 32px;
+}
+
+.section-header-row {
+    display: flex;
+    align-items: center;
+    gap: 8px;
+    margin-bottom: 16px;
+}
+
+.section-title-apple {
+    font-size: 1.4rem;
+    font-weight: 700;
+    margin: 0;
+    color: var(--text-primary);
+}
+
+.section-chevron {
+    color: var(--apple-red);
+    font-size: 1rem;
+}
+
+.tracks-list-apple {
+    display: flex;
+    flex-direction: column;
+    gap: 2px;
+}
+
+.track-item-apple {
+    display: flex;
+    align-items: center;
+    gap: 14px;
+    padding: 10px 4px;
+    border-radius: 8px;
+    cursor: pointer;
+    transition: background 0.15s ease;
+}
+
+.track-item-apple:hover {
+    background: rgba(255, 255, 255, 0.05);
+}
+
+.track-item-apple.loading {
+    opacity: 0.6;
+    pointer-events: none;
+}
+
+.track-number {
+    width: 24px;
+    font-size: 0.95rem;
+    font-weight: 500;
+    color: var(--text-secondary);
+    text-align: center;
+    flex-shrink: 0;
+}
+
+.track-cover-small {
+    width: 52px;
+    height: 52px;
+    border-radius: 6px;
+    overflow: hidden;
+    flex-shrink: 0;
+    position: relative;
+    background: var(--card-bg);
+}
+
+.track-cover-small img {
+    width: 100%;
+    height: 100%;
+    object-fit: cover;
+}
+
+.track-spinner-overlay {
+    position: absolute;
+    inset: 0;
+    background: rgba(0, 0, 0, 0.6);
+    display: flex;
+    align-items: center;
+    justify-content: center;
+}
+
+.spinner-small {
+    width: 20px;
+    height: 20px;
+    border: 2px solid rgba(255, 255, 255, 0.2);
+    border-top-color: white;
+    border-radius: 50%;
+    animation: spin 0.8s linear infinite;
+}
+
+.track-details {
+    flex: 1;
+    min-width: 0;
+    display: flex;
+    flex-direction: column;
+    gap: 4px;
+}
+
+.track-title-apple {
+    font-size: 1rem;
+    font-weight: 500;
+    color: var(--text-primary);
+    white-space: nowrap;
+    overflow: hidden;
+    text-overflow: ellipsis;
+}
+
+.track-album-apple {
+    font-size: 0.85rem;
+    color: var(--text-secondary);
+    white-space: nowrap;
+    overflow: hidden;
+    text-overflow: ellipsis;
+}
+
+.track-menu-btn-apple {
+    width: 36px;
+    height: 36px;
+    border-radius: 50%;
+    background: transparent;
+    border: none;
+    color: var(--text-muted);
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    cursor: pointer;
+    flex-shrink: 0;
+    transition: var(--transition-smooth);
+}
+
+.track-menu-btn-apple:hover {
+    color: white;
+    background: rgba(255, 255, 255, 0.1);
+}
+
+/* =============================================================================
+   DISCOGRAPHY SECTION
+   ============================================================================= */
+
+.discography-section {
+    margin-bottom: 32px;
+}
+
+.albums-scroll-row {
+    display: flex;
+    gap: 16px;
+    overflow-x: auto;
+    padding-bottom: 8px;
+    scrollbar-width: none;
+}
+
+.albums-scroll-row::-webkit-scrollbar {
+    display: none;
+}
+
+.album-card-apple {
+    flex-shrink: 0;
+    width: 150px;
+    cursor: pointer;
+    transition: var(--transition-smooth);
+}
+
+.album-card-apple:hover {
+    transform: scale(1.03);
+}
+
+.album-cover-apple {
+    width: 150px;
+    height: 150px;
+    border-radius: 8px;
+    overflow: hidden;
+    margin-bottom: 10px;
+    box-shadow: 0 4px 20px rgba(0, 0, 0, 0.4);
+}
+
+.album-cover-apple img {
+    width: 100%;
+    height: 100%;
+    object-fit: cover;
+}
+
+.album-title-apple {
+    display: block;
+    font-size: 0.9rem;
+    font-weight: 500;
+    color: var(--text-primary);
+    white-space: nowrap;
+    overflow: hidden;
+    text-overflow: ellipsis;
+}
+
+.album-type-apple {
+    font-size: 0.8rem;
+    color: var(--text-secondary);
+}
+
+/* =============================================================================
+   LOADING & ERROR STATES
+   ============================================================================= */
+
+.artist-loading-screen,
+.artist-error-screen {
+    display: flex;
+    flex-direction: column;
+    align-items: center;
+    justify-content: center;
+    height: 100vh;
+    background: var(--apple-bg);
+    color: var(--text-primary);
+    gap: 20px;
+}
+
+.spinner-loader {
+    width: 50px;
+    height: 50px;
+    border: 3px solid rgba(255, 255, 255, 0.1);
+    border-top-color: var(--apple-red);
+    border-radius: 50%;
+    animation: spin 0.8s linear infinite;
+}
+
+.back-btn-simple {
+    background: var(--apple-red);
+    color: white;
+    border: none;
+    padding: 12px 24px;
+    border-radius: 50px;
+    font-weight: 600;
+    cursor: pointer;
+    transition: transform 0.2s;
+}
+
+.back-btn-simple:hover {
+    transform: scale(1.05);
+}
+
+/* =============================================================================
+   ANIMACIONES
+   ============================================================================= */
+
+@keyframes spin {
+    to {
+        transform: rotate(360deg);
+    }
+}
+
+/* =============================================================================
+   RESPONSIVE - MÓVIL
+   ============================================================================= */
+
+@media (max-width: 768px) {
+    .artist-hero-immersive {
+        height: 55vh;
+        min-height: 350px;
+    }
+
+    .artist-hero-name {
+        font-size: clamp(2rem, 12vw, 3rem);
+        margin-bottom: 16px;
+    }
+
+    .artist-hero-content {
+        padding: 0 16px 20px;
+    }
+
+    /* Barra de acciones - ajustes móvil */
+    .artist-action-bar {
+        gap: 10px;
+    }
+
+    .artist-action-btn.primary {
+        padding: 12px 24px;
+        min-height: 46px;
+        font-size: 14px;
+    }
+
+    .artist-action-btn.secondary {
+        width: 46px;
+        height: 46px;
+    }
+
+    .artist-floating-play {
+        right: 16px;
+        bottom: -24px;
+        width: 50px;
+        height: 50px;
+    }
+
+    .artist-floating-play svg {
+        font-size: 20px;
+    }
+
+    .artist-main-content {
+        padding: 32px 16px;
+        padding-bottom: 160px;
+    }
+
+    .latest-release-card {
+        padding: 12px;
+    }
+
+    .latest-release-cover {
+        width: 70px;
+        height: 70px;
+    }
+
+    .section-title-apple {
+        font-size: 1.2rem;
+    }
+
+    .track-cover-small {
+        width: 48px;
+        height: 48px;
+    }
+
+    .albums-scroll-row {
+        gap: 12px;
+    }
+
+    .album-card-apple {
+        width: 130px;
+    }
+
+    .album-cover-apple {
+        width: 130px;
+        height: 130px;
+    }
+
+    /* Navigation buttons - larger for touch */
+    .artist-nav-overlay {
+        padding: 12px 16px;
+        padding-top: calc(12px + env(safe-area-inset-top, 0px));
+    }
+
+    .nav-btn-circle {
+        width: 40px;
+        height: 40px;
+        min-width: 40px;
+        min-height: 40px;
+    }
+
+    .nav-right-actions {
+        gap: 8px;
+    }
+
+    /* Header buttons */
+    .header-action-btn {
+        width: 34px;
+        height: 34px;
+    }
+
+    /* Hide nav overlay when sticky header is visible */
+    .artist-sticky-header.visible~.artist-nav-overlay {
+        opacity: 0;
+        pointer-events: none;
+        transition: opacity 0.3s ease;
+    }
+}
+
+/* =============================================================================
+   DESKTOP AJUSTES
+   ============================================================================= */
+
+@media (min-width: 1024px) {
+    .artist-hero-immersive {
+        height: 65vh;
+    }
+
+    .artist-hero-name {
+        font-size: clamp(4rem, 8vw, 6rem);
+    }
+
+    .artist-main-content {
+        max-width: 1200px;
+        margin: 0 auto;
+        padding: 48px 40px;
+        padding-bottom: 140px;
+    }
+
+    .artist-floating-play {
+        width: 64px;
+        height: 64px;
+        right: calc(50% - 600px + 40px);
+    }
+
+    .artist-floating-play svg {
+        font-size: 28px;
+    }
+
+    .latest-release-cover {
+        width: 100px;
+        height: 100px;
+    }
+
+    .track-item-apple {
+        padding: 12px 8px;
+    }
+
+    .album-card-apple {
+        width: 180px;
+    }
+
+    .album-cover-apple {
+        width: 180px;
+        height: 180px;
+    }
+}

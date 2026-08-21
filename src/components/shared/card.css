@@ -1,0 +1,308 @@
+/* =============================================================================
+   SHARED CARD COMPONENT
+   Unified design language for Feed, Search, Library, and Radio
+   ============================================================================= */
+
+/* BASE CARD CONTAINER */
+.app-card {
+    position: relative;
+    display: flex;
+    flex-direction: column;
+    background: transparent;
+    border: none;
+    border-radius: var(--radius-md);
+    cursor: pointer;
+    text-align: left;
+    overflow: hidden;
+    transition: transform 0.2s cubic-bezier(0.25, 0.8, 0.25, 1);
+    -webkit-tap-highlight-color: transparent;
+    user-select: none;
+    color: inherit;
+    width: 100%;
+    padding: 0;
+    margin: 0;
+}
+
+/* Hover Effects (Desktop only) */
+@media (hover: hover) {
+    .app-card:hover .app-card-img {
+        transform: scale(1.05);
+    }
+
+    .app-card:active {
+        transform: scale(0.98);
+    }
+
+    .app-card:hover .app-card-play-overlay {
+        opacity: 1;
+        transform: scale(1);
+    }
+}
+
+/* =============================================================================
+   VARIANTS
+   ============================================================================= */
+
+/* --- VERTICAL (Default) --- */
+/* Used in grids (Feed, Library, Search) */
+.app-card.variant-vertical {
+    width: 100%;
+}
+
+.app-card.variant-vertical .app-card-img-wrapper {
+    width: 100%;
+    aspect-ratio: 1;
+    border-radius: var(--radius-md);
+    overflow: hidden;
+    background: var(--bg-card);
+    margin-bottom: var(--space-sm);
+    position: relative;
+    box-shadow: 0 4px 12px rgba(0, 0, 0, 0.2);
+}
+
+/* --- CIRCLE (Artists) --- */
+.app-card.variant-circle {
+    align-items: center;
+}
+
+.app-card.variant-circle .app-card-img-wrapper {
+    width: 100%;
+    aspect-ratio: 1;
+    border-radius: 50%;
+    overflow: hidden;
+    background: var(--bg-card);
+    margin-bottom: var(--space-sm);
+    position: relative;
+    box-shadow: 0 4px 12px rgba(0, 0, 0, 0.2);
+    border: 1px solid var(--glass-border);
+}
+
+.app-card.variant-circle .app-card-title {
+    text-align: center;
+}
+
+/* --- HORIZONTAL / LIST --- */
+/* Used in Search results, Song lists */
+.app-card.variant-horizontal {
+    flex-direction: row;
+    align-items: center;
+    gap: var(--space-md);
+    padding: var(--space-sm);
+    border-radius: var(--radius-md);
+    transition: background-color 0.2s ease;
+}
+
+.app-card.variant-horizontal:hover {
+    background: var(--bg-card-hover);
+}
+
+.app-card.variant-horizontal .app-card-img-wrapper {
+    width: 48px;
+    height: 48px;
+    flex-shrink: 0;
+    border-radius: var(--radius-sm);
+    overflow: hidden;
+    background: var(--bg-card);
+    position: relative;
+}
+
+.app-card.variant-horizontal .app-card-meta {
+    flex: 1;
+    min-width: 0;
+    /* Text truncation fix */
+}
+
+/* --- POSTER (Wide/Tall) --- */
+.app-card.variant-poster {
+    width: 160px;
+}
+
+.app-card.variant-poster .app-card-img-wrapper {
+    width: 100%;
+    height: 220px;
+    border-radius: var(--radius-lg);
+    background: var(--bg-card);
+    margin-bottom: var(--space-sm);
+    overflow: hidden;
+    position: relative;
+    box-shadow: 0 4px 12px rgba(0, 0, 0, 0.3);
+}
+
+/* --- WIDE (Overlay Text) --- */
+.app-card.variant-wide {
+    width: 280px;
+    height: 140px;
+    border-radius: var(--radius-md);
+    overflow: hidden;
+    position: relative;
+}
+
+.app-card.variant-wide .app-card-img-wrapper {
+    width: 100%;
+    height: 100%;
+    margin: 0;
+    border-radius: 0;
+}
+
+.app-card.variant-wide .app-card-meta {
+    position: absolute;
+    bottom: 0;
+    left: 0;
+    right: 0;
+    padding: var(--space-md);
+    background: linear-gradient(to top, rgba(0, 0, 0, 0.9), transparent);
+    z-index: 2;
+    text-shadow: 0 2px 4px rgba(0, 0, 0, 0.5);
+}
+
+.app-card.variant-wide .app-card-title {
+    font-size: 15px;
+    color: white;
+}
+
+.app-card.variant-wide .app-card-subtitle {
+    font-size: 12px;
+    color: rgba(255, 255, 255, 0.8);
+}
+
+/* =============================================================================
+   IMAGE & OVERLAYS
+   ============================================================================= */
+
+.app-card-img {
+    width: 100%;
+    height: 100%;
+    object-fit: cover;
+    opacity: 0;
+    transition: opacity 0.4s ease, transform 0.4s cubic-bezier(0.25, 0.8, 0.25, 1);
+    will-change: transform, opacity;
+}
+
+.app-card-img.is-loaded {
+    opacity: 1;
+}
+
+/* Fallback Icon */
+.app-card-fallback {
+    position: absolute;
+    inset: 0;
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    color: var(--text-hint);
+    font-size: 24px;
+    background: var(--bg-card);
+}
+
+/* Play Button Overlay (Hover) */
+.app-card-play-overlay {
+    position: absolute;
+    inset: 0;
+    background: rgba(0, 0, 0, 0.4);
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    opacity: 0;
+    transform: scale(0.95);
+    transition: opacity 0.2s ease, transform 0.2s ease;
+    z-index: 2;
+}
+
+.app-card-play-button {
+    width: 40px;
+    height: 40px;
+    background: var(--accent-primary);
+    border-radius: 50%;
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    color: white;
+    font-size: 14px;
+    box-shadow: 0 4px 12px rgba(0, 0, 0, 0.4);
+    padding-left: 3px;
+    /* Visual center adjustment for play icon */
+}
+
+/* Mobile: Don't rely on hover for play overlay functionality, 
+   but we can show a small permanent indicator or just rely on tap */
+@media (hover: none) {
+    .app-card-play-overlay {
+        display: none;
+        /* Cleaner look on mobile */
+    }
+}
+
+/* =============================================================================
+   TEXT CONTENT
+   ============================================================================= */
+
+.app-card-meta {
+    display: flex;
+    flex-direction: column;
+    gap: 2px;
+}
+
+.app-card-title {
+    font-size: 13px;
+    font-weight: 600;
+    color: var(--text-primary);
+    white-space: nowrap;
+    overflow: hidden;
+    text-overflow: ellipsis;
+    line-height: 1.3;
+}
+
+.app-card-subtitle {
+    font-size: 11px;
+    color: var(--text-secondary);
+    white-space: nowrap;
+    overflow: hidden;
+    text-overflow: ellipsis;
+    line-height: 1.3;
+}
+
+.variant-poster .app-card-title {
+    font-size: 14px;
+    font-weight: 700;
+}
+
+/* =============================================================================
+   SKELETONS (Loading State)
+   ============================================================================= */
+
+.app-card-skeleton-img {
+    position: absolute;
+    inset: 0;
+    background: var(--skeleton-grad);
+    background-size: 400% 100%;
+    animation: skel 1.5s ease-in-out infinite;
+    z-index: 1;
+}
+
+.app-card-skeleton-text {
+    height: 10px;
+    border-radius: 4px;
+    background: var(--skeleton-grad);
+    background-size: 400% 100%;
+    animation: skel 1.5s ease-in-out infinite;
+    margin-bottom: 4px;
+}
+
+.app-card-skeleton-text.title {
+    width: 80%;
+    height: 12px;
+}
+
+.app-card-skeleton-text.subtitle {
+    width: 50%;
+}
+
+@keyframes skel {
+    0% {
+        background-position: 100% 0;
+    }
+
+    100% {
+        background-position: 0% 0;
+    }
+}

@@ -1,0 +1,368 @@
+/* =============================================================================
+   GLOBAL FIXES - Corrección de Márgenes, Tamaños e Íconos
+   Importar DESPUÉS de globalStyles.css en index.css
+   ============================================================================= */
+
+/* ================================================================
+   🔧 CORRECCIONES GLOBALES DE LAYOUT
+   ================================================================ */
+
+/* Asegurar que todas las pantallas empiecen desde arriba */
+.screen-container,
+.feed-screen,
+.search-page,
+.library-page,
+.favorites-page-apple,
+.profile-wrapper,
+
+.player-screen,
+.home-container {
+    padding-top: 0 !important;
+    margin-top: 0 !important;
+}
+
+/* ================================================================
+   📏 ESTANDARIZACIÓN DE MÁRGENES Y PADDING
+   ================================================================ */
+
+/* Headers de sección - Consistente en todas las pantallas */
+.feed-section,
+.search-section,
+.library-section,
+.favorites-section {
+    padding: var(--space-4) var(--space-5);
+    margin-bottom: var(--space-4);
+}
+
+/* Títulos de sección - Tamaño consistente y GRANDE */
+.feed-section h2,
+.search-section h2,
+.library-section h2,
+.favorites-section h2,
+.section-title,
+.section-header h2,
+.feed-section-title,
+.search-section-title,
+.library-section-title {
+    font-size: 1.5rem !important;
+    /* 24px - MUY VISIBLE */
+    font-weight: 800 !important;
+    /* Extra bold */
+    margin-bottom: var(--space-3) !important;
+    line-height: var(--line-height-tight) !important;
+    letter-spacing: -0.02em !important;
+    /* Más compacto visualmente */
+    color: var(--color-text-primary) !important;
+}
+
+/* Subtítulos de sección */
+.feed-section-subtitle,
+.section-subtitle,
+.section-header p {
+    font-size: 14px !important;
+    /* 14px - legible */
+    font-weight: 400 !important;
+    line-height: 1.4 !important;
+    color: var(--color-text-secondary) !important;
+}
+
+/* ================================================================
+   🔘 TAMAÑOS DE ÍCONOS ESTANDARIZADOS
+   ================================================================ */
+
+/* Íconos pequeños (en listas, metada) */
+.icon-sm,
+.track-icon,
+.metadata-icon {
+    width: 16px !important;
+    height: 16px !important;
+    min-width: 16px !important;
+    min-height: 16px !important;
+}
+
+/* Íconos medianos (en botones, headers) */
+.icon-md,
+.header-icon,
+.button-icon,
+.nav-icon {
+    width: 24px !important;
+    height: 24px !important;
+    min-width: 24px !important;
+    min-height: 24px !important;
+}
+
+/* Íconos grandes (en heroes, features) */
+.icon-lg,
+.hero-icon,
+.feature-icon {
+    width: 40px !important;
+    height: 40px !important;
+    min-width: 40px !important;
+    min-height: 40px !important;
+}
+
+/* Íconos extra grandes (en pantallas principales) */
+.icon-xl,
+.screen-icon {
+    width: 64px !important;
+    height: 64px !important;
+    min-width: 64px !important;
+    min-height: 64px !important;
+}
+
+/* SVG dentro de íconos - Asegurar que llenen el contenedor */
+.icon-sm svg,
+.icon-md svg,
+.icon-lg svg,
+.icon-xl svg {
+    width: 100%;
+    height: 100%;
+}
+
+/* ================================================================
+   🎯 CORRECCIONES ESPECÍFICAS POR PANTALLA
+   ================================================================ */
+
+/* LIBRARY - Hero icon tamaño consistente */
+.library-hero-icon {
+    width: 64px !important;
+    height: 64px !important;
+    font-size: 32px !important;
+}
+
+.library-hero-icon svg {
+    width: 32px !important;
+    height: 32px !important;
+}
+
+/* FAVORITES - Hero icon */
+.favorites-hero-icon,
+.fav-hero-icon {
+    width: 80px !important;
+    height: 80px !important;
+    font-size: 40px !important;
+}
+
+/* SEARCH - Input y filtros alineados */
+.search-input-wrapper {
+    padding: var(--space-4) var(--space-5) !important;
+}
+
+
+/* FEED - Hero padding consistente */
+.feed-hero {
+    padding: var(--space-4) var(--space-5) !important;
+}
+
+
+
+/* ================================================================
+   📱 BOTONES DE NAVEGACIÓN - Tamaño consistente
+   ================================================================ */
+
+/* Botones de back/menu en headers */
+.nav-btn-back,
+.nav-btn-menu,
+.page-header__back,
+.page-header__action,
+.header-back-btn,
+.header-action-btn {
+    width: 44px !important;
+    height: 44px !important;
+    min-width: 44px !important;
+    min-height: 44px !important;
+    padding: 0 !important;
+    display: flex !important;
+    align-items: center !important;
+    justify-content: center !important;
+}
+
+/* Íconos dentro de botones de navegación */
+.nav-btn-back svg,
+.nav-btn-menu svg,
+.page-header__back svg,
+.page-header__action svg,
+.header-back-btn svg,
+.header-action-btn svg {
+    width: 20px !important;
+    height: 20px !important;
+}
+
+/* ================================================================
+   🎵 TARJETAS DE MÚSICA - Íconos consistentes
+   ================================================================ */
+
+/* Play buttons en cards */
+.feed-card .play-btn,
+.search-card .play-btn,
+.music-card__play-btn,
+.card-play-btn {
+    width: 48px !important;
+    height: 48px !important;
+    min-width: 48px !important;
+    min-height: 48px !important;
+}
+
+.feed-card .play-btn svg,
+.search-card .play-btn svg,
+.music-card__play-btn svg,
+.card-play-btn svg {
+    width: 20px !important;
+    height: 20px !important;
+}
+
+/* Íconos de más opciones (three dots) */
+.more-btn,
+.options-btn,
+.menu-btn {
+    width: 36px !important;
+    height: 36px !important;
+    min-width: 36px !important;
+    min-height: 36px !important;
+}
+
+.more-btn svg,
+.options-btn svg,
+.menu-btn svg {
+    width: 18px !important;
+    height: 18px !important;
+}
+
+/* ================================================================
+   📋 LISTAS Y TRACKS - Íconos y spacing
+   ================================================================ */
+
+/* Track lists - altura consistente */
+.track-item,
+.song-item,
+.list-item {
+    min-height: 56px !important;
+    padding: var(--space-2) var(--space-4) !important;
+}
+
+/* Thumbnails en listas */
+.track-thumbnail,
+.song-thumbnail,
+.list-thumbnail {
+    width: 48px !important;
+    height: 48px !important;
+    min-width: 48px !important;
+    min-height: 48px !important;
+    border-radius: var(--radius-sm) !important;
+}
+
+/* ================================================================
+   🔄 BOTONES DE ACCIÓN - Tamaños touch-friendly
+   ================================================================ */
+
+/* Botones primarios en heroes */
+.action-btn-play,
+.hero-play-btn,
+.primary-action-btn {
+    min-height: 52px !important;
+    padding: var(--space-3) var(--space-6) !important;
+    font-size: var(--font-size-base) !important;
+}
+
+/* Botones secundarios */
+.action-btn-secondary,
+.secondary-action-btn {
+    min-height: 48px !important;
+    padding: var(--space-3) var(--space-5) !important;
+}
+
+/* ================================================================
+   ⚡ PERFORMANCE - Evitar layout shifts
+   ================================================================ */
+
+/* Prevenir CLS en íconos */
+[class*="icon"] {
+    flex-shrink: 0;
+}
+
+/* Aspect ratio para imágenes */
+.card-image,
+.thumbnail,
+.cover-image {
+    aspect-ratio: 1;
+    object-fit: cover;
+}
+
+/* ================================================================
+   📱 RESPONSIVE - Ajustes mobile
+   ================================================================ */
+
+@media (max-width: 768px) {
+
+    /* Padding lateral consistente en mobile */
+    .feed-section,
+    .search-section,
+    .library-section,
+    .favorites-section {
+        padding-left: var(--space-4);
+        padding-right: var(--space-4);
+    }
+
+    /* Botones de navegación touch-friendly */
+    .nav-btn-back,
+    .nav-btn-menu,
+    .page-header__back,
+    .page-header__action {
+        width: 48px;
+        height: 48px;
+    }
+
+    /* Íconos en botones mobile - solo un poco más grandes */
+    .nav-btn-back svg,
+    .nav-btn-menu svg,
+    .page-header__back svg,
+    .page-header__action svg {
+        width: 22px;
+        height: 22px;
+    }
+}
+
+/* ================================================================
+   🎨 COLORES DE ÍCONOS - Consistencia
+   ================================================================ */
+
+/* Íconos primarios */
+.icon-primary,
+.primary-icon {
+    color: var(--color-text-primary);
+}
+
+/* Íconos secundarios */
+.icon-secondary,
+.secondary-icon {
+    color: var(--color-text-secondary);
+}
+
+/* Íconos muted */
+.icon-muted,
+.muted-icon {
+    color: var(--color-text-muted);
+}
+
+/* Íconos de acento */
+.icon-accent,
+.accent-icon {
+    color: var(--color-accent);
+}
+
+/* ================================================================
+   🔒 SAFE AREAS - iOS notch support
+   ================================================================ */
+
+/* Headers con safe area */
+.page-header,
+.nav-bar,
+.top-bar {
+    padding-top: max(var(--space-4), var(--safe-top)) !important;
+}
+
+/* Content padding bottom para mobile stacking */
+.screen-container,
+.page-content {
+    padding-bottom: var(--total-bottom-stack) !important;
+}

@@ -1,0 +1,249 @@
+/* =============================================================================
+   BUTTON SYSTEM - Unified Button Components
+   Version: 1.0
+   ============================================================================= */
+
+/* ================================================================
+   🔘 BASE BUTTON STYLES
+   ================================================================ */
+.btn {
+    display: inline-flex;
+    align-items: center;
+    justify-content: center;
+    gap: var(--space-2);
+    padding: var(--space-3) var(--space-5);
+    border-radius: var(--radius-full);
+    font-family: var(--font-family-primary);
+    font-weight: var(--font-weight-semibold);
+    font-size: var(--font-size-sm);
+    line-height: var(--line-height-tight);
+    text-decoration: none;
+    white-space: nowrap;
+    border: none;
+    outline: none;
+    cursor: pointer;
+    transition: var(--transition-fast);
+    -webkit-tap-highlight-color: transparent;
+    user-select: none;
+}
+
+.btn:disabled {
+    opacity: 0.5;
+    cursor: not-allowed;
+    pointer-events: none;
+}
+
+/* ================================================================
+   📏 SIZE VARIANTS
+   ================================================================ */
+.btn--xs {
+    padding: var(--space-1) var(--space-3);
+    font-size: var(--font-size-xs);
+    gap: var(--space-1);
+}
+
+.btn--sm {
+    padding: var(--space-2) var(--space-4);
+    font-size: var(--font-size-sm);
+}
+
+.btn--md {
+    padding: var(--space-3) var(--space-5);
+    font-size: var(--font-size-base);
+}
+
+.btn--lg {
+    padding: var(--space-4) var(--space-6);
+    font-size: var(--font-size-lg);
+}
+
+.btn--xl {
+    padding: var(--space-5) var(--space-8);
+    font-size: var(--font-size-xl);
+}
+
+/* Icon Only */
+.btn--icon {
+    aspect-ratio: 1;
+    padding: var(--space-3);
+}
+
+.btn--icon.btn--sm {
+    padding: var(--space-2);
+}
+
+.btn--icon.btn--lg {
+    padding: var(--space-4);
+}
+
+/* ================================================================
+   🎨 STYLE VARIANTS
+   ================================================================ */
+
+/* Primary - Accent Color */
+.btn--primary {
+    background: var(--color-accent);
+    color: #ffffff;
+    box-shadow: 0 2px 8px var(--color-accent-glow);
+}
+
+.btn--primary:hover:not(:disabled) {
+    background: var(--color-accent-hover);
+    box-shadow: 0 4px 12px var(--color-accent-glow);
+    transform: translateY(-1px);
+}
+
+.btn--primary:active:not(:disabled) {
+    transform: translateY(0);
+    box-shadow: 0 1px 4px var(--color-accent-glow);
+}
+
+/* Secondary - Glass Style */
+.btn--secondary {
+    background: var(--color-glass-medium);
+    color: var(--color-text-primary);
+    border: 1px solid var(--color-border-medium);
+}
+
+.btn--secondary:hover:not(:disabled) {
+    background: var(--color-glass-strong);
+    border-color: var(--color-border-strong);
+}
+
+.btn--secondary:active:not(:disabled) {
+    background: var(--color-card-active);
+}
+
+/* Outline */
+.btn--outline {
+    background: transparent;
+    color: var(--color-accent);
+    border: 2px solid var(--color-accent);
+}
+
+.btn--outline:hover:not(:disabled) {
+    background: var(--color-accent-subtle);
+    border-color: var(--color-accent-hover);
+}
+
+.btn--outline:active:not(:disabled) {
+    background: var(--color-accent-soft);
+}
+
+/* Ghost - Minimal Style */
+.btn--ghost {
+    background: transparent;
+    color: var(--color-text-secondary);
+}
+
+.btn--ghost:hover:not(:disabled) {
+    background: var(--color-glass-subtle);
+    color: var(--color-text-primary);
+}
+
+.btn--ghost:active:not(:disabled) {
+    background: var(--color-glass-base);
+}
+
+/* Danger */
+.btn--danger {
+    background: var(--color-danger);
+    color: #ffffff;
+    box-shadow: 0 2px 8px var(--color-danger-glow);
+}
+
+.btn--danger:hover:not(:disabled) {
+    background: #c0392b;
+    box-shadow: 0 4px 12px var(--color-danger-glow);
+    transform: translateY(-1px);
+}
+
+/* Success */
+.btn--success {
+    background: var(--color-success);
+    color: #ffffff;
+    box-shadow: 0 2px 8px var(--color-success-glow);
+}
+
+.btn--success:hover:not(:disabled) {
+    background: #17a045;
+    box-shadow: 0 4px 12px var(--color-success-glow);
+    transform: translateY(-1px);
+}
+
+/* ================================================================
+   🌟 SPECIAL STYLES
+   ================================================================ */
+
+/* Pill with icon */
+.btn--pill {
+    display: inline-flex;
+    align-items: center;
+    gap: var(--space-2);
+    padding: var(--space-2) var(--space-4);
+    border-radius: var(--radius-full);
+    font-size: var(--font-size-sm);
+    font-weight: var(--font-weight-medium);
+}
+
+/* Glass Elevated - Premium Look */
+.btn--glass {
+    background: var(--color-glass-base);
+    backdrop-filter: blur(20px);
+    -webkit-backdrop-filter: blur(20px);
+    border: 1px solid var(--color-border-base);
+    color: var(--color-text-primary);
+    box-shadow: var(--shadow-glass-sm);
+}
+
+.btn--glass:hover:not(:disabled) {
+    background: var(--color-glass-medium);
+    border-color: var(--color-border-medium);
+    box-shadow: var(--shadow-glass-md);
+}
+
+/* With Loading Spinner */
+.btn--loading {
+    position: relative;
+    color: transparent;
+    pointer-events: none;
+}
+
+.btn--loading::after {
+    content: '';
+    position: absolute;
+    top: 50%;
+    left: 50%;
+    transform: translate(-50%, -50%);
+    width: 16px;
+    height: 16px;
+    border: 2px solid rgba(255, 255, 255, 0.3);
+    border-top-color: white;
+    border-radius: 50%;
+    animation: btn-spin 0.6s linear infinite;
+}
+
+@keyframes btn-spin {
+    to {
+        transform: translate(-50%, -50%) rotate(360deg);
+    }
+}
+
+/* ================================================================
+   📱 RESPONSIVE
+   ================================================================ */
+@media (max-width: 768px) {
+
+    /* Make buttons slightly larger on mobile for better touch targets */
+    .btn {
+        min-height: 44px;
+    }
+
+    .btn--sm {
+        min-height: 40px;
+    }
+
+    .btn--lg {
+        min-height: 52px;
+    }
+}

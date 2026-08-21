@@ -1,0 +1,1917 @@
+/* =============================================================================
+   FEED V4.0 - MOBILE-FIRST OPTIMIZED
+   Optimizado para visualización móvil con mejor espaciado, tipografía y UX táctil
+   ============================================================================= */
+
+/* ============================================================================
+   VARIABLES CSS - Feed Specific
+   ============================================================================ */
+:root {
+  /* Espaciado lateral consistente para mobile */
+  --feed-safe-x: max(20px, env(safe-area-inset-left));
+
+  /* Espaciado vertical entre secciones */
+  --feed-section-gap: 24px;
+
+  /* Tamaños de cards mobile-first */
+  --feed-hero-card-size: 185px;
+  --feed-card-size: 160px;
+  --feed-card-gap: 16px;
+
+  /* Tipografía optimizada para mobile */
+  --feed-hero-title-size: 1.75rem;
+  /* 28px */
+  --feed-section-title-size: 1.5rem;
+  /* 24px */
+  --feed-card-title-size: 0.875rem;
+  /* 14px */
+
+  /* Border radius unificado */
+  --feed-radius-sm: 8px;
+  --feed-radius-md: 12px;
+  --feed-radius-lg: 16px;
+
+  /* Touch target mínimo */
+  --feed-min-touch: 44px;
+}
+
+/* ============================================================================
+   BASE STYLES
+   ============================================================================ */
+
+/* Unified scrollbar hiding para todos los contenedores horizontales */
+.feed-row,
+.feed-album-row,
+.feed-recommended-grid,
+.feed-hero-row {
+  scrollbar-width: none;
+  -ms-overflow-style: none;
+}
+
+.feed-row::-webkit-scrollbar,
+.feed-album-row::-webkit-scrollbar,
+.feed-recommended-grid::-webkit-scrollbar,
+.feed-hero-row::-webkit-scrollbar {
+  display: none;
+}
+
+/* ============================================================================
+   OVERRIDE GLOBAL: Cards de Artistas/Álbumes en el Feed
+   - Aplica a TODAS las secciones que puedan mostrar artistas
+   - El componente Card detecta automáticamente type='artist' y usa círculos
+   ============================================================================ */
+
+/* Cards de artistas en cualquier feed-row */
+.feed-screen .app-card.variant-circle,
+.feed-screen .feed-row .app-card.variant-circle {
+  width: 110px !important;
+  min-width: 110px !important;
+  flex-shrink: 0;
+}
+
+.feed-screen .app-card.variant-circle .app-card-img-wrapper,
+.feed-screen .feed-row .app-card.variant-circle .app-card-img-wrapper {
+  width: 100px !important;
+  height: 100px !important;
+  aspect-ratio: 1/1;
+  border-radius: 50% !important;
+  overflow: hidden;
+  border: 1px solid var(--color-border-subtle);
+  margin: 0 auto 8px;
+  box-shadow: 0 4px 12px rgba(0, 0, 0, 0.2);
+}
+
+.feed-screen .app-card.variant-circle .app-card-img,
+.feed-screen .feed-row .app-card.variant-circle .app-card-img {
+  border-radius: 50% !important;
+}
+
+.feed-screen .app-card.variant-circle .app-card-meta,
+.feed-screen .feed-row .app-card.variant-circle .app-card-meta {
+  text-align: center;
+  padding: 0 4px;
+}
+
+.feed-screen .app-card.variant-circle .app-card-title,
+.feed-screen .feed-row .app-card.variant-circle .app-card-title {
+  font-size: 0.75rem !important;
+  font-weight: 500;
+  line-height: 1.25;
+  text-align: center;
+  max-width: 100%;
+  display: -webkit-box;
+  -webkit-line-clamp: 2;
+  -webkit-box-orient: vertical;
+  overflow: hidden;
+}
+
+.feed-screen .app-card.variant-circle .app-card-subtitle,
+.feed-screen .feed-row .app-card.variant-circle .app-card-subtitle {
+  display: none;
+}
+
+/* ============================================================================
+   LAYOUT PRINCIPAL
+   ============================================================================ */
+.feed-screen {
+  background: var(--color-bg-primary);
+  color: var(--color-text-primary);
+  font-family: var(--font-family-primary);
+  height: 100%;
+  overflow-y: auto;
+  overflow-x: hidden;
+  padding-bottom: var(--total-bottom-stack);
+  scroll-behavior: smooth;
+  overscroll-behavior-y: contain;
+  contain: layout style;
+}
+
+/* ============================================================================
+   UTILIDADES REUTILIZABLES
+   ============================================================================ */
+.feed-flex-center {
+  display: flex;
+  align-items: center;
+  justify-content: center;
+}
+
+.feed-col {
+  display: flex;
+  flex-direction: column;
+}
+
+.text-ellipsis {
+  white-space: nowrap;
+  overflow: hidden;
+  text-overflow: ellipsis;
+}
+
+/* ============================================================================
+   HERO SECTION - Optimizado para Mobile
+   ============================================================================ */
+.feed-hero {
+  position: relative;
+  overflow: hidden;
+  padding: calc(var(--space-3) + var(--safe-top)) var(--feed-safe-x) var(--space-5);
+  contain: paint layout;
+}
+
+/* --- HERO BACKGROUND EFFECT (Infinite Waves) --- */
+.feed-hero-background {
+  position: absolute;
+  inset: 0;
+  width: 100%;
+  height: 100%;
+  pointer-events: none;
+  z-index: 0;
+  overflow: hidden;
+  /* Fade out bottom edge for smooth transition */
+  -webkit-mask-image: linear-gradient(to bottom, black 75%, transparent 100%);
+  mask-image: linear-gradient(to bottom, black 75%, transparent 100%);
+}
+
+.feed-hero-background::before,
+.feed-hero-background::after {
+  content: '';
+  position: absolute;
+  top: -50%;
+  left: -50%;
+  width: 200%;
+  height: 200%;
+  background-image: var(--hero-bg-image);
+  background-position: center;
+  background-size: cover;
+  filter: blur(60px) saturate(180%) brightness(0.7);
+  opacity: 0.4;
+  /* animation: hero-waves 15s ease-in-out infinite alternate; - Removed for performance */
+  transition: background-image 0.5s ease;
+}
+
+.feed-hero-background::after {
+  filter: blur(90px) saturate(200%) brightness(0.5);
+  opacity: 0.3;
+  animation-duration: 23s;
+  animation-direction: alternate-reverse;
+  mix-blend-mode: hard-light;
+}
+
+@keyframes hero-waves {
+  0% {
+    transform: rotate(0deg) scale(1) translate(0, 0);
+  }
+
+  33% {
+    transform: rotate(2deg) scale(1.1) translate(2%, 2%);
+  }
+
+  66% {
+    transform: rotate(-2deg) scale(1.05) translate(-2%, 1%);
+  }
+
+  100% {
+    transform: rotate(0deg) scale(1.15) translate(1%, -1%);
+  }
+}
+
+/* Ensure content sits on top of the effect */
+.feed-hero-top,
+.feed-hero-row {
+  position: relative;
+  z-index: 1;
+}
+
+.feed-hero-top {
+  margin-bottom: 6px;
+}
+
+.feed-hero-greeting {
+  display: flex;
+  flex-direction: column;
+  gap: 4px;
+}
+
+.feed-hero-date {
+  font-size: 0.75rem;
+  /* 12px */
+  color: var(--color-text-muted);
+  font-weight: 500;
+  text-transform: capitalize;
+  letter-spacing: 0.02em;
+}
+
+.feed-hero-title {
+  font-size: var(--feed-hero-title-size);
+  font-weight: 800;
+  line-height: 1.15;
+  letter-spacing: -0.02em;
+  margin: 0;
+  color: var(--color-text-primary);
+}
+
+.feed-hero-sub {
+  font-size: 0.9375rem;
+  /* 15px - más legible */
+  color: var(--color-text-secondary);
+  margin-top: 4px;
+  line-height: 1.4;
+  font-weight: 400;
+}
+
+/* Hero Cards Row - Scroll horizontal mejorado */
+.feed-hero-row {
+  display: flex;
+  gap: var(--feed-card-gap);
+  margin-top: 16px;
+  margin-bottom: 20px;
+  margin-right: calc(var(--feed-safe-x) * -1);
+  padding-right: var(--feed-safe-x);
+  padding-bottom: 6px;
+  overflow-x: auto;
+  scroll-snap-type: x proximity;
+  -webkit-overflow-scrolling: touch;
+  touch-action: pan-x pan-y;
+}
+
+/* Hero Card - Tamaño incrementado para mejor UX móvil */
+.feed-hero-card {
+  position: relative;
+  display: flex;
+  flex-direction: column;
+  flex-shrink: 0;
+  min-width: var(--feed-hero-card-size);
+  width: var(--feed-hero-card-size);
+
+  /* Liquid Glass Base - Ultra Clear */
+  background: rgba(20, 20, 20, 0.15);
+  backdrop-filter: blur(3px) saturate(180%);
+  -webkit-backdrop-filter: blur(3px) saturate(180%);
+  border-radius: var(--feed-radius-md);
+  border: 1px solid rgba(255, 255, 255, 0.12);
+  box-shadow:
+    0 15px 35px -5px rgba(0, 0, 0, 0.6),
+    inset 0 1px 0 0 rgba(255, 255, 255, 0.2);
+
+  overflow: hidden;
+  scroll-snap-align: start;
+  transition: transform 0.2s ease, box-shadow 0.2s ease, border-color 0.2s ease;
+  cursor: pointer;
+  touch-action: pan-x pan-y;
+}
+
+.feed-hero-card:active {
+  transform: scale(0.97);
+}
+
+.feed-hero-img-wrapper {
+  position: relative;
+  width: 100%;
+  aspect-ratio: 1 / 1;
+  background: transparent;
+  /* Transparent for glass effect */
+  flex-shrink: 0;
+  overflow: hidden;
+}
+
+.feed-hero-img {
+  position: absolute;
+  inset: 0;
+  width: 100%;
+  height: 100%;
+  object-fit: cover;
+  opacity: 0;
+  transition: opacity 0.4s ease, transform 0.3s ease;
+}
+
+.feed-hero-img.is-loaded {
+  opacity: 1;
+}
+
+.feed-hero-card:hover .feed-hero-img,
+.feed-hero-card:focus .feed-hero-img {
+  transform: scale(1.03);
+}
+
+.feed-hero-info {
+  padding: 12px 14px 14px;
+  display: flex;
+  flex-direction: column;
+  gap: 2px;
+  /* Liquid Glass Effect - High Gloss */
+  background: linear-gradient(180deg,
+      rgba(255, 255, 255, 0.12) 0%,
+      rgba(255, 255, 255, 0.02) 20%);
+  backdrop-filter: blur(5px) saturate(140%);
+  -webkit-backdrop-filter: blur(5px) saturate(140%);
+  border-top: 1px solid rgba(255, 255, 255, 0.2);
+  box-shadow:
+    inset 0 1px 0 0 rgba(255, 255, 255, 0.1),
+    0 -5px 20px rgba(0, 0, 0, 0.15);
+  position: relative;
+  overflow: hidden;
+}
+
+/* Shine effect for liquid realism - Enhanced */
+.feed-hero-info::before {
+  content: '';
+  position: absolute;
+  top: 0;
+  left: 0;
+  right: 0;
+  height: 2px;
+  background: linear-gradient(90deg,
+      transparent 0%,
+      rgba(255, 255, 255, 0.7) 45%,
+      rgba(255, 255, 255, 0.0) 100%);
+  opacity: 0.8;
+  filter: blur(2px);
+}
+
+.feed-hero-track {
+  font-size: 0.9375rem;
+  /* 15px - más grande y legible */
+  font-weight: 600;
+  color: var(--color-text-primary);
+  line-height: 1.3;
+  white-space: nowrap;
+  overflow: hidden;
+  text-overflow: ellipsis;
+}
+
+.feed-hero-artist {
+  font-size: 0.8125rem;
+  /* 13px - más legible */
+  font-weight: 500;
+  color: var(--color-text-secondary);
+  white-space: nowrap;
+  overflow: hidden;
+  text-overflow: ellipsis;
+}
+
+.feed-hero-type {
+  font-size: 0.6875rem;
+  /* 11px */
+  font-weight: 600;
+  color: var(--color-text-muted);
+  text-transform: uppercase;
+  letter-spacing: 0.06em;
+  margin-top: 6px;
+}
+
+.feed-hero-play-hint {
+  display: flex;
+  align-items: center;
+  gap: 6px;
+  margin-top: 12px;
+  font-size: 0.8125rem;
+  color: var(--color-text-secondary);
+  opacity: 0.8;
+  transition: opacity 0.2s ease;
+}
+
+.feed-hero-play-hint svg {
+  opacity: 0.9;
+}
+
+.feed-hero-card:hover .feed-hero-play-hint,
+.feed-hero-card:focus .feed-hero-play-hint {
+  opacity: 1;
+}
+
+/* Skeleton loaders para hero */
+.feed-hero-img-skeleton {
+  position: absolute;
+  inset: 0;
+  background: var(--skeleton-gradient);
+  background-size: 400% 100%;
+  animation: skel 1.4s ease infinite;
+}
+
+.feed-hero-skeleton-title,
+.feed-hero-skeleton-artist {
+  height: 14px;
+  background: var(--skeleton-gradient);
+  background-size: 400% 100%;
+  animation: skel 1.4s ease infinite;
+  border-radius: 4px;
+}
+
+.feed-hero-skeleton-title {
+  width: 80%;
+}
+
+.feed-hero-skeleton-artist {
+  width: 60%;
+  height: 12px;
+  margin-top: 4px;
+}
+
+/* ============================================================================
+   BUTTONS - Mobile Optimized con Touch Targets Adecuados
+   ============================================================================ */
+.feed-btn-primary,
+.feed-btn {
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  gap: 8px;
+  padding: 0 24px;
+  min-height: var(--feed-min-touch);
+  height: 48px;
+  border-radius: var(--radius-full);
+  font-weight: 600;
+  font-size: 0.875rem;
+  border: none;
+  cursor: pointer;
+  transition: transform 0.15s ease, opacity 0.15s ease;
+  box-shadow: none;
+  touch-action: pan-y;
+}
+
+.feed-btn-primary {
+  background: var(--color-text-primary);
+  color: var(--color-bg-primary);
+}
+
+.feed-btn {
+  background: rgba(30, 30, 30, 0.95);
+  border: 1px solid var(--color-border-subtle);
+  color: var(--color-text-primary);
+}
+
+.feed-btn:active,
+.feed-btn-primary:active {
+  transform: scale(0.96);
+  opacity: 0.9;
+}
+
+/* Desktop blur restore */
+@media (min-width: 900px) {
+  .feed-btn {
+    background: rgba(255, 255, 255, 0.12);
+    backdrop-filter: blur(10px);
+  }
+
+  .feed-hero-img {
+    transition: opacity 0.4s ease, transform 0.6s var(--ease-out);
+  }
+}
+
+/* ============================================================================
+   SECTIONS & ROWS - Estilos individuales para cada sección
+   Todas basadas en el diseño hero, editables independientemente
+   ============================================================================ */
+
+/* Base section con padding adaptable */
+.feed-section {
+  padding: var(--feed-section-gap) var(--feed-safe-x);
+  contain: content;
+  content-visibility: auto;
+  contain-intrinsic-size: 0 280px;
+}
+
+/* Primer section sin padding-top extra */
+.feed-section:first-of-type {
+  padding-top: 0;
+}
+
+/* Separaciones específicas por tipo de sección */
+.feed-section-recommended {
+  padding-top: 22px;
+  /* Grid 3x9 */
+  padding-bottom: 22px;
+}
+
+.feed-section .feed-recommended-grid {
+  padding-bottom: 8px;
+  /* Espacio extra para el grid */
+}
+
+/* Secciones con cards pequeñas - menos espacio */
+.feed-section:has(.app-card.feed-card-new-releases),
+.feed-section:has(.app-card.feed-card-flashback),
+.feed-section:has(.app-card.feed-card-recent) {
+  padding-top: 16px;
+  padding-bottom: 16px;
+}
+
+/* Secciones con cards medianas - espacio estándar */
+.feed-section:has(.app-card.feed-card-trending),
+.feed-section:has(.app-card.feed-card-playlists),
+.feed-section:has(.app-card.feed-card-albums),
+.feed-section:has(.app-card.feed-card-foryou-tracks) {
+  padding-top: 18px;
+  padding-bottom: 18px;
+}
+
+/* Secciones con cards grandes - más espacio */
+.feed-section:has(.app-card.feed-card-mood),
+.feed-section:has(.app-card.feed-card-spotlight) {
+  padding-top: 32px;
+  /* Más aire arriba */
+  padding-bottom: 40px;
+  /* Más aire abajo */
+}
+
+/* Sección de lista - espacio compacto */
+.feed-section:has(.feed-simple-list) {
+  padding-top: 16px;
+  padding-bottom: 14px;
+}
+
+.feed-section-header {
+  padding-bottom: 16px;
+  display: flex;
+  flex-direction: column;
+  gap: 6px;
+}
+
+.feed-section-title {
+  font-size: var(--feed-section-title-size);
+  font-weight: 800;
+  margin: 0;
+  letter-spacing: -0.02em;
+  line-height: 1.2;
+  color: var(--color-text-primary);
+}
+
+.feed-section-subtitle {
+  font-size: 0.9375rem;
+  /* 15px - más legible */
+  color: var(--color-text-secondary);
+  max-width: 90%;
+  line-height: 1.45;
+  font-weight: 400;
+}
+
+/* Rows horizontales con scroll - Base genérico */
+.feed-row,
+.feed-album-row {
+  display: flex;
+  gap: var(--feed-card-gap);
+  margin-right: calc(var(--feed-safe-x) * -1);
+  padding-right: var(--feed-safe-x);
+  padding-bottom: 6px;
+  /* Espacio para sombras y efectos */
+  overflow-x: auto;
+  scroll-snap-type: x proximity;
+  -webkit-overflow-scrolling: touch;
+  touch-action: pan-x pan-y;
+  overscroll-behavior-x: contain;
+}
+
+/* ============================================================================
+   CARD STYLES - Una clase por cada sección del feed
+   Todas copian el diseño hero inicialmente
+   ============================================================================ */
+
+/* --- 1. NEW RELEASES CARDS (Copia exacta del Hero - Tamaño reducido) --- */
+.feed-section .app-card.feed-card-new-releases {
+  position: relative;
+  display: flex;
+  flex-direction: column;
+  flex-shrink: 0;
+  min-width: 135px;
+  width: 135px;
+  background: var(--color-card-base);
+  border-radius: var(--feed-radius-md);
+  border: 1px solid var(--color-border-subtle);
+  overflow: hidden;
+  scroll-snap-align: start;
+  transition: transform 0.2s ease;
+  cursor: pointer;
+  touch-action: pan-x pan-y;
+}
+
+.feed-section .app-card.feed-card-new-releases:active {
+  transform: scale(0.97);
+}
+
+.feed-section .app-card.feed-card-new-releases .app-card-img-wrapper {
+  position: relative;
+  width: 100%;
+  aspect-ratio: 1 / 1;
+  background: var(--color-card-base);
+  flex-shrink: 0;
+  overflow: hidden;
+  margin: 0;
+  border-radius: 0;
+}
+
+.feed-section .app-card.feed-card-new-releases .app-card-img {
+  position: absolute;
+  inset: 0;
+  width: 100%;
+  height: 100%;
+  object-fit: cover;
+  opacity: 0;
+  transition: opacity 0.4s ease, transform 0.3s ease;
+}
+
+.feed-section .app-card.feed-card-new-releases .app-card-img.is-loaded {
+  opacity: 1;
+}
+
+.feed-section .app-card.feed-card-new-releases:hover .app-card-img,
+.feed-section .app-card.feed-card-new-releases:focus .app-card-img {
+  transform: scale(1.03);
+}
+
+.feed-section .app-card.feed-card-new-releases .app-card-meta {
+  padding: 10px 12px 12px;
+  display: flex;
+  flex-direction: column;
+  gap: 2px;
+}
+
+.feed-section .app-card.feed-card-new-releases .app-card-title {
+  font-size: 0.9375rem;
+  /* 15px - más grande y legible */
+  font-weight: 600;
+  color: var(--color-text-primary);
+  line-height: 1.3;
+  white-space: nowrap;
+  overflow: hidden;
+  text-overflow: ellipsis;
+}
+
+.feed-section .app-card.feed-card-new-releases .app-card-subtitle {
+  font-size: 0.8125rem;
+  /* 13px - más legible */
+  font-weight: 500;
+  color: var(--color-text-secondary);
+  white-space: nowrap;
+  overflow: hidden;
+  text-overflow: ellipsis;
+}
+
+/* ============================================================================
+   2. SMART RECOMMENDATIONS - Grid 3x9 (27 canciones)
+   ============================================================================ */
+
+/* Grid Container - 3 filas x scroll horizontal para 9+ columnas */
+.feed-recommended-grid {
+  display: grid;
+  /* Increased size for better visualization */
+  grid-template-rows: repeat(3, 240px);
+  grid-auto-flow: column;
+  grid-auto-columns: 240px;
+  gap: 20px;
+  /* Removed place-items: center to fix left-side cutoff */
+
+  margin-right: calc(var(--feed-safe-x) * -1);
+  padding-right: var(--feed-safe-x);
+  padding-bottom: 16px;
+  overflow-x: auto;
+  overflow-y: hidden;
+  scroll-snap-type: x mandatory;
+  scroll-padding-left: 0;
+  -webkit-overflow-scrolling: touch;
+  touch-action: pan-x pan-y;
+  overscroll-behavior-x: contain;
+  scrollbar-width: none;
+  -ms-overflow-style: none;
+}
+
+.feed-recommended-grid::-webkit-scrollbar {
+  display: none;
+}
+
+/* Card Base - Ocupa toda la celda del grid */
+.feed-section .app-card.feed-card-recommendations {
+  position: relative !important;
+  width: 100%;
+  height: 100%;
+  /* min-width y min-height removidos para que el grid controle */
+  background: var(--color-card-base);
+  border: none;
+  border-radius: var(--feed-radius-sm);
+  overflow: hidden !important;
+  cursor: pointer;
+  transition: transform 0.2s ease;
+  scroll-snap-align: start;
+  text-align: left;
+}
+
+.feed-section .app-card.feed-card-recommendations:active {
+  transform: scale(0.96);
+}
+
+/* Imagen - Cubre toda la card */
+.feed-section .app-card.feed-card-recommendations .app-card-img-wrapper {
+  position: absolute !important;
+  inset: 0 !important;
+  width: 100% !important;
+  height: 100% !important;
+  margin: 0 !important;
+  background: var(--color-card-base);
+  border-radius: 0 !important;
+  overflow: hidden;
+  z-index: 1;
+}
+
+.feed-section .app-card.feed-card-recommendations .app-card-img {
+  position: absolute;
+  inset: 0;
+  width: 100%;
+  height: 100%;
+  object-fit: cover;
+  transition: transform 0.3s ease;
+}
+
+.feed-section .app-card.feed-card-recommendations:hover .app-card-img {
+  transform: scale(1.05);
+}
+
+/* Texto superpuesto con gradiente oscuro y blur */
+.feed-section .app-card.feed-card-recommendations .app-card-meta {
+  position: absolute !important;
+  bottom: 0 !important;
+  left: 0 !important;
+  right: 0 !important;
+  display: flex !important;
+  flex-direction: column !important;
+  justify-content: flex-end !important;
+  padding: 8px 8px 8px !important;
+  background: linear-gradient(to top,
+      rgba(0, 0, 0, 0.95) 0%,
+      rgba(0, 0, 0, 0.75) 50%,
+      transparent 100%);
+  backdrop-filter: blur(2px);
+  -webkit-backdrop-filter: blur(2px);
+  pointer-events: none;
+  z-index: 10 !important;
+  height: auto !important;
+  min-height: 48px;
+}
+
+.feed-section .app-card.feed-card-recommendations .app-card-title {
+  font-size: 0.8125rem !important;
+  font-weight: 700 !important;
+  color: #ffffff !important;
+  line-height: 1.2 !important;
+  background: transparent !important;
+  display: -webkit-box !important;
+  -webkit-line-clamp: 2;
+  -webkit-box-orient: vertical;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  text-shadow: 0 1px 3px rgba(0, 0, 0, 0.8);
+  margin-bottom: 2px !important;
+}
+
+.feed-section .app-card.feed-card-recommendations .app-card-subtitle {
+  font-size: 0.6875rem !important;
+  font-weight: 500 !important;
+  color: rgba(255, 255, 255, 0.9) !important;
+  white-space: nowrap;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  text-shadow: 0 1px 2px rgba(0, 0, 0, 0.8);
+}
+
+
+/* --- 3. TRENDING CARDS --- */
+.feed-section .app-card.feed-card-trending {
+  position: relative;
+  display: flex;
+  flex-direction: column;
+  flex-shrink: 0;
+  min-width: var(--feed-hero-card-size);
+  width: var(--feed-hero-card-size);
+  background: var(--color-card-base);
+  border-radius: var(--feed-radius-md);
+  border: 1px solid var(--color-border-subtle);
+  overflow: hidden;
+  scroll-snap-align: start;
+  transition: transform 0.2s ease;
+}
+
+.feed-section .app-card.feed-card-trending:active {
+  transform: scale(0.97);
+}
+
+.feed-section .app-card.feed-card-trending .app-card-img-wrapper {
+  width: 100%;
+  aspect-ratio: 1 / 1;
+  background: var(--color-card-base);
+  flex-shrink: 0;
+  overflow: hidden;
+  margin: 0;
+  border-radius: 0;
+}
+
+.feed-section .app-card.feed-card-trending .app-card-meta {
+  padding: 10px 12px 12px;
+  display: flex;
+  flex-direction: column;
+  gap: 2px;
+}
+
+.feed-section .app-card.feed-card-trending .app-card-title {
+  font-size: 0.9375rem;
+  font-weight: 600;
+  color: var(--color-text-primary);
+  line-height: 1.3;
+}
+
+.feed-section .app-card.feed-card-trending .app-card-subtitle {
+  font-size: 0.8125rem;
+  font-weight: 500;
+  color: var(--color-text-secondary);
+}
+
+/* --- 4. FOR YOU TRACKS CARDS --- */
+.feed-section .app-card.feed-card-foryou-tracks {
+  position: relative;
+  display: flex;
+  flex-direction: column;
+  flex-shrink: 0;
+  min-width: var(--feed-hero-card-size);
+  width: var(--feed-hero-card-size);
+  background: var(--color-card-base);
+  border-radius: var(--feed-radius-md);
+  border: 1px solid var(--color-border-subtle);
+  overflow: hidden;
+  scroll-snap-align: start;
+  transition: transform 0.2s ease;
+}
+
+.feed-section .app-card.feed-card-foryou-tracks:active {
+  transform: scale(0.97);
+}
+
+.feed-section .app-card.feed-card-foryou-tracks .app-card-img-wrapper {
+  width: 100%;
+  aspect-ratio: 1 / 1;
+  background: var(--color-card-base);
+  flex-shrink: 0;
+  overflow: hidden;
+  margin: 0;
+  border-radius: 0;
+}
+
+.feed-section .app-card.feed-card-foryou-tracks .app-card-meta {
+  padding: 10px 12px 12px;
+  display: flex;
+  flex-direction: column;
+  gap: 2px;
+}
+
+.feed-section .app-card.feed-card-foryou-tracks .app-card-title {
+  font-size: 0.9375rem;
+  font-weight: 600;
+  color: var(--color-text-primary);
+  line-height: 1.3;
+}
+
+.feed-section .app-card.feed-card-foryou-tracks .app-card-subtitle {
+  font-size: 0.8125rem;
+  font-weight: 500;
+  color: var(--color-text-secondary);
+}
+
+/* --- 5. PLAYLISTS CARDS (Top, ForYou, Party) --- */
+.feed-section .app-card.feed-card-playlists {
+  position: relative;
+  display: flex;
+  flex-direction: column;
+  flex-shrink: 0;
+  min-width: var(--feed-hero-card-size);
+  width: var(--feed-hero-card-size);
+  background: var(--color-card-base);
+  border-radius: var(--feed-radius-md);
+  border: 1px solid var(--color-border-subtle);
+  overflow: hidden;
+  scroll-snap-align: start;
+  transition: transform 0.2s ease;
+}
+
+.feed-section .app-card.feed-card-playlists:active {
+  transform: scale(0.97);
+}
+
+.feed-section .app-card.feed-card-playlists .app-card-img-wrapper {
+  width: 100%;
+  aspect-ratio: 1 / 1;
+  background: var(--color-card-base);
+  flex-shrink: 0;
+  overflow: hidden;
+  margin: 0;
+  border-radius: 0;
+}
+
+.feed-section .app-card.feed-card-playlists .app-card-meta {
+  padding: 10px 12px 12px;
+  display: flex;
+  flex-direction: column;
+  gap: 2px;
+}
+
+.feed-section .app-card.feed-card-playlists .app-card-title {
+  font-size: 0.9375rem;
+  font-weight: 600;
+  color: var(--color-text-primary);
+  line-height: 1.3;
+}
+
+.feed-section .app-card.feed-card-playlists .app-card-subtitle {
+  font-size: 0.8125rem;
+  font-weight: 500;
+  color: var(--color-text-secondary);
+}
+
+/* --- 6. ALBUMS CARDS --- */
+.feed-section .app-card.feed-card-albums {
+  position: relative;
+  display: flex;
+  flex-direction: column;
+  flex-shrink: 0;
+  min-width: var(--feed-hero-card-size);
+  width: var(--feed-hero-card-size);
+  background: var(--color-card-base);
+  border-radius: var(--feed-radius-md);
+  border: 1px solid var(--color-border-subtle);
+  overflow: hidden;
+  scroll-snap-align: start;
+  transition: transform 0.2s ease;
+}
+
+.feed-section .app-card.feed-card-albums:active {
+  transform: scale(0.97);
+}
+
+.feed-section .app-card.feed-card-albums .app-card-img-wrapper {
+  width: 100%;
+  aspect-ratio: 1 / 1;
+  background: var(--color-card-base);
+  flex-shrink: 0;
+  overflow: hidden;
+  margin: 0;
+  border-radius: 0;
+}
+
+.feed-section .app-card.feed-card-albums .app-card-meta {
+  padding: 10px 12px 12px;
+  display: flex;
+  flex-direction: column;
+  gap: 2px;
+}
+
+.feed-section .app-card.feed-card-albums .app-card-title {
+  font-size: 0.9375rem;
+  font-weight: 600;
+  color: var(--color-text-primary);
+  line-height: 1.3;
+}
+
+.feed-section .app-card.feed-card-albums .app-card-subtitle {
+  font-size: 0.8125rem;
+  font-weight: 500;
+  color: var(--color-text-secondary);
+}
+
+/* --- 7. RECENTLY PLAYED CARDS --- */
+.feed-section .app-card.feed-card-recent {
+  position: relative;
+  display: flex;
+  flex-direction: column;
+  flex-shrink: 0;
+  min-width: var(--feed-hero-card-size);
+  width: var(--feed-hero-card-size);
+  background: var(--color-card-base);
+  border-radius: var(--feed-radius-md);
+  border: 1px solid var(--color-border-subtle);
+  overflow: hidden;
+  scroll-snap-align: start;
+  transition: transform 0.2s ease;
+}
+
+.feed-section .app-card.feed-card-recent:active {
+  transform: scale(0.97);
+}
+
+.feed-section .app-card.feed-card-recent .app-card-img-wrapper {
+  width: 100%;
+  aspect-ratio: 1 / 1;
+  background: var(--color-card-base);
+  flex-shrink: 0;
+  overflow: hidden;
+  margin: 0;
+  border-radius: 0;
+}
+
+.feed-section .app-card.feed-card-recent .app-card-meta {
+  padding: 10px 12px 12px;
+  display: flex;
+  flex-direction: column;
+  gap: 2px;
+}
+
+.feed-section .app-card.feed-card-recent .app-card-title {
+  font-size: 0.9375rem;
+  font-weight: 600;
+  color: var(--color-text-primary);
+  line-height: 1.3;
+}
+
+.feed-section .app-card.feed-card-recent .app-card-subtitle {
+  font-size: 0.8125rem;
+  font-weight: 500;
+  color: var(--color-text-secondary);
+}
+
+/* --- 8. FLASHBACK / CÁPSULA DEL TIEMPO (Copia de New Releases) --- */
+.feed-section .app-card.feed-card-flashback {
+  position: relative;
+  display: flex;
+  flex-direction: column;
+  flex-shrink: 0;
+  min-width: 135px;
+  width: 135px;
+  background: var(--color-card-base);
+  border-radius: var(--feed-radius-md);
+  border: 1px solid var(--color-border-subtle);
+  overflow: hidden;
+  scroll-snap-align: start;
+  transition: transform 0.2s ease;
+  cursor: pointer;
+  touch-action: pan-x pan-y;
+}
+
+.feed-section .app-card.feed-card-flashback:active {
+  transform: scale(0.97);
+}
+
+.feed-section .app-card.feed-card-flashback .app-card-img-wrapper {
+  position: relative;
+  width: 100%;
+  aspect-ratio: 1 / 1;
+  background: var(--color-card-base);
+  flex-shrink: 0;
+  overflow: hidden;
+  margin: 0;
+  border-radius: 0;
+}
+
+.feed-section .app-card.feed-card-flashback .app-card-img {
+  position: absolute;
+  inset: 0;
+  width: 100%;
+  height: 100%;
+  object-fit: cover;
+  opacity: 0;
+  transition: opacity 0.4s ease, transform 0.3s ease;
+}
+
+.feed-section .app-card.feed-card-flashback .app-card-img.is-loaded {
+  opacity: 1;
+}
+
+.feed-section .app-card.feed-card-flashback:hover .app-card-img,
+.feed-section .app-card.feed-card-flashback:focus .app-card-img {
+  transform: scale(1.03);
+}
+
+.feed-section .app-card.feed-card-flashback .app-card-meta {
+  padding: 10px 12px 12px;
+  display: flex;
+  flex-direction: column;
+  gap: 2px;
+}
+
+.feed-section .app-card.feed-card-flashback .app-card-title {
+  font-size: 0.9375rem;
+  /* 15px - más grande y legible */
+  font-weight: 600;
+  color: var(--color-text-primary);
+  line-height: 1.3;
+  white-space: nowrap;
+  overflow: hidden;
+  text-overflow: ellipsis;
+}
+
+.feed-section .app-card.feed-card-flashback .app-card-subtitle {
+  font-size: 0.8125rem;
+  /* 13px - más legible */
+  font-weight: 500;
+  color: var(--color-text-secondary);
+  white-space: nowrap;
+  overflow: hidden;
+  text-overflow: ellipsis;
+}
+
+/* --- 9. MOOD MIXES / TU VIBRA AHORA (Cards anchas con overlay) --- */
+.feed-section .app-card.feed-card-mood {
+  position: relative;
+  min-width: 240px;
+  width: 240px;
+  height: 135px;
+  background: var(--color-card-base);
+  border-radius: var(--feed-radius-md);
+  border: 1px solid var(--color-border-subtle);
+  overflow: hidden;
+  scroll-snap-align: start;
+  transition: transform 0.2s ease;
+  cursor: pointer;
+}
+
+.feed-section .app-card.feed-card-mood:active {
+  transform: scale(0.97);
+}
+
+.feed-section .app-card.feed-card-mood .app-card-img-wrapper {
+  position: absolute;
+  inset: 0;
+  background: var(--color-card-base);
+  overflow: hidden;
+}
+
+.feed-section .app-card.feed-card-mood .app-card-img {
+  position: absolute;
+  inset: 0;
+  width: 100%;
+  height: 100%;
+  object-fit: cover;
+  opacity: 0;
+  transition: opacity 0.4s ease, transform 0.3s ease;
+}
+
+.feed-section .app-card.feed-card-mood .app-card-img.is-loaded {
+  opacity: 1;
+}
+
+.feed-section .app-card.feed-card-mood:hover .app-card-img {
+  transform: scale(1.05);
+}
+
+.feed-section .app-card.feed-card-mood .app-card-meta {
+  position: absolute;
+  bottom: 0;
+  left: 0;
+  right: 0;
+  padding: 12px 14px;
+  background: linear-gradient(to top, rgba(0, 0, 0, 0.95) 0%, rgba(0, 0, 0, 0.7) 50%, transparent 100%);
+  z-index: 2;
+}
+
+.feed-section .app-card.feed-card-mood .app-card-title {
+  font-size: 1rem;
+  font-weight: 700;
+  color: #ffffff;
+  line-height: 1.2;
+  display: -webkit-box;
+  -webkit-line-clamp: 2;
+  -webkit-box-orient: vertical;
+  overflow: hidden;
+  text-shadow: 0 2px 4px rgba(0, 0, 0, 0.6);
+  margin-bottom: 4px;
+}
+
+.feed-section .app-card.feed-card-mood .app-card-subtitle {
+  font-size: 0.75rem;
+  font-weight: 500;
+  color: rgba(255, 255, 255, 0.9);
+  white-space: nowrap;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  text-shadow: 0 1px 3px rgba(0, 0, 0, 0.5);
+}
+
+
+
+/* --- 11. GLOBAL / TENDENCIAS GLOBALES (Cards horizontales tipo lista) --- */
+.feed-section .app-card.feed-card-global {
+  display: flex;
+  flex-direction: row;
+  align-items: center;
+  gap: 12px;
+  padding: 10px 12px;
+  min-height: 68px;
+  background: transparent;
+  border: none;
+  border-bottom: 1px solid var(--color-border-subtle);
+  border-radius: 0;
+  transition: background-color 0.2s ease;
+  cursor: pointer;
+}
+
+.feed-section .app-card.feed-card-global:hover {
+  background-color: var(--color-card-hover);
+}
+
+.feed-section .app-card.feed-card-global:active {
+  transform: scale(0.99);
+}
+
+.feed-section .app-card.feed-card-global .app-card-img-wrapper {
+  position: relative;
+  width: 48px;
+  height: 48px;
+  flex-shrink: 0;
+  background: var(--color-card-base);
+  border-radius: var(--feed-radius-sm);
+  overflow: hidden;
+}
+
+.feed-section .app-card.feed-card-global .app-card-img {
+  position: absolute;
+  inset: 0;
+  width: 100%;
+  height: 100%;
+  object-fit: cover;
+  opacity: 0;
+  transition: opacity 0.4s ease;
+}
+
+.feed-section .app-card.feed-card-global .app-card-img.is-loaded {
+  opacity: 1;
+}
+
+.feed-section .app-card.feed-card-global .app-card-meta {
+  flex: 1;
+  min-width: 0;
+  display: flex;
+  flex-direction: column;
+  gap: 3px;
+}
+
+.feed-section .app-card.feed-card-global .app-card-title {
+  font-size: 0.9375rem;
+  /* 15px */
+  font-weight: 600;
+  color: var(--color-text-primary);
+  line-height: 1.3;
+  white-space: nowrap;
+  overflow: hidden;
+  text-overflow: ellipsis;
+}
+
+.feed-section .app-card.feed-card-global .app-card-subtitle {
+  font-size: 0.8125rem;
+  /* 13px */
+  font-weight: 500;
+  color: var(--color-text-secondary);
+  white-space: nowrap;
+  overflow: hidden;
+  text-overflow: ellipsis;
+}
+
+/* Contenedor para lista vertical */
+.feed-simple-list {
+  display: flex;
+  flex-direction: column;
+  gap: 0;
+}
+
+/* ============================================================================
+   RECOMMENDED GRID - Optimizado para Touch
+   ============================================================================ */
+.feed-recommended-grid {
+  display: grid;
+  grid-template-rows: repeat(3, 120px);
+  /* Incrementado de 110px */
+  grid-auto-flow: column;
+  grid-auto-columns: 120px;
+  /* Incrementado de 110px */
+  gap: 10px;
+  margin-right: calc(var(--feed-safe-x) * -1);
+  padding-right: var(--feed-safe-x);
+  overflow-x: auto;
+  scroll-snap-type: x mandatory;
+  touch-action: pan-x pan-y;
+  overscroll-behavior-x: contain;
+}
+
+/* Override para shared Card en Recommended Grid */
+.recommended-card-override {
+  width: 100%;
+  height: 100%;
+  min-width: 0;
+  margin: 0;
+}
+
+.recommended-card-override .app-card-img-wrapper {
+  height: 100%;
+  border-radius: var(--feed-radius-sm);
+}
+
+.recommended-card-override .app-card-meta {
+  display: none;
+}
+
+/* ============================================================================
+   CARD VARIANTS - Unificados y Optimizados
+   ============================================================================ */
+
+/* Circle Card Variant - MUY INCREMENTADO para mejor UX móvil */
+
+
+/* ============================================================================
+   SPOTLIGHT CARDS - Premium Apple-Style Design
+   ============================================================================ */
+.feed-section .app-card.feed-card-spotlight {
+  position: relative;
+  width: 160px;
+  /* Reducido para ser mas compactas */
+  height: 200px;
+  /* Proporción mantenida */
+  flex-shrink: 0;
+  border-radius: 16px;
+  overflow: hidden;
+  scroll-snap-align: center;
+  margin-right: 12px;
+  /* Margen estándar fijo */
+  transition: transform 0.3s ease, box-shadow 0.3s ease;
+  background: var(--color-card-base);
+  box-shadow: 0 4px 15px rgba(0, 0, 0, 0.3);
+  cursor: pointer;
+}
+
+/* Hover Simple y Estable */
+.feed-section .app-card.feed-card-spotlight:hover {
+  transform: scale(1.02);
+  box-shadow: 0 12px 30px rgba(0, 0, 0, 0.5);
+  z-index: 2;
+  /* Solo elevación sutil */
+}
+
+.feed-section .app-card.feed-card-spotlight .app-card-img-wrapper {
+  position: absolute;
+  inset: 0;
+  width: 100% !important;
+  height: 100% !important;
+  border-radius: 0;
+  margin: 0;
+  z-index: 0;
+}
+
+.feed-section .app-card.feed-card-spotlight .app-card-img {
+  width: 100%;
+  height: 100%;
+  object-fit: cover;
+  transition: transform 0.6s ease;
+  filter: brightness(0.85) saturate(1.1);
+}
+
+.feed-section .app-card.feed-card-spotlight:hover .app-card-img {
+  transform: scale(1.1);
+  filter: brightness(1) saturate(1.2);
+}
+
+/* Glassmorphism Info Overlay - Flotante */
+.feed-section .app-card.feed-card-spotlight .app-card-meta {
+  position: absolute;
+  bottom: 8px;
+  left: 8px;
+  right: 8px;
+  padding: 10px;
+  background: rgba(20, 20, 20, 0.5);
+  backdrop-filter: blur(8px) saturate(180%);
+  -webkit-backdrop-filter: blur(8px) saturate(180%);
+  border: 1px solid rgba(255, 255, 255, 0.1);
+  border-radius: 12px;
+  z-index: 2;
+  transform: translateY(0);
+  transition: transform 0.3s cubic-bezier(0.2, 0.8, 0.2, 1), background 0.3s;
+  display: flex;
+  flex-direction: column;
+  gap: 4px;
+}
+
+.feed-section .app-card.feed-card-spotlight:hover .app-card-meta {
+  background: rgba(20, 20, 20, 0.7);
+  transform: translateY(-5px);
+  border-color: rgba(255, 255, 255, 0.2);
+}
+
+/* Typography Cinemática */
+/* Typography Cinemática */
+.feed-section .app-card.feed-card-spotlight .app-card-title {
+  font-size: 0.95rem !important;
+  /* Ligeramente reducido para legibilidad */
+  font-weight: 800 !important;
+  line-height: 1.1 !important;
+  letter-spacing: -0.01em;
+  color: #fff !important;
+  text-shadow: 0 2px 10px rgba(0, 0, 0, 0.5);
+  display: -webkit-box;
+  -webkit-line-clamp: 2;
+  -webkit-box-orient: vertical;
+  overflow: hidden;
+}
+
+.feed-section .app-card.feed-card-spotlight .app-card-subtitle {
+  font-size: 0.75rem !important;
+  font-weight: 500 !important;
+  color: rgba(255, 255, 255, 0.85) !important;
+  text-transform: uppercase;
+  letter-spacing: 0.05em;
+  margin-top: 4px;
+}
+
+/* Badge de "Spotlight" o "Nuevo" si aplica (opcional visual decoration) */
+.feed-section .app-card.feed-card-spotlight::after {
+  content: '';
+  position: absolute;
+  top: 0;
+  left: 0;
+  right: 0;
+  height: 40%;
+  background: linear-gradient(to bottom, rgba(0, 0, 0, 0.6), transparent);
+  z-index: 1;
+  pointer-events: none;
+}
+
+
+
+/* ============================================================================
+   LOADERS & SKELETONS - Proporciones Mejoradas
+   ============================================================================ */
+
+.skeleton,
+.feed-hero-skeleton-img,
+.feed-recommended-skeleton,
+.feed-album-skeleton,
+.feed-card-skeleton {
+  background: var(--skeleton-gradient);
+  background-size: 400% 100%;
+  animation: skel 1.4s ease infinite;
+}
+
+/* Card variant skeletons con tamaños actualizados */
+.feed-card-skeleton {
+  width: var(--feed-card-size);
+  height: 180px;
+  border-radius: var(--feed-radius-sm);
+}
+
+/* TOAST NOTIFICATION */
+.feed-toast-container {
+  position: fixed;
+  bottom: calc(var(--total-bottom-stack) + 24px);
+  left: 0;
+  right: 0;
+  display: flex;
+  justify-content: center;
+  pointer-events: none;
+  z-index: 2000;
+  animation: toast-pop 0.4s cubic-bezier(0.34, 1.56, 0.64, 1);
+}
+
+.feed-toast {
+  position: relative;
+  /* Glassmorphism base */
+  background: rgba(18, 18, 18, 0.7);
+  backdrop-filter: blur(12px);
+  -webkit-backdrop-filter: blur(12px);
+  padding: 12px 24px;
+  border-radius: 50px;
+  display: flex;
+  align-items: center;
+  gap: 12px;
+  box-shadow: 0 10px 40px rgba(0, 0, 0, 0.5), 0 0 0 1px rgba(255, 255, 255, 0.1);
+  overflow: hidden;
+  max-width: 90vw;
+}
+
+/* Ambient Artist Color Background */
+.feed-toast-bg {
+  position: absolute;
+  inset: -50%;
+  width: 200%;
+  height: 200%;
+  background-image: var(--toast-img);
+  background-size: cover;
+  background-position: center;
+  filter: blur(30px) saturate(200%) brightness(0.7);
+  opacity: 0.6;
+  z-index: 0;
+  pointer-events: none;
+  border-radius: 50%;
+  /* Softness */
+  transform: translate(-10%, -10%);
+  /* Random offset */
+}
+
+/* Content layer */
+.feed-toast span {
+  position: relative;
+  z-index: 1;
+  color: #fff;
+  font-weight: 600;
+  font-size: 0.9375rem;
+  text-shadow: 0 2px 4px rgba(0, 0, 0, 0.3);
+  white-space: nowrap;
+  text-overflow: ellipsis;
+  overflow: hidden;
+}
+
+.feed-spinner-tiny {
+  position: relative;
+  z-index: 1;
+  width: 18px;
+  height: 18px;
+  border: 2px solid rgba(255, 255, 255, 0.2);
+  border-top-color: #fff;
+  border-radius: 50%;
+  animation: spinner 0.8s cubic-bezier(0.4, 0, 0.2, 1) infinite;
+}
+
+@keyframes toast-pop {
+  0% {
+    opacity: 0;
+    transform: translateY(40px) scale(0.8);
+  }
+
+  100% {
+    opacity: 1;
+    transform: translateY(0) scale(1);
+  }
+}
+
+@keyframes spinner {
+  to {
+    transform: rotate(360deg);
+  }
+}
+
+
+@keyframes skel {
+  0% {
+    background-position: 100% 0;
+  }
+
+  100% {
+    background-position: 0 0;
+  }
+}
+
+/* ============================================================================
+   LOADING STATES
+   ============================================================================ */
+.feed-loading,
+.feed-loading-inline {
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  padding: 40px;
+  gap: 12px;
+}
+
+.feed-spinner,
+.feed-spinner-small {
+  border: 2px solid rgba(255, 255, 255, 0.1);
+  border-top-color: var(--color-text-primary);
+  border-radius: 50%;
+  animation: spin 0.7s linear infinite;
+}
+
+.feed-spinner {
+  width: 32px;
+  height: 32px;
+}
+
+.feed-spinner-small {
+  width: 20px;
+  height: 20px;
+}
+
+@keyframes spin {
+  to {
+    transform: rotate(360deg);
+  }
+}
+
+/* ============================================================================
+   ERROR STATE
+   ============================================================================ */
+.feed-error {
+  display: flex;
+  align-items: center;
+  gap: 10px;
+  margin-top: 16px;
+  padding: 16px 18px;
+  background: rgba(233, 30, 99, 0.12);
+  border: 1px solid rgba(233, 30, 99, 0.3);
+  border-radius: var(--feed-radius-md);
+  color: #ff6b9d;
+  font-size: 0.875rem;
+  font-weight: 500;
+  line-height: 1.4;
+  animation: feedErrorIn 0.3s var(--ease-out);
+}
+
+.feed-error::before {
+  content: '⚠';
+  font-size: 16px;
+  flex-shrink: 0;
+}
+
+@keyframes feedErrorIn {
+  from {
+    opacity: 0;
+    transform: translateY(-8px);
+  }
+
+  to {
+    opacity: 1;
+    transform: translateY(0);
+  }
+}
+
+/* ============================================================================
+   RESPONSIVE - Mobile First Approach
+   ============================================================================ */
+
+/* Móviles grandes (iPhone 12 Pro Max, Pixel 7 Pro, etc.) */
+@media (min-width: 390px) {
+  :root {
+    --feed-hero-card-size: 170px;
+    --feed-card-size: 145px;
+  }
+
+  /* Cards circulares más grandes en móviles grandes */
+  .feed-card-circle,
+  .app-card[data-variant="circle"],
+  .app-card.card-circle {
+    width: 120px !important;
+    min-width: 120px !important;
+  }
+
+  .feed-card-circle .feed-card-img-wrapper,
+  .app-card[data-variant="circle"] .app-card-img-wrapper,
+  .app-card.card-circle .app-card-img-wrapper {
+    width: 110px !important;
+    height: 110px !important;
+  }
+
+  .feed-card-circle .feed-card-title,
+  .app-card[data-variant="circle"] .app-card-title,
+  .app-card.card-circle .app-card-title {
+    font-size: 0.8125rem !important;
+  }
+
+  /* También incrementar las cards circulares globales */
+  .feed-screen .app-card.variant-circle,
+  .feed-screen .feed-row .app-card.variant-circle {
+    width: 120px !important;
+    min-width: 120px !important;
+  }
+
+  .feed-screen .app-card.variant-circle .app-card-img-wrapper,
+  .feed-screen .feed-row .app-card.variant-circle .app-card-img-wrapper {
+    width: 110px !important;
+    height: 110px !important;
+  }
+
+  .feed-screen .app-card.variant-circle .app-card-title,
+  .feed-screen .feed-row .app-card.variant-circle .app-card-title {
+    font-size: 0.8125rem !important;
+  }
+}
+
+/* Tablets pequeñas y móviles en landscape */
+@media (min-width: 600px) {
+  :root {
+    --feed-safe-x: 24px;
+    --feed-section-gap: 28px;
+  }
+
+  .feed-hero {
+    padding-top: 24px;
+  }
+
+  .feed-hero-card {
+    flex-direction: row;
+    width: auto;
+    max-width: 600px;
+  }
+
+  .feed-hero-img-wrapper {
+    width: 180px;
+    border-radius: var(--feed-radius-md);
+    margin: 12px;
+  }
+
+  .feed-hero-info {
+    margin: 0;
+    padding: 20px 20px 20px 0;
+    justify-content: center;
+  }
+
+  .feed-hero-track,
+  .feed-hero-artist {
+    text-shadow: none;
+  }
+
+  .feed-recommended-grid {
+    grid-template-rows: repeat(3, 130px);
+    grid-auto-columns: 130px;
+    gap: 12px;
+  }
+}
+
+/* Tablets y Desktop pequeño */
+@media (min-width: 900px) {
+  :root {
+    --feed-safe-x: 32px;
+    --feed-section-gap: 32px;
+    --feed-card-size: 180px;
+  }
+
+  .feed-hero {
+    padding: 32px;
+  }
+
+  .feed-hero-title {
+    font-size: 2rem;
+  }
+
+  .feed-hero-card {
+    max-width: 700px;
+  }
+
+  .feed-hero-card:hover {
+    transform: translateY(-4px);
+    box-shadow: 0 12px 40px rgba(0, 0, 0, 0.4);
+  }
+
+  .feed-card {
+    transition: transform 0.3s var(--ease-out), background 0.2s;
+  }
+
+  .feed-card:hover {
+    transform: translateY(-6px);
+    background: var(--color-card-hover);
+    z-index: 2;
+  }
+
+
+
+  .feed-recommended-grid {
+    grid-template-rows: repeat(3, 140px);
+    grid-auto-columns: 140px;
+    padding: 0 32px;
+    gap: 14px;
+  }
+
+
+}
+
+/* Desktop grande */
+@media (min-width: 1200px) {
+  :root {
+    --feed-card-size: 200px;
+  }
+
+  .feed-screen {
+    max-width: 1600px;
+    margin: 0 auto;
+  }
+
+  .feed-album-card {
+    width: 210px;
+  }
+}
+
+/* ============================================================================
+   RADIO SECTION - Radio de Artistas Favoritos
+   ============================================================================ */
+.feed-section-radio {
+  padding-top: 8px;
+  padding-bottom: 20px;
+  background: var(--color-bg-primary);
+}
+
+.feed-section-radio .feed-section-header {
+  padding-bottom: 14px;
+}
+
+.feed-section-radio .feed-section-title {
+  font-size: 1.25rem;
+  font-weight: 800;
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  line-height: 1.3;
+}
+
+.feed-section-radio .feed-section-subtitle {
+  font-size: 0.875rem;
+  color: var(--color-text-muted);
+  font-style: italic;
+}
+
+/* Radio Artist Cards - Círculos como en el resto del feed */
+.feed-section-radio .app-card.feed-card-radio {
+  width: 110px !important;
+  min-width: 110px !important;
+  flex-shrink: 0;
+}
+
+.feed-section-radio .app-card.feed-card-radio .app-card-img-wrapper {
+  width: 100px !important;
+  height: 100px !important;
+  aspect-ratio: 1/1;
+  border-radius: 50% !important;
+  overflow: hidden;
+  border: 1px solid var(--color-border-subtle);
+  margin: 0 auto 8px;
+  box-shadow: 0 4px 12px rgba(0, 0, 0, 0.2);
+}
+
+.feed-section-radio .app-card.feed-card-radio .app-card-img {
+  border-radius: 50% !important;
+}
+
+.feed-section-radio .app-card.feed-card-radio .app-card-meta {
+  text-align: center;
+  padding: 0 4px;
+}
+
+.feed-section-radio .app-card.feed-card-radio .app-card-title {
+  font-size: 0.75rem !important;
+  font-weight: 500;
+  line-height: 1.25;
+  text-align: center;
+  max-width: 100%;
+  display: -webkit-box;
+  -webkit-line-clamp: 2;
+  -webkit-box-orient: vertical;
+  overflow: hidden;
+  color: var(--color-text-primary);
+}
+
+.feed-section-radio .app-card.feed-card-radio .app-card-subtitle {
+  display: none;
+}
+
+/* ============================================================================
+   ACCESSIBILITY - Reduce Motion
+   ============================================================================ */
+@media (prefers-reduced-motion: reduce) {
+
+  *,
+  *::before,
+  *::after {
+    animation-duration: 0.01ms !important;
+    animation-iteration-count: 1 !important;
+    transition-duration: 0.01ms !important;
+    scroll-behavior: auto !important;
+  }
+
+  .feed-hero-card,
+  .feed-card,
+  .feed-album-card,
+  .feed-recommended-card,
+  .feed-btn,
+  .feed-btn-primary {
+    transition: none !important;
+  }
+
+  .feed-spinner,
+  .feed-spinner-small {
+    animation: none !important;
+    border-top-color: var(--color-text-secondary);
+  }
+}

@@ -1,18 +1,16 @@
 {
-  "name": "cloudtune",
-  "version": "1.0.0",
+  "name": "paradox-music",
+  "version": "1.1.0",
   "private": true,
-  "homepage": ".",
   "dependencies": {
-    "axios": "^1.13.2",
-    "firebase": "^12.0.0",
-    "gsap": "^3.13.0",
-    "http-proxy-middleware": "^3.0.5",
-    "lucide-react": "^0.293.0",
+    "firebase": "^12.6.0",
+    "framer-motion": "^12.23.24",
     "react": "^18.2.0",
     "react-dom": "^18.2.0",
-    "react-player": "^3.4.0",
-    "react-router-dom": "^7.9.6"
+    "react-icons": "^5.5.0",
+    "react-router-dom": "^7.9.6",
+    "uuid": "^13.0.0",
+    "web-vitals": "^2.1.4"
   },
   "devDependencies": {
     "autoprefixer": "^10.4.13",
@@ -29,6 +27,7 @@
     "start": "react-scripts start",
     "build": "react-scripts build",
     "test": "react-scripts test",
+    "test:ci": "react-scripts test --watchAll=false --passWithNoTests",
     "eject": "react-scripts eject"
   },
   "browserslist": {

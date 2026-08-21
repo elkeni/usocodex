@@ -1,0 +1,484 @@
+/* =============================================================================
+   HOME V3.0 - MIGRATED TO GLOBAL DESIGN SYSTEM
+   Uses shared design tokens from globalStyles.css
+   ============================================================================= */
+
+/* ===== PREMIUM DARK GLASS THEME ===== */
+
+:root {
+    /* ================================================================
+       CORE PALETTE - Colors & Theming
+       ================================================================ */
+    --glass-border: rgba(255, 255, 255, 0.1);
+    --glass-bg: rgba(255, 255, 255, 0.05);
+    --glass-highlight: rgba(255, 255, 255, 0.15);
+    --text-primary: #ffffff;
+    --text-secondary: rgba(255, 255, 255, 0.7);
+    --accent-glow: rgba(50, 100, 255, 0.3);
+    --bg-dark: #000000;
+
+    /* ================================================================
+       🏗️ MOBILE STACKING ARCHITECTURE - SINGLE SOURCE OF TRUTH
+       ================================================================
+       
+       VISUAL LAYER DIAGRAM (Bottom of Screen):
+       ┌─────────────────────────────────────────────┐
+       │                 CONTENT                      │  ← Main scrollable area
+       ├─────────────────────────────────────────────┤
+       │     🎵 MINIPLAYER (Layer 2 - z:9000)        │  ← Sits above navbar
+       │     bottom: var(--mobile-nav-height)        │     Tappable, expandable
+       │     height: var(--player-height)            │
+       ├─────────────────────────────────────────────┤
+       │     📱 NAVBAR (Layer 1 - z:8000)            │  ← Fixed to absolute bottom
+       │     bottom: 0                                │     Always visible
+       │     height: var(--mobile-nav-height)        │
+       ├─────────────────────────────────────────────┤
+       │     [SAFE AREA - iOS notch/home indicator]  │
+       └─────────────────────────────────────────────┘
+       
+       KEY PRINCIPLE: MiniPlayer visually "sits on top" of Navbar,
+       but Navbar has LOWER z-index to allow MiniPlayer to receive
+       tap events without interference.
+       ================================================================ */
+
+    /* --- LAYER 1: Bottom Navigation Bar (Ground Level) --- */
+    --mobile-nav-height: 60px;
+    --mobile-nav-z-index: 8000;
+
+    /* --- LAYER 2: MiniPlayer Docked (First Floor) --- */
+    --player-height: 64px;
+    --player-docked-z-index: 9000;
+
+    /* --- LAYER 3: Fullscreen Player (Top Floor - covers everything) --- */
+    --player-fullscreen-z-index: 10000;
+
+    /* --- COMPUTED: Total reserved space at bottom --- */
+    --total-bottom-stack: calc(var(--mobile-nav-height) + var(--player-height));
+
+    /* --- COMPUTED: MiniPlayer's exact bottom position --- */
+    /* It sits EXACTLY on top of the navbar, no gap, no overlap */
+    --player-bottom-position: calc(var(--mobile-nav-height) + env(safe-area-inset-bottom, 0px));
+
+    /* --- CONTENT AREA PADDING --- */
+    /* Desktop: just player height + comfortable margin */
+    --content-padding-bottom: calc(var(--player-height) + 24px);
+
+    /* Mobile: Total stack height + safety buffer + iOS safe area */
+    --content-padding-bottom-mobile: calc(var(--total-bottom-stack) + 1px + env(safe-area-inset-bottom, 0px));
+
+    /* --- ANIMATIONS --- */
+    --transition-smooth: all 0.4s cubic-bezier(0.25, 0.8, 0.25, 1);
+    --transition-fast: all 0.2s cubic-bezier(0.25, 0.8, 0.25, 1);
+}
+
+* {
+    box-sizing: border-box;
+    margin: 0;
+    padding: 0;
+}
+
+body,
+html {
+    margin: 0;
+    padding: 0;
+    font-family: 'Inter', -apple-system, BlinkMacSystemFont, sans-serif;
+    background: var(--bg-dark);
+    color: var(--text-primary);
+    overflow: hidden;
+    /* Prevent body scroll, handle in main-content */
+}
+
+/* ===== HOME CONTAINER - FULL VIEWPORT COVERAGE ===== */
+.home-container {
+    /* Fill entire viewport - no gaps in any direction */
+    position: fixed;
+    top: 0;
+    left: 0;
+    right: 0;
+    bottom: 0;
+    width: 100%;
+    height: 100%;
+    min-height: 100vh;
+    min-height: 100dvh;
+    /* Dynamic viewport height for mobile */
+
+    /* Layout */
+    display: flex;
+    flex-direction: column;
+    overflow: hidden;
+    z-index: 1;
+
+    /* Edge-to-edge: No borders, no radius, no shadow, no margins */
+    margin: 0;
+    padding: 0;
+    border: none;
+    border-radius: 0;
+    box-shadow: none;
+
+    /* Match body background - extends to all edges */
+    background-color: var(--bg-dark);
+}
+
+/* ===== BACKGROUND VIDEO & OVERLAY ===== */
+.video-background {
+    position: absolute;
+    top: 0;
+    left: 0;
+    width: 100%;
+    height: 100%;
+    z-index: 0;
+    overflow: hidden;
+    pointer-events: none;
+}
+
+.video-background video {
+    width: 100%;
+    height: 100%;
+    object-fit: cover;
+    transform: scale(1.02);
+    filter: contrast(1.1) brightness(0.8);
+    position: absolute;
+    top: 0;
+    left: 0;
+}
+
+.overlay {
+    position: absolute;
+    top: 0;
+    left: 0;
+    width: 100%;
+    height: 100%;
+    z-index: 1;
+    background: radial-gradient(circle at 50% 50%,
+            rgba(10, 20, 60, 0.3) 0%,
+            rgba(2, 4, 10, 0.7) 60%,
+            rgba(0, 0, 0, 0.95) 100%);
+    backdrop-filter: blur(3px);
+    animation: breathe 10s ease-in-out infinite alternate;
+}
+
+@keyframes breathe {
+    0% {
+        background-size: 100% 100%;
+        opacity: 0.9;
+    }
+
+    100% {
+        background-size: 110% 110%;
+        opacity: 0.8;
+    }
+}
+
+/* ===== GLASS NAVBAR ===== */
+.glass-navbar {
+    position: relative;
+    z-index: 100;
+    display: flex;
+    justify-content: space-between;
+    align-items: center;
+    padding: 1rem 1.25rem;
+    width: 100%;
+
+    /* Glass effect */
+    background: rgba(0, 0, 0, 0.6);
+    backdrop-filter: blur(20px);
+    -webkit-backdrop-filter: blur(20px);
+
+    /* Edge-to-edge */
+    margin: 0;
+    border: none;
+    border-radius: 0;
+    box-shadow: none;
+
+    /* Subtle bottom separator */
+    border-bottom: 1px solid rgba(255, 255, 255, 0.06);
+
+    animation: fadeInDown 0.8s ease-out forwards;
+}
+
+.nav-logo {
+    font-size: 1.25rem;
+    font-weight: 600;
+    letter-spacing: -0.02em;
+    display: flex;
+    align-items: center;
+    gap: 0.75rem;
+    color: var(--text-primary);
+    text-transform: uppercase;
+}
+
+.nav-logo-icon {
+    width: 24px;
+    height: 24px;
+    border: 2px solid white;
+    border-radius: 50%;
+    display: block;
+}
+
+.nav-profile {
+    width: 36px;
+    height: 36px;
+    border-radius: 50%;
+    background: rgba(255, 255, 255, 0.1);
+    border: none;
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    cursor: pointer;
+    transition: var(--transition-smooth);
+    overflow: hidden;
+}
+
+.nav-profile:hover {
+    background: rgba(255, 255, 255, 0.2);
+    transform: scale(1.05);
+}
+
+.nav-profile.active {
+    background: rgba(255, 255, 255, 0.25);
+}
+
+/* ===== MAIN CONTENT AREA - EDGE TO EDGE ===== */
+/* Main Content - Relative positioning context for absolute children */
+.main-content {
+    width: 100%;
+    flex: 1;
+    overflow: hidden;
+    /* Hide overflow from absolute children */
+    position: relative;
+    /* Context for tab-pages */
+
+    /* Edge-to-edge defaults */
+    padding: 0;
+    margin: 0;
+    border: none;
+
+    /* CRITICAL: Keep bottom padding for player/nav */
+    padding-bottom: var(--content-padding-bottom);
+
+    /* Match background */
+    background-color: transparent;
+}
+
+/* Scrollable container for each Tab or Page */
+/* Now absolute to allow stacking during transitions */
+.tab-page {
+    position: absolute;
+    top: 0;
+    left: 0;
+    width: 100%;
+    height: 100%;
+
+    /* Handle scrolling internally */
+    overflow-y: auto;
+    overflow-x: hidden;
+
+    /* Remove padding bottom here so content can flow fully */
+    padding-bottom: 0;
+
+    /* Smooth scrolling */
+    -webkit-overflow-scrolling: touch;
+    scroll-behavior: smooth;
+
+    /* Ensure hardware acceleration for smoother animations */
+    will-change: transform, opacity;
+    backface-visibility: hidden;
+
+    /* Hide Scrollbar (Chrome, Safari, Edge) */
+    scrollbar-width: none;
+    /* Firefox */
+    -ms-overflow-style: none;
+    /* IE */
+}
+
+.tab-page {
+    /* Smooth scrolling */
+    -webkit-overflow-scrolling: touch;
+    scroll-behavior: smooth;
+
+    /* Hide Scrollbar (Chrome, Safari, Edge) */
+    scrollbar-width: none;
+    /* Firefox */
+    -ms-overflow-style: none;
+    /* IE */
+}
+
+.tab-page::-webkit-scrollbar {
+    display: none;
+    width: 0;
+    height: 0;
+}
+
+@keyframes fadeIn {
+    from {
+        opacity: 0;
+    }
+
+    to {
+        opacity: 1;
+    }
+}
+
+/* =============================================================================
+   MOBILE OPTIMIZATIONS - MATHEMATICAL STACKING LAYOUT
+   Uses global variables from :root for perfect alignment
+   ============================================================================= */
+@media (max-width: 767px) {
+
+    /* Use dynamic viewport height */
+    .home-container {
+        height: 100dvh;
+        height: 100vh;
+        /* Fallback for older browsers */
+        width: 100%;
+        margin: 0;
+        padding: 0;
+    }
+
+    /* =================================================================
+       LAYER 0: MAIN CONTENT (Background Layer)
+       Fills screen but reserves space at bottom for navbar + player stack
+       ================================================================= */
+    .main-content {
+        width: 100% !important;
+        flex: 1 !important;
+        overflow-y: hidden !important;
+        overflow-x: hidden !important;
+
+        /* Zero padding on sides - edge to edge */
+        padding: 0 !important;
+
+        /* CRITICAL: Reserve space for navbar + miniplayer stack */
+        /* Uses centralized variable: total_stack + buffer + safe_area */
+        padding-bottom: var(--content-padding-bottom-mobile, 150px) !important;
+
+        /* No margins that could cause black bars */
+        margin: 0 !important;
+        border: none !important;
+
+        /* Solid background to prevent gaps */
+        background-color: var(--bg-dark);
+    }
+
+    /* Feed fills edge to edge */
+    .feed-container {
+        width: 100% !important;
+        padding: 0 !important;
+        margin: 0 !important;
+        border: none !important;
+    }
+
+    /* CRITICAL: Hide right sidebar completely on mobile */
+    .right-sidebar {
+        display: none !important;
+        width: 0 !important;
+        height: 0 !important;
+        padding: 0 !important;
+        margin: 0 !important;
+        overflow: hidden !important;
+    }
+
+    /* Navbar compact for mobile */
+    .glass-navbar {
+        padding: 0.75rem 1rem;
+        border-radius: 0;
+        margin: 0;
+        border: none;
+        border-bottom: 1px solid rgba(255, 255, 255, 0.06);
+    }
+}
+
+/* ===== GLOBAL SCROLLBAR HIDING WITHIN MAIN CONTENT ===== */
+/* Hide scrollbar for Chrome, Safari and Opera */
+.main-content::-webkit-scrollbar,
+.main-content *::-webkit-scrollbar {
+    display: none;
+    width: 0;
+    height: 0;
+    background: transparent;
+}
+
+/* Hide scrollbar for IE, Edge and Firefox */
+.main-content,
+.main-content * {
+    -ms-overflow-style: none;
+    /* IE and Edge */
+    scrollbar-width: none;
+    /* Firefox */
+}
+
+/* ===== ANIMATIONS ===== */
+@keyframes fadeInDown {
+    from {
+        opacity: 0;
+        transform: translateY(-20px);
+    }
+
+    to {
+        opacity: 1;
+        transform: translateY(0);
+    }
+}
+
+@keyframes fadeInUp {
+    from {
+        opacity: 0;
+        transform: translateY(30px);
+    }
+
+    to {
+        opacity: 1;
+        transform: translateY(0);
+    }
+}
+
+/* ===== LOADING SCREEN ===== */
+.loading-screen {
+    position: fixed;
+    top: 0;
+    left: 0;
+    right: 0;
+    bottom: 0;
+    background: #000;
+    display: flex;
+    flex-direction: column;
+    align-items: center;
+    justify-content: center;
+    gap: 20px;
+    z-index: 9999;
+}
+
+.loading-spinner-large {
+    width: 50px;
+    height: 50px;
+    border: 2px solid rgba(255, 255, 255, 0.1);
+    border-top: 2px solid white;
+    border-radius: 50%;
+    animation: spin 1s linear infinite;
+}
+
+.loading-text {
+    color: var(--text-secondary);
+    font-size: 0.9rem;
+    letter-spacing: 0.1em;
+    text-transform: uppercase;
+}
+
+@keyframes spin {
+    to {
+        transform: rotate(360deg);
+    }
+}
+
+/* ===== MOBILE FIX: Remove all borders and shadows for clean look ===== */
+@media (max-width: 767px) {
+
+    .home-container,
+    .main-content,
+    .glass-navbar,
+    .feed-container {
+        border: none !important;
+        box-shadow: none !important;
+        border-radius: 0 !important;
+    }
+}
