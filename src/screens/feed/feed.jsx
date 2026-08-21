@@ -218,7 +218,6 @@ const Row = memo(({ title, subtitle, items, onItemClick, variant = 'default', se
       'smartRecommendations': 'feed-card-recommendations',
       'trending': 'feed-card-trending',
       'forYouTracks': 'feed-card-foryou-tracks',
-      'forYouPlaylists': 'feed-card-playlists',
       'topPlaylists': 'feed-card-playlists',
       'partyPlaylists': 'feed-card-playlists',
       'recommendedAlbums': 'feed-card-albums',
@@ -423,10 +422,31 @@ export default function Feed() {
   const [hero, setHeroInternal] = useState(() => screenStateCache.get('feed', 'hero') || null);
   const setHero = useCallback((h) => { setHeroInternal(h); screenStateCache.set('feed', 'hero', h); }, []);
 
-  const [sections, setSectionsInternal] = useState(() => screenStateCache.get('feed', 'sections') || { trending: [], newReleases: [], forYouTracks: [], forYouPlaylists: [], partyPlaylists: [], topPlaylists: [], artistsYouLike: [], smartRecommendations: [], recommendedAlbums: [], moodMixes: [], flashback: [], artistSpotlight: [], global: [], heroMix: [] });
+  const [sections, setSectionsInternal] = useState(() => screenStateCache.get('feed', 'sections') || { trending: [], newReleases: [], forYouTracks: [], partyPlaylists: [], topPlaylists: [], artistsYouLike: [], smartRecommendations: [], recommendedAlbums: [], moodMixes: [], flashback: [], artistSpotlight: [], global: [], heroMix: [] });
   const sectionsRef = useRef(sections);
   useEffect(() => { sectionsRef.current = sections; }, [sections]);
   const setSections = useCallback((u) => setSectionsInternal(p => { const v = typeof u === 'function' ? u(p) : u; screenStateCache.set('feed', 'sections', v); return v; }), []);
+
+  useEffect(() => {
+    // Retirar datos que pudieron quedar guardados por el antiguo generador automático.
+    try {
+      const migrationKey = 'paradox_removed_automatic_mixes_v1';
+      if (localStorage.getItem(migrationKey) !== 'true') {
+        Object.keys(localStorage)
+          .filter((key) => key.startsWith('feed_gen_cache_') || key.startsWith(`${CACHE_PREFIX}:`))
+          .forEach((key) => localStorage.removeItem(key));
+        localStorage.setItem(migrationKey, 'true');
+      }
+    } catch { /* El almacenamiento puede estar bloqueado en modo privado. */ }
+
+    setSections((previous) => {
+      const { forYouPlaylists: _removedAutomaticPlaylists, ...clean } = previous || {};
+      return {
+        ...clean,
+        moodMixes: (clean.moodMixes || []).filter((item) => !String(item?.id || '').startsWith('feed-')),
+      };
+    });
+  }, [setSections]);
 
   const [loading, setLoading] = useState(() => wasRestoredFromMemoryRef.current ? { critical: false, forYou: false, playlists: false, party: false, recommendations: false, albums: false, mood: false, flashback: false, global: false, spotlight: false } : { critical: true, forYou: true, playlists: true, party: true, recommendations: true, albums: true, mood: true, flashback: true, global: true, spotlight: true });
   const [refreshNonce, setRefreshNonce] = useState(0);
@@ -472,14 +492,9 @@ export default function Feed() {
   const cacheKey = useMemo(() => `${CACHE_PREFIX}:${user?.uid || "guest"}:${tasteProfile.signature || "nosig"}:${refreshNonce}`, [user, tasteProfile.signature, refreshNonce]);
   useEffect(() => { setTodayText(new Date().toLocaleDateString("es-ES", { weekday: "long", day: "numeric", month: "long" })); }, []);
 
-  // HeroMix: Estrategia Priorizada -> Playlists Generadas > Descubrimiento > Novedades > Librería
+  // HeroMix: descubrimiento, novedades y elementos elegidos por el usuario.
   const heroMix = useMemo(() => {
-    // === 1. PLAYLISTS GENERADAS (Prioridad Máxima) ===
-    const generatedPlaylists = (sections.forYouPlaylists || [])
-      .filter(p => p.isNative)
-      .map(p => ({ ...p, type: 'playlist' }));
-
-    // === 2. NUEVOS DESCUBRIMIENTOS (Basados en gustos recientes) ===
+    // === 1. NUEVOS DESCUBRIMIENTOS (Basados en gustos recientes) ===
     // Usamos las recomendaciones inteligentes pero priorizamos las mejores
     // NOTA: Estas canciones se mostrarán AQUÍ en el Hero y NO deben repetirse abajo
     const newDiscoveries = (sections.smartRecommendations || [])
@@ -487,7 +502,7 @@ export default function Feed() {
       .filter(t => t.image && t.image !== DEFAULT_IMAGE)
       .map(t => ({ ...t, _source: 'discovery' })); // Marcamos para posible UI distinctiva
 
-    // === 3. NUEVOS LANZAMIENTOS (De artistas favoritos) ===
+    // === 2. NUEVOS LANZAMIENTOS (De artistas favoritos) ===
     const likedArtistNames = new Set([
       ...(savedArtists || []).map(a => a.name?.toLowerCase()),
       ...(tasteProfile.topArtists || []).map(a => a?.toLowerCase()),
@@ -502,7 +517,7 @@ export default function Feed() {
       .filter(t => t.image && t.image !== DEFAULT_IMAGE)
       .slice(0, 4);
 
-    // === 4. DE TU LIBRERÍA (Recordatorios de lo que amas) ===
+    // === 3. DE TU LIBRERÍA (Recordatorios de lo que amas) ===
     const libraryFavorites = [
       ...(favorites || []).slice(0, 10), // Pool más grande de favoritos
       ...(savedAlbums || []).slice(0, 5).map(a => ({ ...a, type: 'album' })),
@@ -516,22 +531,13 @@ export default function Feed() {
       `lib-hero-${refreshNonce}`
     ).map(item => normalizeItem(item, item.type || 'track'));
 
-    // === MEZCLA FINAL ===
-    // Estrategia: 
-    // - Playlists generadas siempre primero
-    // - Luego intercalamos: Descubrimiento -> Novedad -> Librería
-
-    // Aleatorizar el contenido (excepto playlists generadas si queremos mantenerlas top, 
-    // pero el usuario pidió "luego para...", mantendremos el orden de grupos o shuffle?)
-    // Para un feed dinámico, haremos shuffle del contenido mezclado, PONIENDO LAS PLAYLISTS AL INICIO SIEMPRE.
-
     const shuffledContent = pickRandomSample(
       [...newDiscoveries, ...relevantNewReleases, ...selectedLibraryItems],
       15, // Traemos bastantes items
       `heroMix-content-${refreshNonce}`
     );
 
-    return [...generatedPlaylists, ...shuffledContent].slice(0, 15); // Total hasta 15 items
+    return shuffledContent.slice(0, 15);
   }, [favorites, savedArtists, savedAlbums, sections, tasteProfile.topArtists, refreshNonce]);
 
   // =========================================================================
@@ -918,44 +924,6 @@ export default function Feed() {
         throw new Error("No user for personalized feed");
       }
 
-      // === GENERACIÓN NATIVA ===
-      // Usamos el feedGenerator para crear las playlists "De la App"
-      // (Daily Mix, Discover Weekly, Smart Mixes, On Repeat)
-      const feedContext = {
-        user,
-        favorites,
-        playlists,
-        listeningHistory: listeningHistorySnapshotRef.current,
-        tasteEngagement: tasteEngagementSnapshotRef.current
-      };
-
-      const { feedGenerator } = await import('../../services/feedGenerator');
-      const generatedMixes = await feedGenerator.generateFeedRecommendations(feedContext);
-
-      // Si tenemos mixes generados, los mostramos
-      if (generatedMixes && generatedMixes.length > 0) {
-        console.log(`[Feed] 🏠 Loaded ${generatedMixes.length} native mixes`);
-
-        const nativeMixes = generatedMixes.map(mix => ({
-          ...mix,
-          id: mix.id,
-          type: 'playlist', // Importante para que el click funcione
-          name: mix.title,
-          creator: 'Para ti',
-          image: mix.image || DEFAULT_IMAGE,
-          trackCount: mix.tracks?.length || 0,
-          isNative: true
-        }));
-
-        setSections(p => ({
-          ...p,
-          // Reemplazamos forYouPlaylists con nuestros mixes
-          forYouPlaylists: nativeMixes,
-          // También podemos meter algunos en moodMixes si sobran
-          moodMixes: nativeMixes.slice(2)
-        }));
-      }
-
       // === GENERACIÓN DE TRACKS (Para completar la sección) ===
       const topArtists = tasteProfile.topArtists?.length ? tasteProfile.topArtists : [FALLBACK_ARTISTS[Math.floor(Math.random() * FALLBACK_ARTISTS.length)]];
       const primary = topArtists[0];
@@ -970,14 +938,19 @@ export default function Feed() {
 
       if (controller.signal.aborted || reqIdRef.current !== requestId) return;
 
-      setSections((prev) => ({ ...prev, forYouTracks: tracks, artistsYouLike }));
+      setSections((prev) => ({
+        ...prev,
+        moodMixes: (prev.moodMixes || []).filter((item) => !String(item?.id || '').startsWith('feed-')),
+        forYouTracks: tracks,
+        artistsYouLike
+      }));
 
     } catch (e) {
       // Fallback silencioso
     } finally {
       if (!controller.signal.aborted) setLoading((p) => ({ ...p, forYou: false, playlists: false }));
     }
-  }, [makeController, tasteProfile, user, favorites, playlists, setSections]);
+  }, [makeController, tasteProfile, user, setSections]);
 
   // Load Playlists
   const loadPlaylistsLazy = useCallback(async (requestId) => {
@@ -1334,7 +1307,6 @@ export default function Feed() {
       smartRecommendations: 'Basado en tus artistas favoritos',
       recentlyPlayed: 'De tu historial reciente',
       topPlaylists: tasteProfile.topArtists?.length > 0 ? `Con artistas como ${tasteProfile.topArtists.slice(0, 2).join(' y ')}` : 'Playlists populares',
-      forYouPlaylists: tasteProfile.topArtists?.length > 0 ? `Con artistas como ${tasteProfile.topArtists.slice(0, 2).join(' y ')}` : 'Playlists que te gustarán',
       partyPlaylists: 'Para tus momentos de fiesta', trending: 'Lo más escuchado ahora',
       recommendedAlbums: savedArtists?.length > 0 ? 'De artistas que sigues' : 'Álbumes que te pueden gustar',
       moodMixes: tasteProfile.topArtists?.length > 0
