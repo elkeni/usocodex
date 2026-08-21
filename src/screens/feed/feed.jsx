@@ -401,6 +401,7 @@ export default function Feed() {
   const { playTrack, addToQueue } = usePlayerActions();
   const playerState = usePlayer();
   const { user, favorites, playlists, savedArtists, savedAlbums, loading: userLoading } = useUser();
+  const artistRadioRequestRef = useRef(0);
 
   const listeningHistorySnapshotRef = useRef(playerState.listeningHistory || []);
   const tasteEngagementSnapshotRef = useRef(playerState.tasteEngagement || { likedArtists: {}, skippedArtists: {} });
@@ -465,9 +466,19 @@ export default function Feed() {
 
   // Toast Notification State (enhanced with image)
   const [toast, setToast] = useState(null);
-  const showToast = useCallback((msg, image = null) => {
-    setToast({ msg, image });
-    setTimeout(() => setToast(null), 3000);
+  const toastTimerRef = useRef(null);
+  const showToast = useCallback((msg, image = null, loading = false) => {
+    if (toastTimerRef.current) clearTimeout(toastTimerRef.current);
+    setToast({ msg, image, loading });
+    toastTimerRef.current = setTimeout(() => {
+      setToast(null);
+      toastTimerRef.current = null;
+    }, loading ? 6000 : 3000);
+  }, []);
+
+  useEffect(() => () => {
+    artistRadioRequestRef.current += 1;
+    if (toastTimerRef.current) clearTimeout(toastTimerRef.current);
   }, []);
 
   // useMemo en lugar de useEffect+useState para evitar loops infinitos
@@ -552,6 +563,9 @@ export default function Feed() {
   ), []);
 
   const handlePlay = useCallback(async (item, contextQueue = null) => {
+    // Cualquier reproducción manual invalida una radio de artista aún en preparación.
+    artistRadioRequestRef.current += 1;
+
     console.log('[handlePlay] Called with:', {
       itemName: item?.name,
       itemArtist: item?.artist,
@@ -621,8 +635,11 @@ export default function Feed() {
   const handleArtistRadioClick = useCallback(async (artist) => {
     if (!artist?.name) return;
 
-    showToast(`Creando estación de ${artist.name}...`, artist.image);
+    const requestId = ++artistRadioRequestRef.current;
+    showToast(`Buscando música de ${artist.name}...`, artist.image, true);
     const seedResponse = await artistGetTopTracks({ artist: artist.name, limit: 1 }).catch(() => null);
+    if (requestId !== artistRadioRequestRef.current) return;
+
     const seedTrack = seedResponse?.toptracks?.track?.[0];
 
     if (!seedTrack) {
@@ -630,21 +647,40 @@ export default function Feed() {
       return;
     }
 
-    const radioQueue = await buildRadioQueue({
-      seedTrack,
-      contextTracks: sectionsRef.current.smartRecommendations || [],
-      targetSize: 32,
-    });
-
-    if (radioQueue.length < 2) {
-      showToast('No pudimos completar esta estación. Intenta nuevamente.', artist.image);
-      return;
-    }
-
+    // La canción semilla empieza primero; ampliar la radio nunca bloquea la reproducción.
+    const trackToPlay = normalizeItem(seedTrack, 'track') || seedTrack;
     recordProductEvent(PRODUCT_EVENTS.RADIO_STARTED);
-    playTrack(radioQueue[0], radioQueue);
-    navigate('/player');
-  }, [playTrack, navigate, showToast]);
+    playTrack(trackToPlay, [trackToPlay]);
+    showToast(`Reproduciendo ${artist.name}. Completando la radio...`, artist.image, true);
+
+    try {
+      const additionalTracks = await buildRadioQueue({
+        seedTrack: trackToPlay,
+        contextTracks: sectionsRef.current.smartRecommendations || [],
+        existingQueue: [trackToPlay],
+        targetSize: 31,
+        includeSeed: false,
+      });
+
+      if (requestId !== artistRadioRequestRef.current) return;
+
+      additionalTracks.forEach((track) => {
+        addToQueue({ ...track, image: track.image_xl || track.image }, true);
+      });
+
+      showToast(
+        additionalTracks.length > 0
+          ? `Radio de ${artist.name} lista: ${additionalTracks.length + 1} canciones.`
+          : `Radio de ${artist.name} iniciada con la música disponible.`,
+        artist.image,
+      );
+    } catch (error) {
+      console.warn('[ArtistRadio] No se pudo ampliar la cola:', error?.message);
+      if (requestId === artistRadioRequestRef.current) {
+        showToast(`Radio de ${artist.name} iniciada. No pudimos ampliar la cola.`, artist.image);
+      }
+    }
+  }, [playTrack, addToQueue, showToast]);
 
   const applyCacheIfValid = useCallback(() => {
     const cached = safeJsonParse(cacheKey, null);
@@ -1447,7 +1483,7 @@ export default function Feed() {
             style={{ '--toast-img': `url(${toast.image || DEFAULT_IMAGE})` }}
           >
             <div className="feed-toast-bg" />
-            <div className="feed-spinner-tiny" />
+            {toast.loading && <div className="feed-spinner-tiny" />}
             <span>{toast.msg}</span>
           </div>
         </div>
