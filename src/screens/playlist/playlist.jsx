@@ -50,6 +50,7 @@ export default function Playlist() {
         deletePlaylist
     } = useUser();
 
+    const pageRef = useRef(null);
     const controlsRef = useRef(null);
     const [isScrolled, setIsScrolled] = useState(false);
 
@@ -127,16 +128,21 @@ export default function Playlist() {
 
     // Detectar scroll para sticky controls
     useEffect(() => {
+        const scrollContainer = pageRef.current;
+        if (!scrollContainer) return undefined;
+
         const handleScroll = () => {
             if (controlsRef.current) {
                 const rect = controlsRef.current.getBoundingClientRect();
-                setIsScrolled(rect.top <= 0);
+                const containerTop = scrollContainer.getBoundingClientRect().top;
+                setIsScrolled(rect.top <= containerTop);
             }
         };
 
-        window.addEventListener('scroll', handleScroll, { passive: true });
-        return () => window.removeEventListener('scroll', handleScroll);
-    }, []);
+        handleScroll();
+        scrollContainer.addEventListener('scroll', handleScroll, { passive: true });
+        return () => scrollContainer.removeEventListener('scroll', handleScroll);
+    }, [isLoading, playlist?.id]);
 
     // Extraer color dominante de la imagen
     const extractColor = useCallback((imageUrl) => {
@@ -729,7 +735,7 @@ export default function Playlist() {
     // Loading State con Skeleton
     if (isLoading) {
         return (
-            <div className="playlist-page">
+            <div className="playlist-page" ref={pageRef}>
                 <div className="playlist-bg-layer">
                     <div className="playlist-bg-overlay" />
                 </div>
@@ -781,7 +787,7 @@ export default function Playlist() {
     }
 
     return (
-        <div className="playlist-page">
+        <div className="playlist-page" ref={pageRef}>
             {/* Notification Toast */}
             {notification && (
                 <div className={`playlist-notification ${notification.type}`}>
