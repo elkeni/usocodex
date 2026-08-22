@@ -52,4 +52,10 @@ describe('Fase 2: navegación móvil y fluidez', () => {
     expect(screen.getByRole('button', { name: /Ir a Descubrir/i })).toBeInTheDocument();
     expect(screen.getByRole('button', { name: /Buscar música/i })).toBeInTheDocument();
   });
+
+  it('reconoce enlaces estables de álbum por ID', async () => {
+    render(<MemoryRouter initialEntries={['/album/123456']}><Home /></MemoryRouter>);
+    expect(await screen.findByRole('heading', { name: 'Álbum cargado' })).toBeInTheDocument();
+    expect(screen.queryByText('Esta página no está en la playlist')).not.toBeInTheDocument();
+  });
 });

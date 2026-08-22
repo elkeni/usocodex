@@ -812,6 +812,18 @@ export const PlayerProvider = ({ children }) => {
                 duration: trackDuration,
             });
 
+            // Las pantallas de artista/álbum ya resuelven el audio dentro del
+            // gesto del usuario. Reutilizarlo evita una segunda petición que
+            // puede perder la autorización de reproducción en iOS.
+            if (typeof track?.url === 'string' && /^https?:\/\//i.test(track.url)) {
+                return {
+                    status: "ok",
+                    url: track.url,
+                    confidence: track.urlSource === 'resolved' ? 1 : 0.5,
+                    cacheKey,
+                };
+            }
+
             // [CONTRATO] Guard: si este track ya falló, devolver unavailable inmediatamente
             const failedKey = `${track?.artistId || artistName}::${trackName}`.toLowerCase();
             if (failedTracksRef.current.has(failedKey)) {

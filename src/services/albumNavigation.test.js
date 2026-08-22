@@ -10,7 +10,7 @@ describe('Navegación y resolución de álbumes', () => {
             id: 123456,
             name: 'More Than We Ever Imagined (Live in Mexico City)',
             artist: 647650,
-        }, 'Twenty One Pilots')).toBe('/album/Twenty%20One%20Pilots/123456');
+        }, 'Twenty One Pilots')).toBe('/album/123456');
     });
 
     it('conserva compatibilidad con álbumes que todavía no tienen ID', () => {

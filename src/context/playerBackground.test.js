@@ -27,4 +27,9 @@ describe('Player: reproducción en segundo plano', () => {
     it('evita el crossfade de dos reproductores con la app oculta', () => {
         expect(playerSource).toContain("document.visibilityState !== 'hidden'");
     });
+
+    it('reutiliza el audio ya resuelto por el toque del usuario', () => {
+        expect(playerSource).toContain("typeof track?.url === 'string'");
+        expect(playerSource).toContain('url: track.url');
+    });
 });

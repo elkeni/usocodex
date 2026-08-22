@@ -91,7 +91,7 @@ const useColorExtractor = (imageUrl) => {
 };
 
 export default function AlbumDetail() {
-    const { artist, name } = useParams();
+    const { artist, name, albumId } = useParams();
     const navigate = useNavigate();
     const { playTrack } = usePlayerActions();
     const { isAlbumSaved, toggleSaveAlbum } = useUser();
@@ -134,8 +134,8 @@ export default function AlbumDetail() {
             setRelatedAlbums([]);
             setTracks([]);
             if (containerRef.current) containerRef.current.scrollTop = 0;
-            const safeName = decodeURIComponent(name);
-            const safeArtist = decodeURIComponent(artist);
+            const safeName = decodeURIComponent(albumId || name || '');
+            const safeArtist = artist ? decodeURIComponent(artist) : '';
 
             try {
                 // ⭐ CAMBIO CRÍTICO: Usar getAlbumDetails para obtener datos EXACTOS
@@ -182,9 +182,9 @@ export default function AlbumDetail() {
             }
         };
 
-        if (artist && name) fetchData();
+        if (albumId || (artist && name)) fetchData();
         return () => { cancelled = true; };
-    }, [artist, name, retryKey]);
+    }, [albumId, artist, name, retryKey]);
 
     const handlePlayTrack = useCallback(async (track, queueSource = tracks) => {
         if (playingTrackId) return;
@@ -202,17 +202,15 @@ export default function AlbumDetail() {
             const trackDuration = track.duration ? parseInt(track.duration) : 0;
 
             // Intentar usar preview de Deezer primero, luego fetchAudioUrl
-            let audioUrl = track.preview;
-            if (!audioUrl) {
-                const resolution = await fetchAudioUrl({
-                    ...track,
-                    artist: trackArtist,
-                    artistId: track.artistId || albumInfo?.artistId,
-                    albumId: track.albumId || albumInfo?.id,
-                    duration: trackDuration,
-                });
-                audioUrl = resolution.status === 'ok' ? resolution.audio?.url : null;
-            }
+            const resolution = await fetchAudioUrl({
+                ...track,
+                artist: trackArtist,
+                artistId: track.artistId || albumInfo?.artistId,
+                albumId: track.albumId || albumInfo?.id,
+                duration: trackDuration,
+            });
+            const resolvedUrl = resolution.status === 'ok' ? resolution.audio?.url : null;
+            const audioUrl = resolvedUrl || track.preview || null;
 
             if (audioUrl) {
                 // Crear cola con todos los tracks del álbum
@@ -224,7 +222,7 @@ export default function AlbumDetail() {
                     albumId: t.albumId || albumInfo?.id || null,
                     image: t.image || albumImg,
                     duration: t.duration ? parseInt(t.duration) : 0,
-                    url: t.preview,
+                    preview: t.preview,
                     album: albumInfo?.name || name
                 }));
 
@@ -237,6 +235,7 @@ export default function AlbumDetail() {
                     image: trackImg,
                     duration: trackDuration,
                     url: audioUrl,
+                    urlSource: resolvedUrl ? 'resolved' : 'preview',
                     album: albumInfo?.name || name
                 }, fullQueue);
             } else {

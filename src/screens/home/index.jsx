@@ -61,6 +61,7 @@ export default function Home() {
                 <Route path="/profile" element={<Profile />} />
                 <Route path="/playlist/:playlistId" element={<Playlist />} />
                 <Route path="/artist/:name" element={<ArtistDetail />} />
+                <Route path="/album/:albumId" element={<AlbumDetail />} />
                 <Route path="/album/:artist/:name" element={<AlbumDetail />} />
                 <Route path="/import/*" element={<Import />} />
                 <Route path="*" element={<NotFound />} />

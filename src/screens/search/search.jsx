@@ -901,21 +901,22 @@ export default function Search() {
                 id: track.id,
                 name: track.name,
                 artist: track.artist,
+                artistId: track.artistId || null,
+                albumId: track.albumId || null,
                 // ⭐ USE XL IMAGE FOR PLAYER, FALLBACK TO REGULAR (OPTIMIZED)
                 image: track.image_xl || track.image || getImageUrl(track, true) || DEFAULT_IMAGE,
-                url: track.preview,
+                url: null,
                 album: track.album || 'Búsqueda',
                 duration: track.duration || 0
             };
 
-            // Buscar audio si no hay preview
-            if (!trackToPlay.url) {
-                if (import.meta.env.DEV) {
-                    console.log(`[Search] 🔍 Buscando audio en backend...`);
-                }
-                const resolution = await fetchAudioUrl(track);
-                trackToPlay.url = resolution.status === 'ok' ? resolution.audio?.url : null;
+            if (import.meta.env.DEV) {
+                console.log(`[Search] 🔍 Buscando audio en backend...`);
             }
+            const resolution = await fetchAudioUrl(track);
+            const resolvedUrl = resolution.status === 'ok' ? resolution.audio?.url : null;
+            trackToPlay.url = resolvedUrl || track.preview || null;
+            trackToPlay.urlSource = resolvedUrl ? 'resolved' : 'preview';
 
             if (!trackToPlay.url) {
                 console.warn(`[Search] ❌ No se encontró audio para: "${track.artist} - ${track.name}"`);
@@ -946,15 +947,18 @@ export default function Search() {
                     id: t.id,
                     name: t.name,
                     artist: t.artist,
+                    artistId: t.artistId || null,
+                    albumId: t.albumId || null,
                     image: t.image_xl || t.image || getImageUrl(t, true) || DEFAULT_IMAGE, // prefer XL
                     duration: t.duration || 0,
-                    url: t.preview || t.url,
+                    preview: t.preview,
                     album: t.album || 'Radio de Búsqueda'
                 }));
 
                 // Asegurar que el primer track tenga la URL de audio
                 if (radioQueue.length > 0) {
                     radioQueue[0].url = trackToPlay.url;
+                    radioQueue[0].urlSource = trackToPlay.urlSource;
                 }
 
                 if (import.meta.env.DEV) {

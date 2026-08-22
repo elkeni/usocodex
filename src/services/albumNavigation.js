@@ -9,9 +9,12 @@ const getArtistName = (album, fallbackArtist = '') => {
  */
 export const getAlbumPath = (album, fallbackArtist = '') => {
     const artist = getArtistName(album, fallbackArtist);
-    const target = album?.id || album?.name || album?.title;
-    if (!target) return null;
-    return `/album/${encodeURIComponent(artist)}/${encodeURIComponent(target)}`;
+    const albumId = album?.originalId || album?.id;
+    if (albumId) return `/album/${encodeURIComponent(albumId)}`;
+
+    const title = album?.name || album?.title;
+    if (!title) return null;
+    return `/album/${encodeURIComponent(artist)}/${encodeURIComponent(title)}`;
 };
 
 export const shuffleAlbumTracks = (source, random = Math.random) => {

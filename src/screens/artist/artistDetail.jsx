@@ -143,16 +143,14 @@ export default function ArtistDetail() {
             const trackName = track.name;
             const trackDuration = track.duration ? parseInt(track.duration) : 0;
 
-            let audioUrl = track.preview;
-            if (!audioUrl) {
-                const resolution = await fetchAudioUrl({
-                    ...track,
-                    artist: trackArtist,
-                    artistId: track.artistId || artistInfo?.id,
-                    duration: trackDuration,
-                });
-                audioUrl = resolution.status === 'ok' ? resolution.audio?.url : null;
-            }
+            const resolution = await fetchAudioUrl({
+                ...track,
+                artist: trackArtist,
+                artistId: track.artistId || artistInfo?.id,
+                duration: trackDuration,
+            });
+            const resolvedUrl = resolution.status === 'ok' ? resolution.audio?.url : null;
+            const audioUrl = resolvedUrl || track.preview || null;
 
             if (audioUrl) {
                 const artistQueue = topTracks.map(t => ({
@@ -162,7 +160,7 @@ export default function ArtistDetail() {
                     artistId: t.artistId || artistInfo?.id || null,
                     image: getBestImage(t.image) || getBestImage(artistInfo?.image) || DEFAULT_IMAGE,
                     duration: t.duration ? parseInt(t.duration) : 0,
-                    url: t.preview,
+                    preview: t.preview,
                     album: t.album || 'Top Hits'
                 }));
 
@@ -174,6 +172,7 @@ export default function ArtistDetail() {
                     image: trackImg,
                     duration: trackDuration,
                     url: audioUrl,
+                    urlSource: resolvedUrl ? 'resolved' : 'preview',
                     album: track.album || 'Top Hits'
                 }, artistQueue);
             }
