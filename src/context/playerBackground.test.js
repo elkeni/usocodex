@@ -45,4 +45,9 @@ describe('Player: reproducción en segundo plano', () => {
             'q.every((track) => failedTracksRef.current.has(makeFailureKey(track)))',
         );
     });
+
+    it('normaliza identificadores numéricos de Deezer antes de crear claves', () => {
+        expect(playerSource).toContain('return val == null ? "" : String(val);');
+        expect(playerSource).toContain('const artist = getSafeString(track?.artistId || track?.artist).toLowerCase()');
+    });
 });

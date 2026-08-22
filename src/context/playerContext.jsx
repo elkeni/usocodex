@@ -37,8 +37,10 @@ const safeInt = (key, fallback = -1) => {
 };
 
 const getSafeString = (val) => {
-    if (typeof val === "object" && val !== null) return val.name || val["#text"] || "";
-    return val || "";
+    if (typeof val === "object" && val !== null) {
+        return String(val.name || val["#text"] || "");
+    }
+    return val == null ? "" : String(val);
 };
 
 const makeTrackKey = (track) => {
@@ -1248,6 +1250,7 @@ export const PlayerProvider = ({ children }) => {
                 syncIndicesByTrackId(track.id, track);
 
             } catch (e) {
+                console.error('[PlayerContext] Error inesperado al preparar la reproducción:', e);
                 if (activeRequestId.current === requestId) {
                     showError("Error de conexión");
                 }
