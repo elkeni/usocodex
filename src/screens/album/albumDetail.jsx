@@ -12,6 +12,7 @@ import { usePlayerActions } from '../../context/playerContext';
 import { useUser } from '../../context/userContext';
 import PageState from '../../components/shared/PageState';
 import { getAlbumPath, shuffleAlbumTracks } from '../../services/albumNavigation';
+import { getArtistPath } from '../../services/artistIdentity';
 
 // getBestImage removed - images now come as strings from API
 
@@ -203,7 +204,14 @@ export default function AlbumDetail() {
             // Intentar usar preview de Deezer primero, luego fetchAudioUrl
             let audioUrl = track.preview;
             if (!audioUrl) {
-                audioUrl = await fetchAudioUrl(trackArtist, trackName, trackDuration);
+                const resolution = await fetchAudioUrl({
+                    ...track,
+                    artist: trackArtist,
+                    artistId: track.artistId || albumInfo?.artistId,
+                    albumId: track.albumId || albumInfo?.id,
+                    duration: trackDuration,
+                });
+                audioUrl = resolution.status === 'ok' ? resolution.audio?.url : null;
             }
 
             if (audioUrl) {
@@ -212,6 +220,8 @@ export default function AlbumDetail() {
                     id: t.id || t.name,
                     name: t.name,
                     artist: t.artist || albumInfo?.artist || artist,
+                    artistId: t.artistId || albumInfo?.artistId || null,
+                    albumId: t.albumId || albumInfo?.id || null,
                     image: t.image || albumImg,
                     duration: t.duration ? parseInt(t.duration) : 0,
                     url: t.preview,
@@ -222,6 +232,8 @@ export default function AlbumDetail() {
                     id: trackId,
                     name: trackName,
                     artist: trackArtist,
+                    artistId: track.artistId || albumInfo?.artistId || null,
+                    albumId: track.albumId || albumInfo?.id || null,
                     image: trackImg,
                     duration: trackDuration,
                     url: audioUrl,
@@ -319,7 +331,7 @@ export default function AlbumDetail() {
 
                 <div className="album-info-section">
                     <h1 className="album-title-apple">{albumInfo.name}</h1>
-                    <button type="button" className="album-artist-apple" onClick={() => navigate(`/artist/${encodeURIComponent(albumInfo.artist)}`)}>
+                    <button type="button" className="album-artist-apple" onClick={() => navigate(getArtistPath({ id: albumInfo.artistId, name: albumInfo.artist }))}>
                         {albumInfo.artist}
                     </button>
                     <p className="album-meta-apple">

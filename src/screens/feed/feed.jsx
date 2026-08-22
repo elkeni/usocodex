@@ -13,6 +13,7 @@ import screenStateCache, { useScrollPersistence } from "../../services/screenSta
 import { buildRadioQueue } from "../../services/radioService";
 import { PRODUCT_EVENTS, recordProductEvent } from "../../services/productMetrics";
 import { getAlbumPath } from "../../services/albumNavigation";
+import { getArtistPath } from "../../services/artistIdentity";
 import "./feed.css";
 import Card from "../../components/shared/Card";
 
@@ -266,7 +267,7 @@ const HeroCard = memo(({ item, onPlay }) => {
     } else if (item.type === 'playlist') {
       navigate(`/playlist/${item.id}`, { state: { playlist: item } });
     } else if (item.type === 'artist') {
-      navigate(`/artist/${encodeURIComponent(item.name)}`);
+      navigate(getArtistPath(item));
     } else {
       onPlay(item);
     }
@@ -577,7 +578,7 @@ export default function Feed() {
 
     if (!item) return;
     if (item.type === "playlist") { navigate(`/playlist/${item.id}`, { state: { playlist: item } }); return; }
-    if (item.type === "artist") { navigate(`/artist/${encodeURIComponent(item.artist || item.name)}`); return; }
+    if (item.type === "artist") { navigate(getArtistPath(item, item.artist)); return; }
     if (item.type === "album") { navigate(getAlbumPath(item)); return; }
 
     // Si ya viene con una cola, usarla directamente

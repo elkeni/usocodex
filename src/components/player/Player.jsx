@@ -23,6 +23,8 @@ import { usePlayer } from '../../context/playerContext';
 import { useUser } from '../../context/userContext';
 import { useFeedback } from '../../context/feedbackContext';
 import { fetchLyrics, getArtistInfo, getAlbumDetails, artistGetTopTracks } from '../../services/unifiedService';
+import { getArtistPath } from '../../services/artistIdentity';
+import { getAlbumPath } from '../../services/albumNavigation';
 import useBodyScrollLock from '../../hooks/useBodyScrollLock';
 
 import './Player.css';
@@ -562,7 +564,7 @@ export default function Player() {
 
     const handleViewArtist = useCallback(() => {
         if (currentTrack?.artist) {
-            navigate(`/artist/${encodeURIComponent(currentTrack.artist)}`);
+            navigate(getArtistPath({ id: currentTrack.artistId, name: currentTrack.artist }));
             closeFullscreen();
             handleMenuClose();
         }
@@ -570,7 +572,11 @@ export default function Player() {
 
     const handleViewAlbum = useCallback(() => {
         if (currentTrack?.artist && currentTrack?.album) {
-            navigate(`/album/${encodeURIComponent(currentTrack.artist)}/${encodeURIComponent(currentTrack.album)}`);
+            navigate(getAlbumPath({
+                id: currentTrack.albumId,
+                name: currentTrack.album,
+                artist: currentTrack.artist,
+            }));
             closeFullscreen();
             handleMenuClose();
         }

@@ -22,6 +22,8 @@ import './library-modal.css';
 import Card from '../../components/shared/Card';
 import { libraryGenerator } from '../../services/libraryGenerator';
 import { PRODUCT_EVENTS, recordProductEvent } from '../../services/productMetrics';
+import { getArtistPath } from '../../services/artistIdentity';
+import { getAlbumPath } from '../../services/albumNavigation';
 
 const DEFAULT_IMAGE = 'https://images.unsplash.com/photo-1470225620780-dba8ba36b745?auto=format&fit=crop&w=500&q=60';
 
@@ -756,7 +758,7 @@ export default function Library() {
                             <Card
                                 item={album}
                                 variant="vertical"
-                                onClick={() => navigate(`/album/${encodeURIComponent(album.artist)}/${encodeURIComponent(album.name)}`)}
+                                onClick={() => navigate(getAlbumPath(album))}
                             />
                         </div>
                     ))}
@@ -833,7 +835,7 @@ export default function Library() {
                             <Card
                                 item={artist}
                                 variant="circle"
-                                onClick={() => navigate(`/artist/${encodeURIComponent(artist.name)}`)}
+                                onClick={() => navigate(getArtistPath(artist))}
                             />
                         </div>
                     ))}

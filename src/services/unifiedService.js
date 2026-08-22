@@ -8,6 +8,7 @@
 
 import { AuthService } from './authService';
 import { CONFIG } from './config';
+import { isArtistCreditMatch, normalizeArtistName } from './artistIdentity';
 
 // =============================================================================
 // UTILIDADES DE LIMPIEZA Y NORMALIZACIÓN (para metadatos UI, NO para decisiones)
@@ -88,7 +89,9 @@ const DeezerClient = {
             id: dt.id,
             name: dt.title,
             artist: dt.artist?.name || "Desconocido",
+            artistId: dt.artist?.id || null,
             album: dt.album?.title || "Sencillo",
+            albumId: dt.album?.id || null,
             image: dt.album?.cover_medium || dt.album?.cover_big || dt.artist?.picture_medium,
             duration: dt.duration,
             preview: dt.preview,
@@ -136,25 +139,33 @@ const DeezerClient = {
     async getArtistTop(artistId, limit = 20) {
         let id = artistId;
         if (isNaN(id)) {
-            const search = await this.searchGlobal(artistId, 'artist', 1);
-            if (!search[0]) return [];
-            id = search[0].id;
+            const artistInfo = await this.getArtistInfo(artistId);
+            if (!artistInfo) return [];
+            id = artistInfo.id;
         }
         const top = await this._fetch(`/artist/${id}/top?limit=${limit}`);
         return top?.data ? top.data.map(this._mapTrack) : [];
     },
 
-    async getArtistInfo(artistName) {
-        if (!artistName) return null;
+    async getArtistInfo(artistIdOrName) {
+        if (!artistIdOrName) return null;
 
-        const searchResults = await this.searchGlobal(artistName, 'artist', 5);
-        if (!searchResults || searchResults.length === 0) return null;
+        let artistId = artistIdOrName;
+        if (isNaN(artistIdOrName)) {
+            const requestedName = normalizeArtistName(artistIdOrName);
+            const searchResults = await this.searchGlobal(artistIdOrName, 'artist', 25);
+            const exactMatches = (searchResults || []).filter((candidate) =>
+                normalizeArtistName(candidate?.name) === requestedName
+            );
 
-        // [MOD] NO VALIDATION: Aceptamos el mejor match que Deezer nos de.
-        const bestMatch = searchResults[0];
+            // Nunca convertir una coincidencia parecida en una identidad exacta.
+            if (exactMatches.length === 0) return null;
+            exactMatches.sort((a, b) => (b.nb_fan || 0) - (a.nb_fan || 0));
+            artistId = exactMatches[0].id;
+        }
 
-        const artistData = await this._fetch(`/artist/${bestMatch.id}`);
-        if (!artistData || artistData.error) return null;
+        const artistData = await this._fetch(`/artist/${artistId}`);
+        if (!artistData?.id || artistData.error) return null;
 
         return {
             id: artistData.id,
@@ -283,6 +294,7 @@ const DeezerClient = {
                 id: track.id,
                 name: track.title || track.title_short,
                 artist: track.artist?.name || albumData.artist?.name,
+                artistId: track.artist?.id || albumData.artist?.id || null,
                 album: albumData.title,
                 albumId: albumData.id,
                 image: albumData.cover_xl || albumData.cover_big || albumData.cover_medium,
@@ -376,14 +388,16 @@ async function fetchAudioUrl(artistOrTrack, title, duration) {
     // Construir objeto track normalizado
     const trackInfo = {
         id: track.id || null,
+        artistId: track.artistId || track.artist?.id || null,
+        albumId: track.albumId || null,
         title: track.title || track.name || '',
-        artist: track.artist || '',
+        artist: typeof track.artist === 'string' ? track.artist : track.artist?.name || '',
         duration: parseDurationToSeconds(track.duration)
     };
 
     // 0. CACHÉ EN MEMORIA (Instantánea)
     // Evita round-trips al servidor para tracks recientes
-    const cacheKey = `${trackInfo.artist}|${trackInfo.title}|${trackInfo.duration}`.toLowerCase();
+    const cacheKey = `${trackInfo.artistId || trackInfo.artist}|${trackInfo.albumId || ''}|${trackInfo.id || trackInfo.title}|${trackInfo.duration}`.toLowerCase();
     const cached = audioUrlCache.get(cacheKey);
     if (cached) {
         if (Date.now() - cached.timestamp < CACHE_TTL_MS) {
@@ -435,6 +449,12 @@ async function fetchAudioUrl(artistOrTrack, title, duration) {
             const song = hit.canonical ? hit.canonical.song : hit.song;
 
             if (!song?.sourceId) throw new Error('No sourceId');
+            const indexedArtist = typeof song.artist === 'string'
+                ? song.artist
+                : song.artist?.name || song.author?.name;
+            if (indexedArtist && !isArtistCreditMatch(trackInfo.artist, indexedArtist)) {
+                throw new Error('Artist mismatch');
+            }
 
             // Obtener stream para el videoId del índice
             const streamUrl = `${BACKEND}/api/youtube-streams?videoId=${song.sourceId}&confidence=1.0`;
@@ -474,7 +494,10 @@ async function fetchAudioUrl(artistOrTrack, title, duration) {
     const tryInstantPlay = async () => {
         const instantPlayUrl = `${BACKEND}/api/instant-play?artist=${encodeURIComponent(
             trackInfo.artist
-        )}&track=${encodeURIComponent(trackInfo.title)}`;
+        )}&track=${encodeURIComponent(trackInfo.title)}`
+            + (trackInfo.artistId ? `&artistId=${encodeURIComponent(trackInfo.artistId)}` : '')
+            + (trackInfo.id ? `&trackId=${encodeURIComponent(trackInfo.id)}` : '')
+            + (trackInfo.albumId ? `&albumId=${encodeURIComponent(trackInfo.albumId)}` : '');
 
         const controller = new AbortController();
         // TURBO: Solo 4s para instant-play
@@ -491,6 +514,11 @@ async function fetchAudioUrl(artistOrTrack, title, duration) {
 
             const data = await res.json();
             if (!data?.audioUrl) throw new Error('No audioUrl');
+
+            const resolvedArtist = data.track?.artist || data.artist;
+            if (resolvedArtist && !isArtistCreditMatch(trackInfo.artist, resolvedArtist)) {
+                throw new Error('Artist mismatch');
+            }
 
             console.log(`[UnifiedService] ⚡ INSTANT-PLAY WIN`);
             return {

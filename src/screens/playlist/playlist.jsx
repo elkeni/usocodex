@@ -31,6 +31,7 @@ import { playlistGetInfo, searchGlobal, artistGetTopTracks, getRelatedArtists } 
 import { getGenrePlaylist, isGenrePlaylistId } from '../../services/genrePlaylistService';
 import PageState from '../../components/shared/PageState';
 import useBodyScrollLock from '../../hooks/useBodyScrollLock';
+import { getArtistPath } from '../../services/artistIdentity';
 
 const DEFAULT_IMAGE = 'https://images.unsplash.com/photo-1470225620780-dba8ba36b745?auto=format&fit=crop&w=500&q=60';
 
@@ -488,7 +489,7 @@ export default function Playlist() {
     const handleViewArtist = useCallback((track) => {
         const artistName = typeof track.artist === 'object' ? track.artist.name : track.artist;
         if (artistName) {
-            navigate(`/artist/${encodeURIComponent(artistName)}`);
+            navigate(getArtistPath({ id: track.artistId || track.artist?.id, name: artistName }));
         }
         setShowTrackMenu(null);
     }, [navigate]);

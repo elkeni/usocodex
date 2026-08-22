@@ -1,5 +1,7 @@
 import { useState, useCallback, useMemo } from 'react';
 import { useNavigate } from 'react-router-dom';
+import { getArtistPath } from '../../services/artistIdentity';
+import { getAlbumPath } from '../../services/albumNavigation';
 import { FaPlay, FaMusic, FaUser, FaCompactDisc, FaListAlt } from 'react-icons/fa';
 import './card.css';
 
@@ -104,12 +106,12 @@ export default function Card({
         if (!item) return;
 
         if (item.type === 'album' || variant === 'album') {
-            navigate(`/album/${encodeURIComponent(item.artist || 'Unknown')}/${encodeURIComponent(item.name)}`);
+            navigate(getAlbumPath(item, 'Unknown'));
         } else if (item.type === 'playlist') {
             // Fix: Pass the item state navigation for generated/virtual playlists
             navigate(`/playlist/${item.id}`, { state: { playlist: item } });
         } else if (item.type === 'artist' || variant === 'circle') {
-            navigate(`/artist/${encodeURIComponent(item.name || item.id)}`);
+            navigate(getArtistPath(item));
         } else if (onPlay) {
             // Fallback to play if it's a track and no explicit navigate logic
             onPlay(item);

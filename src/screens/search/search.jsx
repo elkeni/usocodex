@@ -27,6 +27,7 @@ import {
 import { buildRadioQueue } from '../../services/radioService';
 import { PRODUCT_EVENTS, recordProductEvent } from '../../services/productMetrics';
 import { getAlbumPath } from '../../services/albumNavigation';
+import { getArtistPath, isSameArtist } from '../../services/artistIdentity';
 
 
 
@@ -188,18 +189,6 @@ const generateSmartQueue = (selectedTrack, allTracks, searchQuery = '') => {
         return [];
     }
 
-    // Normalizar nombre de artista para comparación
-    const normalizeArtist = (artist) => {
-        if (!artist) return '';
-        return artist.toLowerCase()
-            .replace(/\s*&\s*/g, ' ')
-            .replace(/\s+feat\.?\s*/gi, ' ')
-            .replace(/\s+ft\.?\s*/gi, ' ')
-            .replace(/\s+/g, ' ')
-            .trim();
-    };
-
-    const selectedArtist = normalizeArtist(selectedTrack.artist);
     const selectedId = selectedTrack.id || selectedTrack.name;
 
     // Separar tracks en categorías
@@ -213,19 +202,9 @@ const generateSmartQueue = (selectedTrack, allTracks, searchQuery = '') => {
         // Excluir el track seleccionado
         if (trackId === selectedId) return;
 
-        const trackArtist = normalizeArtist(track.artist);
-
         // 1. Mismo artista (máxima prioridad)
-        if (trackArtist === selectedArtist ||
-            trackArtist.includes(selectedArtist) ||
-            selectedArtist.includes(trackArtist)) {
+        if (isSameArtist(track, selectedTrack)) {
             sameArtistTracks.push(track);
-        }
-        // 2. Artista relacionado (comparten palabras en común, ej: colaboraciones)
-        else if (trackArtist.split(' ').some(word =>
-            word.length > 2 && selectedArtist.includes(word)
-        )) {
-            relatedTracks.push(track);
         }
         // 3. Otros tracks populares
         else {
@@ -252,8 +231,8 @@ const generateSmartQueue = (selectedTrack, allTracks, searchQuery = '') => {
     const canAddTrack = (track) => {
         if (smartQueue.length === 0) return true;
 
-        const currentArtist = normalizeArtist(track.artist);
-        const lastArtist = normalizeArtist(smartQueue[smartQueue.length - 1].artist);
+        const currentArtist = String(track.artistId || track.artist || '');
+        const lastArtist = String(smartQueue[smartQueue.length - 1].artistId || smartQueue[smartQueue.length - 1].artist || '');
 
         if (currentArtist === lastArtist) {
             consecutiveCount[currentArtist] = (consecutiveCount[currentArtist] || 0) + 1;
@@ -730,7 +709,9 @@ export default function Search() {
                 id: t.id,
                 name: t.title,
                 artist: t.artist?.name,
+                artistId: t.artist?.id || null,
                 album: t.album?.title,
+                albumId: t.album?.id || null,
                 image: getImageUrl({ image: t.album?.cover_xl || t.artist?.picture_xl }, false), // 250x250
                 image_xl: getImageUrl({ image: t.album?.cover_xl || t.artist?.picture_xl }, true), // 1000x1000
                 duration: t.duration,
@@ -751,6 +732,7 @@ export default function Search() {
                 id: a.id,
                 name: a.title,
                 artist: a.artist?.name,
+                artistId: a.artist?.id || null,
                 image: getImageUrl({ image: a.cover_xl }, false),
                 image_xl: getImageUrl({ image: a.cover_xl }, true),
                 fans: a.fans,
@@ -931,7 +913,8 @@ export default function Search() {
                 if (import.meta.env.DEV) {
                     console.log(`[Search] 🔍 Buscando audio en backend...`);
                 }
-                trackToPlay.url = await fetchAudioUrl(track.artist, track.name, track.duration);
+                const resolution = await fetchAudioUrl(track);
+                trackToPlay.url = resolution.status === 'ok' ? resolution.audio?.url : null;
             }
 
             if (!trackToPlay.url) {
@@ -1097,7 +1080,7 @@ export default function Search() {
                                             <Card
                                                 item={artist}
                                                 variant="vertical" // Force vertical for bubbles style
-                                                onClick={() => navigate(`/artist/${encodeURIComponent(artist.name)}`)}
+                                                onClick={() => navigate(getArtistPath(artist))}
                                             />
                                         </div>
                                     ))}
@@ -1338,7 +1321,7 @@ export default function Search() {
                                         <Card
                                             item={artist}
                                             variant="circle"
-                                            onClick={() => navigate(`/artist/${encodeURIComponent(artist.name)}`)}
+                                            onClick={() => navigate(getArtistPath(artist))}
                                         />
                                     </div>
                                 ))}

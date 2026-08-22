@@ -49,7 +49,7 @@ const makeTrackKey = (track) => {
 
 const makeAudioCacheKey = (track) => {
     const name = getSafeString(track?.name || track?.title).toLowerCase();
-    const artist = getSafeString(track?.artist).toLowerCase();
+    const artist = getSafeString(track?.artistId || track?.artist).toLowerCase();
     const duration = track?.duration || 0;
     return `${artist}-${name}-${duration}`.trim();
 };
@@ -805,10 +805,15 @@ export const PlayerProvider = ({ children }) => {
             const trackDuration = track?.duration || 0;
 
             // Cache key incluye duración para evitar servir audio equivocado
-            const cacheKey = makeAudioCacheKey({ artist: artistName, name: trackName, duration: trackDuration });
+            const cacheKey = makeAudioCacheKey({
+                artist: artistName,
+                artistId: track?.artistId,
+                name: trackName,
+                duration: trackDuration,
+            });
 
             // [CONTRATO] Guard: si este track ya falló, devolver unavailable inmediatamente
-            const failedKey = `${artistName}::${trackName}`.toLowerCase();
+            const failedKey = `${track?.artistId || artistName}::${trackName}`.toLowerCase();
             if (failedTracksRef.current.has(failedKey)) {
                 console.warn(`[PlayerContext] ⛔ Track previamente fallido: ${artistName} - ${trackName}`);
                 return {
@@ -838,6 +843,8 @@ export const PlayerProvider = ({ children }) => {
             const result = await fetchAudioUrl({
                 id: track?.id,
                 artist: artistName,
+                artistId: track?.artistId || null,
+                albumId: track?.albumId || null,
                 title: trackName,
                 duration: trackDuration,
             });

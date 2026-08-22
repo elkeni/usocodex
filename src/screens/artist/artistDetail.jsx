@@ -79,22 +79,26 @@ export default function ArtistDetail() {
         const fetchData = async () => {
             setLoading(true);
             setLoadError(null);
+            setArtistInfo(null);
+            setTopTracks([]);
+            setTopAlbums([]);
             const safeName = decodeURIComponent(name);
 
             try {
-                // ⭐ CAMBIO CRÍTICO: Usar funciones de datos exactos
-                const [artistRes, tracksRes, albumsRes] = await Promise.allSettled([
-                    getArtistInfo(safeName),
-                    artistGetTopTracks({ artist: safeName, limit: 10 }),
-                    getArtistAlbums(safeName, 50)
-                ]);
-
-                // Artista: Ahora con ID y datos exactos de Deezer
-                if (artistRes.status === 'fulfilled' && artistRes.value) {
-                    setArtistInfo(artistRes.value);
-                } else {
+                // Resolver la identidad una sola vez. Tracks y álbumes deben usar
+                // exactamente el mismo ID, nunca tres búsquedas independientes.
+                const resolvedArtist = await getArtistInfo(safeName);
+                if (!resolvedArtist) {
                     setArtistInfo(null);
+                    setLoadError('No encontramos una coincidencia exacta para este artista.');
+                    return;
                 }
+                setArtistInfo(resolvedArtist);
+
+                const [tracksRes, albumsRes] = await Promise.allSettled([
+                    artistGetTopTracks({ artist: resolvedArtist.id, limit: 10 }),
+                    getArtistAlbums(resolvedArtist.id, 50)
+                ]);
 
                 // Top Tracks: Sin cambios, ya funciona correctamente
                 if (tracksRes.status === 'fulfilled' && tracksRes.value?.toptracks?.track) {
@@ -111,7 +115,7 @@ export default function ArtistDetail() {
                     setTopAlbums(validAlbums);
                 }
 
-                const hasUsefulData = artistRes.value || tracksRes.value?.toptracks?.track?.length || albumsRes.value?.length;
+                const hasUsefulData = resolvedArtist || tracksRes.value?.toptracks?.track?.length || albumsRes.value?.length;
                 if (!hasUsefulData) setLoadError('No encontramos información disponible para este artista.');
 
             } catch (e) {
@@ -141,7 +145,13 @@ export default function ArtistDetail() {
 
             let audioUrl = track.preview;
             if (!audioUrl) {
-                audioUrl = await fetchAudioUrl(trackArtist, trackName, trackDuration);
+                const resolution = await fetchAudioUrl({
+                    ...track,
+                    artist: trackArtist,
+                    artistId: track.artistId || artistInfo?.id,
+                    duration: trackDuration,
+                });
+                audioUrl = resolution.status === 'ok' ? resolution.audio?.url : null;
             }
 
             if (audioUrl) {
@@ -149,6 +159,7 @@ export default function ArtistDetail() {
                     id: t.id || t.name,
                     name: t.name,
                     artist: t.artist?.name || t.artist || artistInfo?.name || name,
+                    artistId: t.artistId || artistInfo?.id || null,
                     image: getBestImage(t.image) || getBestImage(artistInfo?.image) || DEFAULT_IMAGE,
                     duration: t.duration ? parseInt(t.duration) : 0,
                     url: t.preview,
@@ -159,6 +170,7 @@ export default function ArtistDetail() {
                     id: trackId,
                     name: trackName,
                     artist: trackArtist,
+                    artistId: track.artistId || artistInfo?.id || null,
                     image: trackImg,
                     duration: trackDuration,
                     url: audioUrl,
