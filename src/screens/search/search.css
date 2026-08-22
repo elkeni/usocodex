@@ -93,7 +93,8 @@
     border-radius: 12px;
     padding: 12px 42px 12px 16px;
     color: white;
-    font-size: 15px;
+    /* Safari iOS amplía automáticamente inputs con texto menor de 16px. */
+    font-size: 16px;
     font-weight: 400;
     outline: none;
     transition: all 0.2s ease;
