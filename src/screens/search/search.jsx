@@ -612,7 +612,6 @@ export default function Search() {
     const [results, setResults] = useState(createEmptyResults);
     const [isLoading, setIsLoading] = useState(false);
     const [searchNotice, setSearchNotice] = useState(null);
-    const [showRecents, setShowRecents] = useState(false);
     const [hasSearched, setHasSearched] = useState(false);
     const [playingTrackId, setPlayingTrackId] = useState(null);
     const [menuTrack, setMenuTrack] = useState(null); // Estado para el menú desplegable
@@ -873,7 +872,6 @@ export default function Search() {
     // ========================================
     const executeRecentSearch = useCallback((term) => {
         setQuery(term);
-        setShowRecents(false);
         performSearch(term);
         inputRef.current?.blur();
     }, [performSearch]);
@@ -884,7 +882,6 @@ export default function Search() {
         if (cleanQuery.length < 2) return;
         if (cleanQuery !== query) setQuery(cleanQuery);
         saveToRecentSearches(cleanQuery);
-        setShowRecents(false);
         inputRef.current?.blur();
         performSearch(cleanQuery);
     }, [performSearch, query, saveToRecentSearches]);
@@ -894,8 +891,6 @@ export default function Search() {
         const timer = setTimeout(() => {
             if (query.trim()) {
                 performSearch(query);
-                // Ocultar recientes cuando hay texto
-                setShowRecents(false);
             } else {
                 setResults({ tracks: [], artists: [], albums: [], playlists: [] });
                 setHasSearched(false);
@@ -1223,16 +1218,6 @@ export default function Search() {
                             enterKeyHint="search"
                             value={query}
                             onChange={(e) => setQuery(e.target.value)}
-                            onFocus={() => {
-                                // Mostrar recientes solo si no hay texto
-                                if (!query.trim()) {
-                                    setShowRecents(true);
-                                }
-                            }}
-                            onBlur={() => {
-                                // Delay para permitir clicks en la lista
-                                setTimeout(() => setShowRecents(false), 200);
-                            }}
                             autoFocus
                         />
                         <FaSearch className="search-icon" />
@@ -1242,7 +1227,6 @@ export default function Search() {
                             aria-label="Limpiar búsqueda"
                             onClick={() => {
                                 clearSearch();
-                                setShowRecents(true);
                                 inputRef.current?.focus();
                             }}
                         >
@@ -1287,9 +1271,9 @@ export default function Search() {
                 )}
 
                 {/* =====================================================
-                    BÚSQUEDAS RECIENTES - Mostrar cuando input tiene foco pero está vacío
+                    BÚSQUEDAS RECIENTES - Permanecen visibles mientras no haya búsqueda
                 ===================================================== */}
-                {!isLoading && !hasSearched && showRecents && recentSearches.length > 0 && (
+                {!isLoading && !hasSearched && !query.trim() && recentSearches.length > 0 && (
                     <div className="recent-searches">
                         <div className="recent-header">
                             <h2 className="recent-title">Búsquedas Recientes</h2>

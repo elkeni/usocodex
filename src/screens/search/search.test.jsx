@@ -77,6 +77,19 @@ describe('Búsqueda y reproducción esenciales', () => {
     expect(screen.queryByText('Top Latinoamérica')).not.toBeInTheDocument();
   });
 
+  it('no oculta el historial cuando la barra pierde el foco', async () => {
+    localStorage.setItem('musicalol_recent_searches_v3', JSON.stringify(['Twenty One Pilots']));
+    render(<MemoryRouter><Search /></MemoryRouter>);
+
+    const input = screen.getByRole('searchbox', { name: 'Buscar música' });
+    expect(screen.getByText('Twenty One Pilots')).toBeInTheDocument();
+
+    input.blur();
+    await new Promise((resolve) => setTimeout(resolve, 250));
+
+    expect(screen.getByText('Twenty One Pilots')).toBeInTheDocument();
+  });
+
   it('busca y presenta resultados procedentes del servicio musical', async () => {
     const user = userEvent.setup();
     render(<MemoryRouter><Search /></MemoryRouter>);
