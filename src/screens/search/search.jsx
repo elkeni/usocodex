@@ -33,96 +33,6 @@ import { getAlbumPath } from '../../services/albumNavigation';
 // ⭐ Sistema de caché en memoria para persistencia entre navegaciones
 import screenStateCache, { useScrollPersistence } from '../../services/screenStateCache';
 
-// =============================================================================
-// CATEGORÍAS DE EXPLORACIÓN (Actualizado con tus links manuales)
-// =============================================================================
-
-const SEARCH_CATEGORIES = [
-    {
-        id: 'global',
-        title: 'Top Global',
-        color: 'linear-gradient(135deg, #1DB954 0%, #191414 100%)',
-        image: 'https://cdn-images.dzcdn.net/images/playlist/69e153933022f3855f916981ef0a38f3/250x250-000000-80-0-0.jpg',
-        playlistId: '2098157264' // Tu link anterior
-    },
-    {
-        id: 'latino',
-        title: 'Top Latinoamérica',
-        color: '#FF9800',
-        image: 'https://cdn-images.dzcdn.net/images/playlist/5b8e0fae2be474dbc9728cf50b6d7984/250x250-000000-80-0-0.jpg',
-        playlistId: '2025681806' // Tu link anterior
-    },
-    {
-        id: 'salsa',
-        title: 'Salsa Brava y Vieja', // ⭐ NUEVO: Tu link 8291888262
-        color: '#9C27B0',
-        image: 'https://cdn-images.dzcdn.net/images/playlist/00b38322674843f770f48cb024815db2/250x250-000000-80-0-0.jpg',
-        playlistId: '8291888262'
-    },
-    {
-        id: 'alternative',
-        title: 'Alternative Essentials', // ⭐ ACTUALIZADO desde channels/alternative
-        color: '#009688',
-        image: 'https://cdn-images.dzcdn.net/images/playlist/90e455a288cebc49fe49a0e3e0730da9/250x250-000000-80-0-0.jpg',
-        playlistId: '668126235' // ID Oficial de Alternative Essentials
-    },
-    {
-        id: 'electronic',
-        title: 'Electronic Hits', // ⭐ ACTUALIZADO desde channels/electronic
-        color: '#00C853',
-        image: 'https://cdn-images.dzcdn.net/images/playlist/84a4d267e88397ccc542fc8295e1027c/250x250-000000-80-0-0.jpg',
-        playlistId: '1902101402' // ID Oficial de Electronic Hits
-    },
-    {
-        id: 'pop',
-        title: 'Pop Hits',
-        color: '#2196F3',
-        image: 'https://cdn-images.dzcdn.net/images/playlist/1479973d20b21505fdccabda26a7aa42/250x250-000000-80-0-0.jpg',
-        playlistId: '1282495565'
-    },
-    {
-        id: 'reggaeton',
-        title: 'Reggaetón',
-        color: '#FF4081',
-        image: 'https://cdn-images.dzcdn.net/images/playlist/1e4966b5abd8ba3b5ba3f2c07cf9e0ce/250x250-000000-80-0-0.jpg',
-        playlistId: '3803398766'
-    },
-    {
-        id: 'hiphop',
-        title: 'Hip-Hop',
-        color: '#3F51B5',
-        image: 'https://cdn-images.dzcdn.net/images/playlist/7a4c3ec4f11a72e3b3301d6fb7adec4e/250x250-000000-80-0-0.jpg',
-        playlistId: '1677006641'
-    },
-    {
-        id: 'rock',
-        title: 'Rock Classics',
-        color: '#F44336',
-        image: 'https://cdn-images.dzcdn.net/images/playlist/4f509c2f5222f32b23ac29be0a80cfe4/250x250-000000-80-0-0.jpg',
-        playlistId: '1306931615'
-    },
-    {
-        id: 'dance',
-        title: 'Dance & Electro',
-        color: '#673AB7',
-        image: 'https://cdn-images.dzcdn.net/images/playlist/e9e5eb1be34467a109657fa024ec2837/250x250-000000-80-0-0.jpg',
-        playlistId: '2159765062'
-    },
-    {
-        id: 'fiesta',
-        title: 'Party Hits',
-        color: '#009688',
-        image: 'https://cdn-images.dzcdn.net/images/playlist/cd9f2e361aba27ab53cd728947cef8f6/250x250-000000-80-0-0.jpg',
-        playlistId: '2097558104'
-    },
-    {
-        id: 'reggae',
-        title: 'Reggae Essentials',
-        color: '#607D8B',
-        image: 'https://cdn-images.dzcdn.net/images/playlist/4a0ab2f8497c1da8aa46a4617c756ad5/250x250-000000-80-0-0.jpg',
-        playlistId: '2448918882'
-    }
-];
 const DEFAULT_IMAGE = 'https://images.unsplash.com/photo-1470225620780-dba8ba36b745?auto=format&fit=crop&w=500&q=60';
 const SEARCH_TYPES = ['track', 'artist', 'album', 'playlist'];
 const SEARCH_LIMITS = {
@@ -1413,37 +1323,6 @@ export default function Search() {
                                         <FaTimes size={12} />
                                     </button>
                                 </div>
-                            ))}
-                        </div>
-                    </div>
-                )}
-
-                {/* =====================================================
-                    BROWSE CATEGORIES - Cuando NO hay búsqueda y NO hay recientes visibles
-                    ✅ CORREGIDO: Navega DIRECTO a /playlist/{playlistId}
-                ===================================================== */}
-                {!isLoading && !hasSearched && !(showRecents && recentSearches.length > 0) && (
-                    <div className="browse-categories">
-                        <h2 className="browse-title">Explorar Géneros</h2>
-                        <div className="categories-grid">
-                            {SEARCH_CATEGORIES.map((category) => (
-                                <button
-                                    type="button"
-                                    key={category.id}
-                                    className="category-card"
-                                    style={{ background: category.color }}
-                                    onClick={() => navigate(`/playlist/${category.playlistId}`)}
-                                >
-                                    <span className="category-title">{category.title}</span>
-                                    <div className="category-image-wrapper">
-                                        <img
-                                            src={category.image}
-                                            alt={category.title}
-                                            loading="lazy"
-                                            onError={(e) => { e.target.style.display = 'none'; }}
-                                        />
-                                    </div>
-                                </button>
                             ))}
                         </div>
                     </div>

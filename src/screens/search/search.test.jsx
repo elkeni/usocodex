@@ -68,6 +68,15 @@ describe('Búsqueda y reproducción esenciales', () => {
   });
   afterEach(() => cleanup());
 
+  it('mantiene la portada enfocada en el buscador y el historial', () => {
+    render(<MemoryRouter><Search /></MemoryRouter>);
+
+    expect(screen.getByRole('searchbox', { name: 'Buscar música' })).toBeInTheDocument();
+    expect(screen.queryByText(/Explorar Géneros/i)).not.toBeInTheDocument();
+    expect(screen.queryByText('Top Global')).not.toBeInTheDocument();
+    expect(screen.queryByText('Top Latinoamérica')).not.toBeInTheDocument();
+  });
+
   it('busca y presenta resultados procedentes del servicio musical', async () => {
     const user = userEvent.setup();
     render(<MemoryRouter><Search /></MemoryRouter>);
