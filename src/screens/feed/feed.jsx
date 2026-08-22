@@ -1317,7 +1317,17 @@ export default function Feed() {
   }, [cancelKey, loadCritical, loadForYou, loadPlaylistsLazy, loadPartyLazy, loadSmartRecommendations, loadRecommendedAlbums, loadMoodMixes, loadFlashback, loadGlobalVibes, loadArtistSpotlight]);
 
   const debounceRef = useRef(null);
-  useEffect(() => { if (userLoading) return; const usedCache = applyCacheIfValid(); if (debounceRef.current) clearTimeout(debounceRef.current); debounceRef.current = setTimeout(() => revalidateAll(), usedCache ? 450 : 0); return () => { if (debounceRef.current) clearTimeout(debounceRef.current); }; }, [userLoading, applyCacheIfValid, revalidateAll, cacheKey]);
+  useEffect(() => {
+    if (userLoading || wasRestoredFromMemoryRef.current) return;
+
+    const usedCache = applyCacheIfValid();
+    if (debounceRef.current) clearTimeout(debounceRef.current);
+    debounceRef.current = setTimeout(() => revalidateAll(), usedCache ? 450 : 0);
+
+    return () => {
+      if (debounceRef.current) clearTimeout(debounceRef.current);
+    };
+  }, [userLoading, applyCacheIfValid, revalidateAll, cacheKey]);
   useEffect(() => { if (!criticalReady) return; const t = setTimeout(() => saveCache({ hero, sections, forYouTitle, refreshNonce }), 250); return () => clearTimeout(t); }, [criticalReady, hero, sections, forYouTitle, saveCache, refreshNonce]);
 
   // Stable callbacks
