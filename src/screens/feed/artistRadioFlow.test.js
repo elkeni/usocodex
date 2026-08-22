@@ -23,4 +23,9 @@ describe('Feed: radio de artistas favoritos', () => {
         expect(handler).toContain('requestId !== artistRadioRequestRef.current');
         expect(handler).toContain('}, true)');
     });
+
+    it('no mezcla la radio del artista con recomendaciones generales', () => {
+        expect(handler).toContain('contextTracks: []');
+        expect(handler).not.toContain('sectionsRef.current.smartRecommendations');
+    });
 });

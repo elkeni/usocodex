@@ -54,6 +54,12 @@ const makeAudioCacheKey = (track) => {
     return `${artist}-${name}-${duration}`.trim();
 };
 
+const makeFailureKey = (track) => {
+    const name = getSafeString(track?.name || track?.title).toLowerCase();
+    const artist = getSafeString(track?.artistId || track?.artist).toLowerCase();
+    return `${artist}::${name}`;
+};
+
 const findTrackIndex = (arr, track) => {
     if (!arr || !arr.length || !track) return -1;
     const id = track.id;
@@ -251,7 +257,7 @@ export const PlayerProvider = ({ children }) => {
     // Helper para verificar si toda la cola ha fallado
     const checkIfAllQueueFailed = useCallback(() => {
         const q = queueRef.current;
-        return q.length > 0 && failedTracksRef.current.size >= q.length;
+        return q.length > 0 && q.every((track) => failedTracksRef.current.has(makeFailureKey(track)));
     }, []);
 
     const setVolume = useCallback((val) => {
@@ -549,7 +555,7 @@ export const PlayerProvider = ({ children }) => {
             const track = currentTrackRef.current;
             const artistName = getSafeString(track?.artist);
             const trackName = getSafeString(track?.name || track?.title);
-            const failedKey = `${artistName}::${trackName}`.toLowerCase();
+            const failedKey = makeFailureKey(track);
 
             failedTracksRef.current.add(failedKey);
             console.error(`[PlayerContext] ❌ Error de audio: ${artistName} - ${trackName}`);
@@ -816,6 +822,7 @@ export const PlayerProvider = ({ children }) => {
             // gesto del usuario. Reutilizarlo evita una segunda petición que
             // puede perder la autorización de reproducción en iOS.
             if (typeof track?.url === 'string' && /^https?:\/\//i.test(track.url)) {
+                failedTracksRef.current.delete(makeFailureKey(track));
                 return {
                     status: "ok",
                     url: track.url,
@@ -824,16 +831,7 @@ export const PlayerProvider = ({ children }) => {
                 };
             }
 
-            // [CONTRATO] Guard: si este track ya falló, devolver unavailable inmediatamente
-            const failedKey = `${track?.artistId || artistName}::${trackName}`.toLowerCase();
-            if (failedTracksRef.current.has(failedKey)) {
-                console.warn(`[PlayerContext] ⛔ Track previamente fallido: ${artistName} - ${trackName}`);
-                return {
-                    status: "unavailable",
-                    reason: "ALREADY_FAILED",
-                    cacheKey
-                };
-            }
+            const failedKey = makeFailureKey(track);
 
             // Cache check (solo para status: ok)
             const TTL = 6 * 60 * 60 * 1000;
@@ -844,6 +842,7 @@ export const PlayerProvider = ({ children }) => {
                 (!cachedAudioUrlRef.current.timestamp || Date.now() - cachedAudioUrlRef.current.timestamp < TTL);
 
             if (cacheOk) {
+                failedTracksRef.current.delete(failedKey);
                 return {
                     status: "ok",
                     url: cachedAudioUrlRef.current.url,
@@ -864,10 +863,6 @@ export const PlayerProvider = ({ children }) => {
             // [CONTRATO] Interpretar resultado según status
             if (result.status === "unavailable") {
                 console.warn(`[PlayerContext] ⚠️ Audio no disponible: ${artistName} - ${trackName} (${result.reason})`);
-                // Marcar como fallido para no reintentar (excepto errores de red temporales)
-                if (result.reason !== "NETWORK_ERROR" && result.reason !== "TIMEOUT") {
-                    failedTracksRef.current.add(failedKey);
-                }
                 return {
                     status: "unavailable",
                     reason: result.reason,
@@ -880,7 +875,6 @@ export const PlayerProvider = ({ children }) => {
 
             if (!audioUrl || typeof audioUrl !== 'string') {
                 console.error(`[PlayerContext] ❌ Contrato roto: status ok pero sin URL`);
-                failedTracksRef.current.add(failedKey);
                 return {
                     status: "unavailable",
                     reason: "CONTRACT_VIOLATION",
@@ -889,6 +883,7 @@ export const PlayerProvider = ({ children }) => {
             }
 
             console.log(`[PlayerContext] ✅ Audio OK: ${audioUrl.substring(0, 60)}...`);
+            failedTracksRef.current.delete(failedKey);
 
             // Guardar en cache
             const cacheEntry = { key: cacheKey, url: audioUrl, timestamp: Date.now() };
@@ -913,9 +908,9 @@ export const PlayerProvider = ({ children }) => {
     // Helper: Limpiar caché antiguo
     const prunePrefetchCache = useCallback(() => {
         const now = Date.now();
-        const TTL = 30 * 60 * 1000; // 30 mins
         prefetchCacheRef.current.forEach((val, key) => {
-            if (now - val.timestamp > TTL) prefetchCacheRef.current.delete(key);
+            const ttl = val.status === 'error' ? 10 * 1000 : 30 * 60 * 1000;
+            if (now - val.timestamp > ttl) prefetchCacheRef.current.delete(key);
         });
     }, []);
 
@@ -990,27 +985,29 @@ export const PlayerProvider = ({ children }) => {
             // Si ya está en caché y es válido, pasamos (pero revisamos si necesitamos cargar el audio object)
             if (cache.has(key)) {
                 const cachedEntry = cache.get(key);
-                if (cachedEntry.status === 'ok') {
-                    // Solo contamos como "prefetch exitoso" los que están OK
-                    lookaheadCount++;
+                if (cachedEntry.status === 'error' && Date.now() - cachedEntry.timestamp > 10 * 1000) {
+                    cache.delete(key);
+                } else {
+                    if (cachedEntry.status === 'ok') {
+                        // Solo contamos como "prefetch exitoso" los que están OK
+                        lookaheadCount++;
 
-                    if (!immediateNextFound) {
-                        // Cargar bytes en el segundo player para zero-latency
-                        nextAudioRef.current.src = cachedEntry.url;
-                        nextAudioRef.current.preload = "auto";
-                        nextAudioRef.current.load();
-                        immediateNextFound = true;
+                        if (!immediateNextFound) {
+                            // Cargar bytes en el segundo player para zero-latency
+                            nextAudioRef.current.src = cachedEntry.url;
+                            nextAudioRef.current.preload = "auto";
+                            nextAudioRef.current.load();
+                            immediateNextFound = true;
 
-                        // [FIX LOOP] Sync legacy refs to satisfy onTimeUpdate check & playTrackInternal
-                        // SOLO actualizar para el INMEDIATO siguiente, no para los futuros
-                        prefetchedNextUrl.current = cachedEntry.url;
-                        prefetchedNextTrack.current = track;
-                        prefetchTriggeredForTrack.current = key;
+                            // [FIX LOOP] Sync legacy refs to satisfy onTimeUpdate check & playTrackInternal
+                            // SOLO actualizar para el INMEDIATO siguiente, no para los futuros
+                            prefetchedNextUrl.current = cachedEntry.url;
+                            prefetchedNextTrack.current = track;
+                            prefetchTriggeredForTrack.current = key;
+                        }
                     }
+                    continue;
                 }
-                // Si estaba en error, seguimos buscando el siguiente válido sin incrementar lookaheadCount necesariamente?
-                // No, mejor simple: si ya lo procesamos, seguimos.
-                continue;
             }
 
             // Resolver URL
@@ -1035,7 +1032,7 @@ export const PlayerProvider = ({ children }) => {
                         prefetchTriggeredForTrack.current = key;
                     }
                 } else {
-                    // Guardamos el error para saltarla rápido después
+                    // El error solo evita repetir de inmediato esta precarga.
                     cache.set(key, { status: 'error', timestamp: Date.now() });
                 }
             } catch (err) {
@@ -1123,6 +1120,7 @@ export const PlayerProvider = ({ children }) => {
             // Caso 1: Cache OK -> Reproducción instantánea
             if (cachedEntry && cachedEntry.status === 'ok' && cachedEntry.url) {
                 console.log('[PlayerContext] ⚡ Usando URL prefetcheada - reproducción instantánea');
+                failedTracksRef.current.delete(makeFailureKey(track));
 
                 const a = audioRef.current;
                 if (a) {
@@ -1149,13 +1147,10 @@ export const PlayerProvider = ({ children }) => {
                 }
             }
 
-            // Caso 2: Cache ERROR -> Saltarla inmediatamente sin intentar
+            // Un fallo de precarga es especulativo: la reproducción explícita
+            // siempre debe volver a resolver la canción.
             if (cachedEntry && cachedEntry.status === 'error') {
-                console.warn(`[PlayerContext] ⏭️ Skipping known bad track: ${track.name}`);
-                setIsLoading(false);
-                // Importante: un pequeño timeout para no bloquear el stack si hay muchos errores seguidos
-                setTimeout(() => skipRef.current && skipRef.current(true), 50);
-                return;
+                prefetchCacheRef.current.delete(trackKey);
             }
 
             // No hay prefetch o cache no válido - hacer fetch normal
@@ -1170,6 +1165,7 @@ export const PlayerProvider = ({ children }) => {
                     const trackName = getSafeString(track?.name || track?.title);
 
                     console.warn(`[PlayerContext] ⚠️ Track unavailable: ${artistName} - ${trackName} (${result.reason})`);
+                    failedTracksRef.current.add(makeFailureKey(track));
 
                     // [CORTE DE LOOPS] Verificar si TODA la cola falló
                     if (checkIfAllQueueFailed()) {

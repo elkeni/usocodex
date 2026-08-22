@@ -658,7 +658,9 @@ export default function Feed() {
     try {
       const additionalTracks = await buildRadioQueue({
         seedTrack: trackToPlay,
-        contextTracks: sectionsRef.current.smartRecommendations || [],
+        // Una radio de artista no debe contaminarse con recomendaciones
+        // generales del inicio, que pueden pertenecer a otros artistas.
+        contextTracks: [],
         existingQueue: [trackToPlay],
         targetSize: 31,
         includeSeed: false,

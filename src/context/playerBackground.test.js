@@ -32,4 +32,17 @@ describe('Player: reproducción en segundo plano', () => {
         expect(playerSource).toContain("typeof track?.url === 'string'");
         expect(playerSource).toContain('url: track.url');
     });
+
+    it('nunca convierte un fallo de precarga en un bloqueo permanente', () => {
+        expect(playerSource).not.toContain('Skipping known bad track');
+        expect(playerSource).not.toContain('reason: "ALREADY_FAILED"');
+        expect(playerSource).toContain('prefetchCacheRef.current.delete(trackKey)');
+        expect(playerSource).toContain("val.status === 'error' ? 10 * 1000");
+    });
+
+    it('solo detiene la reproducción si fallaron las canciones de la cola actual', () => {
+        expect(playerSource).toContain(
+            'q.every((track) => failedTracksRef.current.has(makeFailureKey(track)))',
+        );
+    });
 });
