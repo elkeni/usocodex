@@ -47,6 +47,13 @@ const makeTrackKey = (track) => {
     return `${artist}-${name}`.trim();
 };
 
+const makeAudioCacheKey = (track) => {
+    const name = getSafeString(track?.name || track?.title).toLowerCase();
+    const artist = getSafeString(track?.artist).toLowerCase();
+    const duration = track?.duration || 0;
+    return `${artist}-${name}-${duration}`.trim();
+};
+
 const findTrackIndex = (arr, track) => {
     if (!arr || !arr.length || !track) return -1;
     const id = track.id;
@@ -79,6 +86,7 @@ export const PlayerProvider = ({ children }) => {
     const [cachedAudioUrl, setCachedAudioUrl] = useState(() =>
         safeJsonParse("paradox_audio_cache", null)
     );
+    const cachedAudioUrlRef = useRef(cachedAudioUrl);
 
     const [volume, setVolumeState] = useState(() => {
         try {
@@ -173,7 +181,7 @@ export const PlayerProvider = ({ children }) => {
     const playerBRef = useRef(null);
 
     const prefetchCacheRef = useRef(new Map()); // Cache de URLs futuras: Key -> { url, status, timestamp }
-    const PREFETCH_LOOKAHEAD = 3;               // Cuántas canciones mirar a futuro
+    const PREFETCH_LOOKAHEAD = 4;               // Reserva suficiente para varios saltos en segundo plano
 
     // [FIX #1] Contador incremental para requestId (evita race conditions de Date.now())
     const requestSeqRef = useRef(0);
@@ -192,6 +200,7 @@ export const PlayerProvider = ({ children }) => {
     const shuffledIndexRef = useRef(shuffledIndex);
 
     const skipRef = useRef(null);
+    const previousRef = useRef(null);
 
     // =========================
     // Prefetch refs
@@ -260,6 +269,10 @@ export const PlayerProvider = ({ children }) => {
         queueRef.current = queue;
         indexRef.current = currentIndex;
     }, [queue, currentIndex]);
+
+    useEffect(() => {
+        cachedAudioUrlRef.current = cachedAudioUrl;
+    }, [cachedAudioUrl]);
 
     useEffect(() => {
         shuffledQueueRef.current = shuffledQueue;
@@ -500,7 +513,7 @@ export const PlayerProvider = ({ children }) => {
 
             // [AUTOMIX] Detector de transición Crossfade
             // Chequeamos refs directamente para evitar closures viejos en callbacks
-            if (isCrossfadeEnabled && !isCrossfadingRef.current && dur > 0) {
+            if (isCrossfadeEnabled && document.visibilityState !== 'hidden' && !isCrossfadingRef.current && dur > 0) {
                 const remaining = dur - ct;
                 // Iniciar si falta poco, pero no si la canción es muy corta (<20s)
                 if (remaining <= CROSSFADE_DURATION && remaining > 1 && dur > 20) {
@@ -739,7 +752,7 @@ export const PlayerProvider = ({ children }) => {
         const hydrate = async () => {
             if (!currentTrack || !cachedAudioUrl?.url) return;
 
-            const expectedKey = makeTrackKey(currentTrack);
+            const expectedKey = makeAudioCacheKey(currentTrack);
             if (cachedAudioUrl.key !== expectedKey) return;
 
             try {
@@ -792,7 +805,7 @@ export const PlayerProvider = ({ children }) => {
             const trackDuration = track?.duration || 0;
 
             // Cache key incluye duración para evitar servir audio equivocado
-            const cacheKey = `${artistName}-${trackName}-${trackDuration}`.toLowerCase().trim();
+            const cacheKey = makeAudioCacheKey({ artist: artistName, name: trackName, duration: trackDuration });
 
             // [CONTRATO] Guard: si este track ya falló, devolver unavailable inmediatamente
             const failedKey = `${artistName}::${trackName}`.toLowerCase();
@@ -808,15 +821,15 @@ export const PlayerProvider = ({ children }) => {
             // Cache check (solo para status: ok)
             const TTL = 6 * 60 * 60 * 1000;
             const cacheOk =
-                cachedAudioUrl &&
-                cachedAudioUrl.key === cacheKey &&
-                cachedAudioUrl.url &&
-                (!cachedAudioUrl.timestamp || Date.now() - cachedAudioUrl.timestamp < TTL);
+                cachedAudioUrlRef.current &&
+                cachedAudioUrlRef.current.key === cacheKey &&
+                cachedAudioUrlRef.current.url &&
+                (!cachedAudioUrlRef.current.timestamp || Date.now() - cachedAudioUrlRef.current.timestamp < TTL);
 
             if (cacheOk) {
                 return {
                     status: "ok",
-                    url: cachedAudioUrl.url,
+                    url: cachedAudioUrlRef.current.url,
                     cacheKey
                 };
             }
@@ -859,7 +872,9 @@ export const PlayerProvider = ({ children }) => {
             console.log(`[PlayerContext] ✅ Audio OK: ${audioUrl.substring(0, 60)}...`);
 
             // Guardar en cache
-            setCachedAudioUrl({ key: cacheKey, url: audioUrl, timestamp: Date.now() });
+            const cacheEntry = { key: cacheKey, url: audioUrl, timestamp: Date.now() };
+            cachedAudioUrlRef.current = cacheEntry;
+            setCachedAudioUrl(cacheEntry);
 
             return {
                 status: "ok",
@@ -868,7 +883,7 @@ export const PlayerProvider = ({ children }) => {
                 cacheKey
             };
         },
-        [cachedAudioUrl]
+        []
     );
 
     // =========================
@@ -884,6 +899,43 @@ export const PlayerProvider = ({ children }) => {
             if (now - val.timestamp > TTL) prefetchCacheRef.current.delete(key);
         });
     }, []);
+
+    // Selecciona de forma síncrona la siguiente URL ya resuelta. Esto es
+    // esencial en iOS: al quedar la app en segundo plano no podemos depender
+    // de un temporizador o de una petición de red para responder a "siguiente".
+    const primeNextFromCache = useCallback((startIndex, queueSource) => {
+        if (!queueSource?.length || startIndex < 0) {
+            clearPrefetch();
+            return false;
+        }
+
+        for (let offset = 1; offset <= queueSource.length; offset += 1) {
+            let candidateIndex = startIndex + offset;
+            if (candidateIndex >= queueSource.length) {
+                if (repeatMode !== 1) break;
+                candidateIndex %= queueSource.length;
+            }
+
+            const candidate = queueSource[candidateIndex];
+            const cached = prefetchCacheRef.current.get(makeTrackKey(candidate));
+            if (cached?.status !== 'ok' || !cached.url) continue;
+
+            prefetchedNextUrl.current = cached.url;
+            prefetchedNextTrack.current = candidate;
+            prefetchTriggeredForTrack.current = makeTrackKey(candidate);
+
+            const buffer = nextAudioRef.current;
+            if (buffer && buffer.src !== cached.url) {
+                buffer.src = cached.url;
+                buffer.preload = 'auto';
+                buffer.load();
+            }
+            return true;
+        }
+
+        clearPrefetch();
+        return false;
+    }, [clearPrefetch, repeatMode]);
 
     // Motor de Prefetching
     const runAggressivePrefetch = useCallback(async (startIndex, queueSource) => {
@@ -975,20 +1027,37 @@ export const PlayerProvider = ({ children }) => {
         prunePrefetchCache();
     }, [resolveAudioUrl, repeatMode, prunePrefetchCache]);
 
-    // Trigger de Prefetch cuando cambia la canción o el estado
+    // Trigger de prefetch cuando cambia la canción O cuando crece la cola.
+    // Las radios del Feed empiezan con una pista y agregan el resto después.
     useEffect(() => {
         if (!currentTrack) return;
 
-        // Delay pequeño para no competir con la carga de la canción actual
+        // Debounce corto para agrupar los addToQueue consecutivos.
         const t = setTimeout(() => {
             const q = isShuffle ? shuffledQueueRef.current : queueRef.current;
             const i = isShuffle ? shuffledIndexRef.current : indexRef.current;
-            // console.log('[PlayerContext] 🚀 Triggering aggressive prefetch');
             runAggressivePrefetch(i, q);
-        }, 1200); // 1.2s después de empezar la actual
+        }, 120);
 
         return () => clearTimeout(t);
-    }, [currentTrack, isShuffle, runAggressivePrefetch]);
+    }, [currentTrack, currentIndex, queue.length, shuffledIndex, shuffledQueue.length, isShuffle, runAggressivePrefetch]);
+
+    // iOS concede una ventana muy corta antes de suspender una PWA oculta.
+    // Aprovecharla para dejar seleccionado el siguiente audio ya resuelto y
+    // completar la reserva, sin esperar al evento `ended` en segundo plano.
+    useEffect(() => {
+        const prepareForBackground = () => {
+            if (document.visibilityState !== 'hidden') return;
+
+            const q = isShuffle ? shuffledQueueRef.current : queueRef.current;
+            const i = isShuffle ? shuffledIndexRef.current : indexRef.current;
+            primeNextFromCache(i, q);
+            runAggressivePrefetch(i, q);
+        };
+
+        document.addEventListener('visibilitychange', prepareForBackground);
+        return () => document.removeEventListener('visibilitychange', prepareForBackground);
+    }, [isShuffle, primeNextFromCache, runAggressivePrefetch]);
 
 
     // [FIX MISSING REF] Definition of prefetchNextTrack for manual calls
@@ -1040,6 +1109,7 @@ export const PlayerProvider = ({ children }) => {
                 if (a) {
                     a.src = cachedEntry.url;
                     a.preload = "auto";
+                    a.load();
 
                     // Intentar PLAY inmediatamente
                     try {
@@ -1529,8 +1599,10 @@ export const PlayerProvider = ({ children }) => {
             else setCurrentIndex(nextIndex);
 
             playTrackInternal(q[nextIndex], q, nextIndex);
+            // Preparar +1 ahora; los timers pueden quedar congelados en iOS.
+            primeNextFromCache(nextIndex, q);
         },
-        [isShuffle, repeatMode, currentTrack, playTrackInternal, clearPrefetch]
+        [isShuffle, repeatMode, currentTrack, playTrackInternal, clearPrefetch, primeNextFromCache]
     );
 
     useEffect(() => {
@@ -1560,6 +1632,10 @@ export const PlayerProvider = ({ children }) => {
         }
     }, [isShuffle, playTrackInternal, clearPrefetch]);
 
+    useEffect(() => {
+        previousRef.current = prev;
+    }, [prev]);
+
     const seekTo = useCallback((fraction) => {
         const a = audioRef.current;
         if (a?.duration) {
@@ -1588,9 +1664,9 @@ export const PlayerProvider = ({ children }) => {
 
         // Si no hay src, intentar hidratar con cache o recargar
         if (!a.src && currentTrack) {
-            const expectedKey = makeTrackKey(currentTrack);
-            if (cachedAudioUrl?.key === expectedKey && cachedAudioUrl.url) {
-                a.src = cachedAudioUrl.url;
+            const expectedKey = makeAudioCacheKey(currentTrack);
+            if (cachedAudioUrlRef.current?.key === expectedKey && cachedAudioUrlRef.current.url) {
+                a.src = cachedAudioUrlRef.current.url;
                 a.load();
             } else {
                 setIsLoading(true);
@@ -1615,7 +1691,7 @@ export const PlayerProvider = ({ children }) => {
 
         // Solo llamar play(), el estado se actualiza via evento
         a.play().catch(() => showError("Error al reproducir"));
-    }, [isPlaying, isLoading, currentTrack, cachedAudioUrl, resolveAudioUrl, showError]);
+    }, [isPlaying, isLoading, currentTrack, resolveAudioUrl, showError]);
 
     // =========================
     // [FIX #7] handleAudioEnded con doble buffer
@@ -1669,6 +1745,7 @@ export const PlayerProvider = ({ children }) => {
                 // 1. Asignar SRC directamente (sin resetear currentTime ni pause, es automático)
                 a.src = nextUrl;
                 a.preload = "auto"; // Reforzar preload
+                a.load();
 
                 // 2. Intentar PLAY inmediatamente (Estrategia Optimista)
                 // Esto elimina la latencia de esperar el evento 'canplay' via JS.
@@ -1697,8 +1774,10 @@ export const PlayerProvider = ({ children }) => {
             // [FIX #6] Sincronizar índices
             syncIndicesByTrackId(nextTrackObj.id, nextTrackObj);
 
-            // Prefetch del siguiente inmediatamente
-            setTimeout(() => prefetchNextTrack(), 100);
+            // Preparar la pista posterior de forma síncrona antes de que iOS
+            // vuelva a suspender la ejecución en segundo plano.
+            primeNextFromCache(nextIndex, q);
+            runAggressivePrefetch(nextIndex, q);
 
             // Liberar mutex después de que la transición esté completa
             setTimeout(() => {
@@ -1710,7 +1789,7 @@ export const PlayerProvider = ({ children }) => {
         // Fallback normal
         isAdvancingRef.current = false;
         next(true);
-    }, [repeatMode, isShuffle, next, prefetchNextTrack, nextRequestId, syncIndicesByTrackId, showError, clearPrefetch]);
+    }, [repeatMode, isShuffle, next, nextRequestId, syncIndicesByTrackId, showError, clearPrefetch, primeNextFromCache, runAggressivePrefetch]);
 
     // Actualizar ref de ended handler
     useEffect(() => {
@@ -1791,13 +1870,20 @@ export const PlayerProvider = ({ children }) => {
         if (!("mediaSession" in navigator)) return;
 
         const handlePlay = async () => {
-            if (!isPlaying) await togglePlay();
+            const audio = audioRef.current;
+            if (audio?.paused) {
+                try {
+                    await audio.play();
+                } catch {
+                    showError('Abre la app y toca play para continuar');
+                }
+            }
         };
         const handlePause = () => {
-            if (isPlaying) togglePlay();
+            audioRef.current?.pause();
         };
-        const handlePreviousTrack = () => prev();
-        const handleNextTrack = () => next();
+        const handlePreviousTrack = () => previousRef.current?.();
+        const handleNextTrack = () => skipRef.current?.(false);
 
         // [FIX #8] seekto con clamp
         const handleSeekTo = (details) => {
@@ -1816,7 +1902,7 @@ export const PlayerProvider = ({ children }) => {
 
             // Si estamos en los primeros 5 segundos, ir al track anterior
             if (a.currentTime < 5) {
-                prev();
+                previousRef.current?.();
                 return;
             }
 
@@ -1833,7 +1919,7 @@ export const PlayerProvider = ({ children }) => {
 
             // Si estamos en los últimos 10 segundos, ir al siguiente track
             if (a.duration - a.currentTime < 10) {
-                next(false);
+                skipRef.current?.(false);
                 return;
             }
 
@@ -1851,34 +1937,37 @@ export const PlayerProvider = ({ children }) => {
             // Estado se actualizará via evento pause
         };
 
-        try {
-            navigator.mediaSession.setActionHandler("play", handlePlay);
-            navigator.mediaSession.setActionHandler("pause", handlePause);
-            navigator.mediaSession.setActionHandler("previoustrack", handlePreviousTrack);
-            navigator.mediaSession.setActionHandler("nexttrack", handleNextTrack);
-            navigator.mediaSession.setActionHandler("seekto", handleSeekTo);
-            navigator.mediaSession.setActionHandler("seekbackward", handleSeekBackward);
-            navigator.mediaSession.setActionHandler("seekforward", handleSeekForward);
-            navigator.mediaSession.setActionHandler("stop", handleStop);
-        } catch {
-            // ignore
-        }
+        const handlers = {
+            play: handlePlay,
+            pause: handlePause,
+            previoustrack: handlePreviousTrack,
+            nexttrack: handleNextTrack,
+            seekto: handleSeekTo,
+            seekbackward: handleSeekBackward,
+            seekforward: handleSeekForward,
+            stop: handleStop,
+        };
+
+        // Safari no admite necesariamente todas las acciones. Registrar cada
+        // una por separado evita que una acción no soportada anule "siguiente".
+        Object.entries(handlers).forEach(([action, handler]) => {
+            try {
+                navigator.mediaSession.setActionHandler(action, handler);
+            } catch {
+                // Acción no soportada por esta versión de WebKit.
+            }
+        });
 
         return () => {
-            try {
-                navigator.mediaSession.setActionHandler("play", null);
-                navigator.mediaSession.setActionHandler("pause", null);
-                navigator.mediaSession.setActionHandler("previoustrack", null);
-                navigator.mediaSession.setActionHandler("nexttrack", null);
-                navigator.mediaSession.setActionHandler("seekto", null);
-                navigator.mediaSession.setActionHandler("seekbackward", null);
-                navigator.mediaSession.setActionHandler("seekforward", null);
-                navigator.mediaSession.setActionHandler("stop", null);
-            } catch {
-                // ignore
-            }
+            Object.keys(handlers).forEach((action) => {
+                try {
+                    navigator.mediaSession.setActionHandler(action, null);
+                } catch {
+                    // Acción no soportada.
+                }
+            });
         };
-    }, [isPlaying, togglePlay, prev, next, updatePositionState]);
+    }, [showError, updatePositionState]);
 
     useEffect(() => {
         if (!isPlaying || !("mediaSession" in navigator)) return;
