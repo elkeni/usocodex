@@ -3,7 +3,7 @@ import { describe, expect, it } from 'vitest';
 
 const feedSource = readFileSync(new URL('./feed.jsx', import.meta.url), 'utf8');
 const handler = feedSource.match(
-    /const handleArtistRadioClick[\s\S]*?\n[ ]{2}\}, \[playTrack, addToQueue, showToast\]\);/,
+    /const handleArtistRadioClick[\s\S]*?\n[ ]{2}\}, \[playTrack, appendToQueue, showToast\]\);/,
 )?.[0] || '';
 
 describe('Feed: radio de artistas favoritos', () => {
@@ -12,16 +12,16 @@ describe('Feed: radio de artistas favoritos', () => {
     });
 
     it('reproduce la semilla antes de completar la radio en segundo plano', () => {
-        expect(handler).toContain('playTrack(trackToPlay, [trackToPlay])');
+        expect(handler).toContain('playTrack(trackToPlay, [trackToPlay], {');
         expect(handler).toContain('includeSeed: false');
-        expect(handler).toContain('addToQueue(');
-        expect(handler.indexOf('playTrack(trackToPlay, [trackToPlay])'))
+        expect(handler).toContain('appendToQueue(');
+        expect(handler.indexOf('playTrack(trackToPlay, [trackToPlay], {'))
             .toBeLessThan(handler.indexOf('await buildRadioQueue'));
     });
 
     it('descarta solicitudes antiguas y agrega la cola silenciosamente', () => {
         expect(handler).toContain('requestId !== artistRadioRequestRef.current');
-        expect(handler).toContain('}, true)');
+        expect(handler).toContain('sessionId: queueSessionId');
     });
 
     it('no mezcla la radio del artista con recomendaciones generales', () => {

@@ -376,7 +376,7 @@ function unavailable(trackInfo, reason) {
  * ========================================================================
  */
 const audioUrlCache = new Map();
-const CACHE_TTL_MS = 60 * 60 * 1000; // 1 hora en memoria RAM
+const CACHE_TTL_MS = 20 * 60 * 1000; // Las URLs de streaming son temporales.
 
 async function fetchAudioUrl(artistOrTrack, title, duration) {
     // Normalizar entrada

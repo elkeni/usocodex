@@ -372,20 +372,20 @@ export default function Playlist() {
     // Handlers de reproducción
     const handlePlayAll = useCallback(() => {
         if (tracks.length > 0) {
-            playTrack(tracks[0], tracks);
+            playTrack(tracks[0], tracks, { id: `playlist-${playlistId}`, type: 'playlist', name: playlist?.name, autoExtend: false });
         }
-    }, [tracks, playTrack]);
+    }, [tracks, playTrack, playlistId, playlist?.name]);
 
     const handlePlayTrack = useCallback((track) => {
-        playTrack(track, tracks);
-    }, [tracks, playTrack]);
+        playTrack(track, tracks, { id: `playlist-${playlistId}`, type: 'playlist', name: playlist?.name, autoExtend: false });
+    }, [tracks, playTrack, playlistId, playlist]);
 
     const handleShuffle = useCallback(() => {
         if (tracks.length > 0) {
-            const shuffled = [...tracks].sort(() => Math.random() - 0.5);
-            playTrack(shuffled[0], shuffled);
+            const randomTrack = tracks[Math.floor(Math.random() * tracks.length)];
+            playTrack(randomTrack, tracks, { id: `playlist-${playlistId}`, type: 'playlist', name: playlist?.name, autoExtend: false }, true);
         }
-    }, [tracks, playTrack]);
+    }, [tracks, playTrack, playlistId, playlist]);
 
     // Guardar playlist en biblioteca (solo para externas)
     const handleSavePlaylist = useCallback(() => {

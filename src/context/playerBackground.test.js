@@ -20,8 +20,32 @@ describe('Player: reproducción en segundo plano', () => {
 
     it('atiende los controles del sistema mediante referencias estables', () => {
         expect(playerSource).toContain('const handlePreviousTrack = () => previousRef.current?.()');
-        expect(playerSource).toContain('const handleNextTrack = () => skipRef.current?.(false)');
+        expect(playerSource).toContain('const handleNextTrack = () => {');
+        expect(playerSource).toContain('forceAdvanceRef.current = true');
+        expect(playerSource).toContain('handleAudioEndedInternalRef.current?.()');
+        expect(playerSource).toContain('skipRef.current?.(false)');
         expect(playerSource).toContain('navigator.mediaSession.setActionHandler(action, handler)');
+    });
+
+    it('intercambia el reproductor precargado sin volver a descargar la siguiente canción', () => {
+        expect(playerSource).toContain('preparedPlayer.readyState >= 2');
+        expect(playerSource).toContain('audioRef.current = preparedPlayer');
+        expect(playerSource).toContain('nextAudioRef.current = activePlayer');
+        expect(playerSource).toContain('const prefetchedIndex = prefetchedNextIndex.current');
+        expect(playerSource).toContain('nextIndex !== expectedIndex');
+    });
+
+    it('aísla ampliaciones y precargas pertenecientes a colas anteriores', () => {
+        expect(playerSource).toContain('const queueSessionRef = useRef(0)');
+        expect(playerSource).toContain('sessionId !== queueSessionRef.current');
+        expect(playerSource).toContain('runId !== prefetchRunRef.current');
+        expect(playerSource).toContain('playbackContext?.autoExtend !== true');
+    });
+
+    it('no sustituye la cola canónica por el orden aleatorio al reproducir', () => {
+        expect(playerSource).not.toContain('setQueue(contextQueue)');
+        expect(playerSource).toContain('serializeQueueSnapshot({');
+        expect(playerSource).toContain('shuffledQueue,');
     });
 
     it('evita el crossfade de dos reproductores con la app oculta', () => {

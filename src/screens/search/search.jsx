@@ -574,7 +574,7 @@ const TrackRow = ({ track, isLoading, onPlay, showRank = false, index = 0, onLon
 // =============================================================================
 export default function Search() {
     const navigate = useNavigate();
-    const { playTrack } = usePlayerActions();
+    const { playTrack, appendToQueue } = usePlayerActions();
 
     // Referencias
     const inputRef = useRef(null);
@@ -917,33 +917,25 @@ export default function Search() {
             const resolvedUrl = resolution.status === 'ok' ? resolution.audio?.url : null;
             trackToPlay.url = resolvedUrl || track.preview || null;
             trackToPlay.urlSource = resolvedUrl ? 'resolved' : 'preview';
+            trackToPlay.urlResolvedAt = resolvedUrl ? Date.now() : null;
 
             if (!trackToPlay.url) {
                 console.warn(`[Search] ❌ No se encontró audio para: "${track.artist} - ${track.name}"`);
                 return;
             }
 
-            if (import.meta.env.DEV) {
-                console.log(`[Search] ✅ Audio encontrado, generando radio...`);
-            }
+            const queueSessionId = playTrack(trackToPlay, [trackToPlay], {
+                id: `search-radio-${trackToPlay.id || trackToPlay.name}`,
+                type: 'radio',
+                name: `Radio de ${trackToPlay.artist}`,
+                autoExtend: true,
+                seedTrack: trackToPlay,
+            });
 
-            // 🎵 RADIO INSTANTÁNEA con timeout para no hacer esperar demasiado
-            const RADIO_TIMEOUT_MS = 3000;
-            let radioQueue = [trackToPlay];
-
-            try {
-                // Pasamos los tracks results actuales para tener pool inicial
-                // NOTA: Para la radio necesitamos también imágenes de buena calidad si es posible,
-                // pero si vienen del search results ya traen .image_xl.
-                const radioPromise = buildInstantRadioForSearch(track, results.tracks);
-                const timeoutPromise = new Promise((_, reject) =>
-                    setTimeout(() => reject(new Error('timeout')), RADIO_TIMEOUT_MS)
-                );
-
-                const rawQueue = await Promise.race([radioPromise, timeoutPromise]);
-
-                // Formatear la cola para el reproductor
-                radioQueue = rawQueue.map(t => ({
+            // La búsqueda ya está sonando. La radio se completa sin bloquear
+            // el gesto del usuario y solo puede modificar esta sesión.
+            buildInstantRadioForSearch(track, results.tracks).then((rawQueue) => {
+                const radioTracks = rawQueue.slice(1).map(t => ({
                     id: t.id,
                     name: t.name,
                     artist: t.artist,
@@ -954,30 +946,20 @@ export default function Search() {
                     preview: t.preview,
                     album: t.album || 'Radio de Búsqueda'
                 }));
-
-                // Asegurar que el primer track tenga la URL de audio
-                if (radioQueue.length > 0) {
-                    radioQueue[0].url = trackToPlay.url;
-                    radioQueue[0].urlSource = trackToPlay.urlSource;
+                if (radioTracks.length) {
+                    recordProductEvent(PRODUCT_EVENTS.RADIO_STARTED);
+                    appendToQueue(radioTracks, { sessionId: queueSessionId, silent: true, maxSize: 200 });
                 }
-
-                if (import.meta.env.DEV) {
-                    console.log(`[Search] 📻 Radio generada: ${radioQueue.length} canciones`);
-                }
-            } catch (err) {
-                console.warn('[Search] Radio timeout/error, playing single track');
-                radioQueue = [trackToPlay];
-            }
-
-            if (radioQueue.length > 1) recordProductEvent(PRODUCT_EVENTS.RADIO_STARTED);
-            playTrack(trackToPlay, radioQueue);
+            }).catch((error) => {
+                console.warn('[Search] No se pudo ampliar la radio:', error?.message);
+            });
 
         } catch (e) {
             console.error("[Search] Error reproduciendo:", e);
         } finally {
             setPlayingTrackId(null);
         }
-    }, [playingTrackId, results.tracks, playTrack]);
+    }, [playingTrackId, results.tracks, playTrack, appendToQueue]);
 
     // Limpiar búsqueda
     const clearSearch = useCallback(() => {

@@ -10,6 +10,16 @@ import {
 import { fetchAudioUrl } from "../services/unifiedService";
 import { buildRadioQueue } from "../services/radioService";
 import { PRODUCT_EVENTS, recordProductEvent } from "../services/productMetrics";
+import {
+    appendUniqueTracks,
+    findQueueIndex,
+    getNextQueuePosition,
+    getTrackIdentity,
+    isSameTrack,
+    prepareQueue,
+    serializeQueueSnapshot,
+    shuffleQueueFromTrack,
+} from "../services/queueEngine";
 
 const PlayerContext = createContext(null);
 export const usePlayer = () => useContext(PlayerContext);
@@ -44,9 +54,7 @@ const getSafeString = (val) => {
 };
 
 const makeTrackKey = (track) => {
-    const name = getSafeString(track?.name || track?.title).toLowerCase();
-    const artist = getSafeString(track?.artist).toLowerCase();
-    return `${artist}-${name}`.trim();
+    return getTrackIdentity(track);
 };
 
 const makeAudioCacheKey = (track) => {
@@ -63,13 +71,10 @@ const makeFailureKey = (track) => {
 };
 
 const findTrackIndex = (arr, track) => {
-    if (!arr || !arr.length || !track) return -1;
-    const id = track.id;
-    const key = makeTrackKey(track);
-
-    const idx = arr.findIndex((t) => (id && t.id && t.id === id) || makeTrackKey(t) === key);
-    return idx;
+    return findQueueIndex(arr, track);
 };
+
+const readQueueSnapshot = () => safeJsonParse("paradox_queue_snapshot_v2", null);
 
 const useThrottledEffect = (fn, deps, delay = 250) => {
     const t = useRef(null);
@@ -87,9 +92,9 @@ const AUDIO_LOAD_TIMEOUT_MS = 6000;      // Timeout para carga de audio (reducid
 // [CIRUGÍA] Eliminado ERROR_RETRY_MAX - el backend ya decidió, no reitentar
 
 export const PlayerProvider = ({ children }) => {
-    const [currentTrack, setCurrentTrack] = useState(() => safeJsonParse("paradox_track", null));
-    const [queue, setQueue] = useState(() => safeJsonParse("paradox_queue", []));
-    const [currentIndex, setCurrentIndex] = useState(() => safeInt("paradox_index", -1));
+    const [currentTrack, setCurrentTrack] = useState(() => readQueueSnapshot()?.currentTrack ?? safeJsonParse("paradox_track", null));
+    const [queue, setQueue] = useState(() => readQueueSnapshot()?.queue ?? safeJsonParse("paradox_queue", []));
+    const [currentIndex, setCurrentIndex] = useState(() => readQueueSnapshot()?.currentIndex ?? safeInt("paradox_index", -1));
 
     const [cachedAudioUrl, setCachedAudioUrl] = useState(() =>
         safeJsonParse("paradox_audio_cache", null)
@@ -117,6 +122,8 @@ export const PlayerProvider = ({ children }) => {
 
     const [isShuffle, setIsShuffle] = useState(() => {
         try {
+            const snapshot = readQueueSnapshot();
+            if (!snapshot?.shuffledQueue?.length) return false;
             const saved = localStorage.getItem("paradox_shuffle");
             return saved ? JSON.parse(saved) : false;
         } catch {
@@ -133,8 +140,8 @@ export const PlayerProvider = ({ children }) => {
         }
     });
 
-    const [shuffledQueue, setShuffledQueue] = useState([]);
-    const [shuffledIndex, setShuffledIndex] = useState(-1);
+    const [shuffledQueue, setShuffledQueue] = useState(() => readQueueSnapshot()?.shuffledQueue || []);
+    const [shuffledIndex, setShuffledIndex] = useState(() => readQueueSnapshot()?.shuffledIndex ?? -1);
 
     const [listeningHistory, setListeningHistory] = useState(() =>
         safeJsonParse("paradox_listening_history", [])
@@ -157,6 +164,7 @@ export const PlayerProvider = ({ children }) => {
     });
     const CROSSFADE_DURATION = 6; // Segundos de overlap
     const isCrossfadingRef = useRef(false);
+    const isCrossfadeEnabledRef = useRef(isCrossfadeEnabled);
     const audioListenersCleanupRef = useRef(null); // Para limpiar listeners al hacer swap
     const performCrossfadeRef = useRef(null);
     const finalizeCrossfadeRef = useRef(null);
@@ -171,6 +179,7 @@ export const PlayerProvider = ({ children }) => {
     const historyRecordedKeyRef = useRef(null);
     const playbackStartedKeyRef = useRef(null);
     const historyPausedRef = useRef(historyPaused);
+    const playbackContextRef = useRef(playbackContext);
 
     const [isQueueOpen, setIsQueueOpen] = useState(false);
 
@@ -194,6 +203,10 @@ export const PlayerProvider = ({ children }) => {
     // [FIX #1] Contador incremental para requestId (evita race conditions de Date.now())
     const requestSeqRef = useRef(0);
     const activeRequestId = useRef(0);
+    const queueSessionRef = useRef(0);
+    const prefetchRunRef = useRef(0);
+    const pendingSkipTimeoutRef = useRef(null);
+    const activePlaybackLoadRef = useRef(false);
 
     // Helper para obtener un requestId único
     const nextRequestId = useCallback(() => {
@@ -215,6 +228,7 @@ export const PlayerProvider = ({ children }) => {
     // =========================
     const prefetchedNextUrl = useRef(null);
     const prefetchedNextTrack = useRef(null);
+    const prefetchedNextIndex = useRef(-1);
     const isPrefetching = useRef(false);
     const prefetchTriggeredForTrack = useRef(""); // trackKey para evitar spam
 
@@ -231,6 +245,7 @@ export const PlayerProvider = ({ children }) => {
 
     // [FIX iOS #2] Mutex para evitar doble avance (ended + error racing)
     const isAdvancingRef = useRef(false);
+    const forceAdvanceRef = useRef(false);
 
     // [FIX LOOP] Memoria de tracks que ya fallaron - evita reintentos infinitos
     const failedTracksRef = useRef(new Set());
@@ -253,6 +268,7 @@ export const PlayerProvider = ({ children }) => {
     const clearPrefetch = useCallback(() => {
         prefetchedNextUrl.current = null;
         prefetchedNextTrack.current = null;
+        prefetchedNextIndex.current = -1;
         prefetchTriggeredForTrack.current = "";
     }, []);
 
@@ -305,21 +321,34 @@ export const PlayerProvider = ({ children }) => {
         try { localStorage.setItem("paradox_history_paused", JSON.stringify(historyPaused)); } catch { }
     }, [historyPaused]);
 
+    useEffect(() => {
+        playbackContextRef.current = playbackContext;
+    }, [playbackContext]);
+
+    useEffect(() => {
+        isCrossfadeEnabledRef.current = isCrossfadeEnabled;
+    }, [isCrossfadeEnabled]);
+
     // =========================
     // Persistencia (throttle con try/catch)
     // =========================
     useThrottledEffect(
         () => {
             try {
-                localStorage.setItem("paradox_track", JSON.stringify(currentTrack));
-                localStorage.setItem("paradox_queue", JSON.stringify(queue));
-                localStorage.setItem("paradox_index", String(currentIndex));
+                const snapshot = serializeQueueSnapshot({
+                    queue,
+                    currentTrack,
+                    currentIndex,
+                    shuffledQueue,
+                    shuffledIndex,
+                });
+                localStorage.setItem("paradox_queue_snapshot_v2", JSON.stringify(snapshot));
                 if (cachedAudioUrl) localStorage.setItem("paradox_audio_cache", JSON.stringify(cachedAudioUrl));
             } catch {
                 // iOS puede fallar en private mode - no bloquear reproducción
             }
         },
-        [currentTrack, queue, currentIndex, cachedAudioUrl],
+        [currentTrack, queue, currentIndex, shuffledQueue, shuffledIndex, cachedAudioUrl],
         250
     );
 
@@ -364,25 +393,7 @@ export const PlayerProvider = ({ children }) => {
     // Shuffle helpers
     // =========================
     const generateShuffledQueue = useCallback((originalQueue, current) => {
-        if (!current || !originalQueue?.length) return originalQueue || [];
-        const shuffled = [...originalQueue];
-
-        for (let i = shuffled.length - 1; i > 0; i--) {
-            const j = Math.floor(Math.random() * (i + 1));
-            [shuffled[i], shuffled[j]] = [shuffled[j], shuffled[i]];
-        }
-
-        const currentKey = makeTrackKey(current);
-        let pos = shuffled.findIndex((t) => makeTrackKey(t) === currentKey);
-
-        if (pos === -1) {
-            shuffled.unshift(current);
-            return shuffled;
-        }
-
-        const [cur] = shuffled.splice(pos, 1);
-        shuffled.unshift(cur);
-        return shuffled;
+        return shuffleQueueFromTrack(originalQueue, current);
     }, []);
 
     // [FIX #6] Helper para sincronizar índices por trackId
@@ -390,22 +401,22 @@ export const PlayerProvider = ({ children }) => {
         if (!trackId && !trackObj) return;
 
         const targetId = trackId || trackObj?.id;
-        const targetKey = trackObj ? makeTrackKey(trackObj) : null;
 
         // Actualizar currentIndex en cola original
-        const originalIdx = queue.findIndex(t =>
-            (targetId && t.id === targetId) || (targetKey && makeTrackKey(t) === targetKey)
-        );
+        let originalIdx = trackObj ? findTrackIndex(queueRef.current, trackObj) : -1;
+        if (originalIdx < 0 && targetId) {
+            originalIdx = queueRef.current.findIndex(t => String(t.id) === String(targetId));
+        }
         if (originalIdx >= 0) setCurrentIndex(originalIdx);
 
-        // Si shuffle está activo, también actualizar shuffledIndex
-        if (isShuffle && shuffledQueue.length) {
-            const shuffledIdx = shuffledQueue.findIndex(t =>
-                (targetId && t.id === targetId) || (targetKey && makeTrackKey(t) === targetKey)
-            );
+        if (shuffledQueueRef.current.length) {
+            let shuffledIdx = trackObj ? findTrackIndex(shuffledQueueRef.current, trackObj) : -1;
+            if (shuffledIdx < 0 && targetId) {
+                shuffledIdx = shuffledQueueRef.current.findIndex(t => String(t.id) === String(targetId));
+            }
             if (shuffledIdx >= 0) setShuffledIndex(shuffledIdx);
         }
-    }, [queue, isShuffle, shuffledQueue]);
+    }, []);
 
     // =========================
     // [FIX PROD] Refs y callbacks indirectos para audio events
@@ -521,7 +532,7 @@ export const PlayerProvider = ({ children }) => {
 
             // [AUTOMIX] Detector de transición Crossfade
             // Chequeamos refs directamente para evitar closures viejos en callbacks
-            if (isCrossfadeEnabled && document.visibilityState !== 'hidden' && !isCrossfadingRef.current && dur > 0) {
+            if (isCrossfadeEnabledRef.current && document.visibilityState !== 'hidden' && !isCrossfadingRef.current && dur > 0) {
                 const remaining = dur - ct;
                 // Iniciar si falta poco, pero no si la canción es muy corta (<20s)
                 if (remaining <= CROSSFADE_DURATION && remaining > 1 && dur > 20) {
@@ -550,6 +561,7 @@ export const PlayerProvider = ({ children }) => {
         // [CIRUGÍA] Evento error
         const onError = () => {
             if (isCrossfadingRef.current) return; // Ignorar errores durante transición crítica por ahora
+            if (!activePlaybackLoadRef.current && a.paused) return;
 
             if (isAdvancingRef.current) return;
             isAdvancingRef.current = true;
@@ -572,8 +584,12 @@ export const PlayerProvider = ({ children }) => {
                 return;
             }
 
-            setTimeout(() => {
-                if (skipRef.current) skipRef.current(true);
+            const failedSessionId = queueSessionRef.current;
+            const failedRequestId = activeRequestId.current;
+            pendingSkipTimeoutRef.current = window.setTimeout(() => {
+                if (failedSessionId === queueSessionRef.current && failedRequestId === activeRequestId.current) {
+                    skipRef.current?.(true);
+                }
                 isAdvancingRef.current = false;
             }, 300);
         };
@@ -607,7 +623,7 @@ export const PlayerProvider = ({ children }) => {
             a.removeEventListener("error", onError);
             a.removeEventListener("volumechange", onVolumeChange);
         };
-    }, [isCrossfadeEnabled, checkIfAllQueueFailed, handleAudioEndedInternal, prefetchNextTrackInternal]);
+    }, [checkIfAllQueueFailed, handleAudioEndedInternal, prefetchNextTrackInternal]);
 
     // [AUTOMIX] Lógica de ejecución
     const performCrossfade = useCallback(() => {
@@ -659,6 +675,24 @@ export const PlayerProvider = ({ children }) => {
     const finalizeCrossfade = useCallback((nextTrack) => {
         console.log('[Automix] ✨ Crossfade completo. Swapping players.');
 
+        const q = isShuffle ? shuffledQueueRef.current : queueRef.current;
+        const currentPosition = isShuffle ? shuffledIndexRef.current : indexRef.current;
+        const expectedIndex = getNextQueuePosition({
+            length: q.length,
+            currentIndex: currentPosition,
+            repeatMode,
+        });
+        const nextIndex = prefetchedNextIndex.current;
+
+        // La cola pudo cambiar mientras duraba el fundido. En ese caso no se
+        // promueve audio perteneciente a una sesión u orden anterior.
+        if (nextIndex !== expectedIndex || !isSameTrack(q[nextIndex], nextTrack)) {
+            nextAudioRef.current?.pause();
+            isCrossfadingRef.current = false;
+            clearPrefetch();
+            return;
+        }
+
         // Punteros actuales
         const activePlayer = audioRef.current; // El que terminó de sonar
         const nextPlayer = nextAudioRef.current; // El que está sonando ahora
@@ -691,19 +725,18 @@ export const PlayerProvider = ({ children }) => {
         // Inyectar el cambio de estado sin recargar audio
         // Usamos una versión manual de 'playTrackInternal'
 
-        // Calcular nuevos índices
         clearPrefetch();
-        const q = isShuffle ? shuffledQueueRef.current : queueRef.current;
-        const i = isShuffle ? shuffledIndexRef.current : indexRef.current;
-
-        let nextIndex = i + 1;
-        if (nextIndex >= q.length && repeatMode === 1) nextIndex = 0;
-        if (nextIndex >= q.length) nextIndex = 0; // Fallback
 
         // Update State
         setCurrentTrack(nextTrack);
-        if (isShuffle) setShuffledIndex(nextIndex);
-        else setCurrentIndex(nextIndex);
+        currentTrackRef.current = nextTrack;
+        if (isShuffle) {
+            shuffledIndexRef.current = nextIndex;
+            setShuffledIndex(nextIndex);
+        } else {
+            indexRef.current = nextIndex;
+            setCurrentIndex(nextIndex);
+        }
 
         setPlayed(0); // Visualmente empieza
         setCurrentTime(0);
@@ -759,6 +792,11 @@ export const PlayerProvider = ({ children }) => {
 
         const hydrate = async () => {
             if (!currentTrack || !cachedAudioUrl?.url) return;
+            if (!cachedAudioUrl.timestamp || Date.now() - cachedAudioUrl.timestamp > 20 * 60 * 1000) {
+                setCachedAudioUrl(null);
+                try { localStorage.removeItem("paradox_audio_cache"); } catch { }
+                return;
+            }
 
             const expectedKey = makeAudioCacheKey(currentTrack);
             if (cachedAudioUrl.key !== expectedKey) return;
@@ -823,7 +861,10 @@ export const PlayerProvider = ({ children }) => {
             // Las pantallas de artista/álbum ya resuelven el audio dentro del
             // gesto del usuario. Reutilizarlo evita una segunda petición que
             // puede perder la autorización de reproducción en iOS.
-            if (typeof track?.url === 'string' && /^https?:\/\//i.test(track.url)) {
+            const directUrlAge = Date.now() - Number(track?.urlResolvedAt || 0);
+            const directUrlIsFresh = track?.urlSource === 'preview'
+                || (track?.urlSource === 'resolved' && directUrlAge < 20 * 60 * 1000);
+            if (directUrlIsFresh && typeof track?.url === 'string' && /^https?:\/\//i.test(track.url)) {
                 failedTracksRef.current.delete(makeFailureKey(track));
                 return {
                     status: "ok",
@@ -836,7 +877,7 @@ export const PlayerProvider = ({ children }) => {
             const failedKey = makeFailureKey(track);
 
             // Cache check (solo para status: ok)
-            const TTL = 6 * 60 * 60 * 1000;
+            const TTL = 20 * 60 * 1000;
             const cacheOk =
                 cachedAudioUrlRef.current &&
                 cachedAudioUrlRef.current.key === cacheKey &&
@@ -925,19 +966,22 @@ export const PlayerProvider = ({ children }) => {
             return false;
         }
 
-        for (let offset = 1; offset <= queueSource.length; offset += 1) {
-            let candidateIndex = startIndex + offset;
-            if (candidateIndex >= queueSource.length) {
-                if (repeatMode !== 1) break;
-                candidateIndex %= queueSource.length;
-            }
+        const candidateIndex = getNextQueuePosition({
+            length: queueSource.length,
+            currentIndex: startIndex,
+            repeatMode,
+        });
+        if (candidateIndex < 0) {
+            clearPrefetch();
+            return false;
+        }
 
-            const candidate = queueSource[candidateIndex];
-            const cached = prefetchCacheRef.current.get(makeTrackKey(candidate));
-            if (cached?.status !== 'ok' || !cached.url) continue;
-
+        const candidate = queueSource[candidateIndex];
+        const cached = prefetchCacheRef.current.get(makeTrackKey(candidate));
+        if (cached?.status === 'ok' && cached.url) {
             prefetchedNextUrl.current = cached.url;
             prefetchedNextTrack.current = candidate;
+            prefetchedNextIndex.current = candidateIndex;
             prefetchTriggeredForTrack.current = makeTrackKey(candidate);
 
             const buffer = nextAudioRef.current;
@@ -955,9 +999,12 @@ export const PlayerProvider = ({ children }) => {
 
     // Motor de Prefetching
     const runAggressivePrefetch = useCallback(async (startIndex, queueSource) => {
-        if (!queueSource || !queueSource.length) return;
+        if (!queueSource?.length || startIndex < 0 || isPrefetching.current) return;
 
         const cache = prefetchCacheRef.current;
+        const sessionId = queueSessionRef.current;
+        const runId = ++prefetchRunRef.current;
+        isPrefetching.current = true;
         let pIndex = startIndex;
         const processedKeys = new Set();
         const MAX_LOOKAHEAD_TOTAL = 5; // Limite total de tracks a revisar
@@ -966,7 +1013,9 @@ export const PlayerProvider = ({ children }) => {
         let immediateNextFound = false;
         let lookaheadCount = 0;
 
+        try {
         for (let offset = 1; offset <= MAX_LOOKAHEAD_TOTAL; offset++) {
+            if (sessionId !== queueSessionRef.current || runId !== prefetchRunRef.current) return;
             pIndex++;
             // Wrap around logic
             if (pIndex >= queueSource.length) {
@@ -994,7 +1043,7 @@ export const PlayerProvider = ({ children }) => {
                         // Solo contamos como "prefetch exitoso" los que están OK
                         lookaheadCount++;
 
-                        if (!immediateNextFound) {
+                        if (offset === 1 && !immediateNextFound) {
                             // Cargar bytes en el segundo player para zero-latency
                             nextAudioRef.current.src = cachedEntry.url;
                             nextAudioRef.current.preload = "auto";
@@ -1005,6 +1054,7 @@ export const PlayerProvider = ({ children }) => {
                             // SOLO actualizar para el INMEDIATO siguiente, no para los futuros
                             prefetchedNextUrl.current = cachedEntry.url;
                             prefetchedNextTrack.current = track;
+                            prefetchedNextIndex.current = pIndex;
                             prefetchTriggeredForTrack.current = key;
                         }
                     }
@@ -1016,13 +1066,14 @@ export const PlayerProvider = ({ children }) => {
             // console.log(`[Prefetch] 🔮 Resolving lookahead +${offset}: ${track.name}`);
             try {
                 const result = await resolveAudioUrl(track);
+                if (sessionId !== queueSessionRef.current || runId !== prefetchRunRef.current) return;
 
                 if (result.status === 'ok' && result.url) {
                     cache.set(key, { url: result.url, status: 'ok', timestamp: Date.now() });
                     lookaheadCount++;
 
                     // Si es la inmediata siguiente, cargar bytes
-                    if (!immediateNextFound) {
+                    if (offset === 1 && !immediateNextFound) {
                         nextAudioRef.current.src = result.url;
                         nextAudioRef.current.preload = "auto";
                         nextAudioRef.current.load();
@@ -1031,6 +1082,7 @@ export const PlayerProvider = ({ children }) => {
                         // [FIX LOOP] Sync legacy refs to satisfy onTimeUpdate check & playTrackInternal
                         prefetchedNextUrl.current = result.url;
                         prefetchedNextTrack.current = track;
+                        prefetchedNextIndex.current = pIndex;
                         prefetchTriggeredForTrack.current = key;
                     }
                 } else {
@@ -1038,11 +1090,15 @@ export const PlayerProvider = ({ children }) => {
                     cache.set(key, { status: 'error', timestamp: Date.now() });
                 }
             } catch (err) {
-                cache.set(key, { status: 'error', timestamp: Date.now() });
+                if (sessionId === queueSessionRef.current && runId === prefetchRunRef.current) {
+                    cache.set(key, { status: 'error', timestamp: Date.now() });
+                }
             }
         }
-
-        prunePrefetchCache();
+        } finally {
+            if (runId === prefetchRunRef.current) isPrefetching.current = false;
+            prunePrefetchCache();
+        }
     }, [resolveAudioUrl, repeatMode, prunePrefetchCache]);
 
     // Trigger de prefetch cuando cambia la canción O cuando crece la cola.
@@ -1094,8 +1150,11 @@ export const PlayerProvider = ({ children }) => {
     // Core play (Modificado para usar Buffer)
     // =========================
     const playTrackInternal = useCallback(
-        async (track, contextQueue, newIndex) => {
+        async (track, newIndex, useShuffledIndex = false) => {
             if (!track) return;
+
+            window.clearTimeout(pendingSkipTimeoutRef.current);
+            activePlaybackLoadRef.current = true;
 
             setIsLoading(true);
             setIsBuffering(false);
@@ -1107,8 +1166,14 @@ export const PlayerProvider = ({ children }) => {
 
             // Actualizar estado de cola e índices con menos renders
             setCurrentTrack(track);
-            setCurrentIndex(newIndex);
-            if (contextQueue && contextQueue !== queueRef.current) setQueue(contextQueue);
+            currentTrackRef.current = track;
+            if (useShuffledIndex) {
+                shuffledIndexRef.current = newIndex;
+                setShuffledIndex(newIndex);
+            } else {
+                indexRef.current = newIndex;
+                setCurrentIndex(newIndex);
+            }
 
             // [FIX #1] Usar contador incremental en lugar de Date.now()
             const requestId = nextRequestId();
@@ -1145,6 +1210,7 @@ export const PlayerProvider = ({ children }) => {
                     syncIndicesByTrackId(track.id, track);
 
                     setIsLoading(false);
+                    activePlaybackLoadRef.current = false;
                     return;
                 }
             }
@@ -1179,7 +1245,12 @@ export const PlayerProvider = ({ children }) => {
 
                     // Hay más tracks - avanzar UNA vez (no loop infinito gracias al set failedTracksRef)
                     setIsLoading(false);
-                    setTimeout(() => skipRef.current && skipRef.current(true), 200);
+                    const failedSessionId = queueSessionRef.current;
+                    pendingSkipTimeoutRef.current = window.setTimeout(() => {
+                        if (failedSessionId === queueSessionRef.current && activeRequestId.current === requestId) {
+                            skipRef.current?.(true);
+                        }
+                    }, 200);
                     return;
                 }
 
@@ -1255,6 +1326,7 @@ export const PlayerProvider = ({ children }) => {
                     showError("Error de conexión");
                 }
             } finally {
+                if (activeRequestId.current === requestId) activePlaybackLoadRef.current = false;
                 if (activeRequestId.current === requestId) setIsLoading(false);
             }
         },
@@ -1266,204 +1338,247 @@ export const PlayerProvider = ({ children }) => {
     // =========================
     const playTrack = useCallback(
         (track, contextQueue = null, contextData = null, forceShuffle = false) => {
+            if (!track) return queueSessionRef.current;
+
+            const startsNewSession = Array.isArray(contextQueue) && contextQueue.length > 0;
+            let sessionId = queueSessionRef.current;
             let newQueue = queueRef.current;
-            let newIndex;
+            let selectedTrack;
 
-            let newShuffledQueue = shuffledQueueRef.current;
-            let newShuffledIndex = -1;
-
-            // [NUEVO] Actualizar contexto
-            if (contextData) {
-                setPlaybackContext(contextData);
-            }
-
-            // [NUEVO] Forzar shuffle si se necesita
-            if (forceShuffle) {
-                setIsShuffle(true);
-            }
-            const effectiveShuffle = isShuffle || forceShuffle;
-
-            // DETECCION DE CONTEXTO: ¿Es la misma cola visual?
-            // Si contextQueue es null, o es idéntica a la actual (referencia o contenido)
-            const isSameQueue = !contextQueue || contextQueue === queueRef.current;
-
-            if (!isSameQueue && contextQueue?.length) {
-                // CAMBIO DE CONTEXTO REAL (Nueva playlist/álbum)
-                // [CIRUGÍA] Nueva cola = borrón y cuenta nueva para tracks fallidos
+            if (startsNewSession) {
+                sessionId = ++queueSessionRef.current;
+                prefetchRunRef.current += 1;
+                isPrefetching.current = false;
+                window.clearTimeout(pendingSkipTimeoutRef.current);
+                clearPrefetch();
                 failedTracksRef.current.clear();
 
-                newQueue = contextQueue;
-                const trackKey = makeTrackKey(track);
-                newIndex = newQueue.findIndex(t => makeTrackKey(t) === trackKey);
-
-                if (newIndex === -1) newIndex = findTrackIndex(newQueue, track);
-                if (newIndex === -1) newIndex = 0;
-
-                if (effectiveShuffle) {
-                    // Nuevo contexto + shuffle explícito = Barajar todo nuevo
-                    newShuffledQueue = generateShuffledQueue(newQueue, track);
-                    newShuffledIndex = 0;
-                    setShuffledQueue(newShuffledQueue);
-                    setShuffledIndex(newShuffledIndex);
+                newQueue = prepareQueue(contextQueue, track);
+                let selectedIndex = findTrackIndex(newQueue, track);
+                if (selectedIndex < 0) {
+                    const [preparedTrack] = prepareQueue([track], track);
+                    newQueue = [...newQueue, preparedTrack];
+                    selectedIndex = newQueue.length - 1;
                 }
+                selectedTrack = newQueue[selectedIndex];
+                setPlaybackContext(contextData || {
+                    id: `queue-${sessionId}`,
+                    type: 'collection',
+                    name: 'Cola de reproducción',
+                    autoExtend: false,
+                });
             } else {
-                // MISMO CONTEXTO (Usuario seleccionó canción de la lista actual)
-                // O canción suelta
-
-                // Si la cola estaba vacía, se comporta como nueva
-                if (newQueue.length === 0 && contextQueue?.length) {
-                    newQueue = contextQueue;
+                let selectedIndex = findTrackIndex(newQueue, track);
+                if (selectedIndex < 0) {
+                    const [preparedTrack] = prepareQueue([track], track);
+                    newQueue = [...newQueue, preparedTrack];
+                    selectedIndex = newQueue.length - 1;
                 }
+                selectedTrack = newQueue[selectedIndex];
+                if (contextData) setPlaybackContext(contextData);
+            }
 
-                const idx = findTrackIndex(newQueue, track);
+            const effectiveShuffle = isShuffle || forceShuffle;
+            if (forceShuffle && !isShuffle) setIsShuffle(true);
 
-                if (idx !== -1) {
-                    // La canción EXISTE en la cola actual
-                    newIndex = idx;
+            const originalIndex = findTrackIndex(newQueue, selectedTrack);
+            let newShuffledQueue = shuffledQueueRef.current;
+            let effectiveIndex = originalIndex;
 
-                    if (effectiveShuffle) {
-                        // [FIX SHUFFLE STABILITY]
-                        // Si ya estamos en modo shuffle y la canción existe en la cola barajada,
-                        // NO REBARAJAR. Solo saltar a esa canción.
-                        const sidx = findTrackIndex(newShuffledQueue, track);
-
-                        if (sidx !== -1) {
-                            // Encontrada en la mezcla actual: MANTENER ORDEN
-                            newShuffledIndex = sidx;
-                        } else {
-                            // No encontrada en mezcla (raro) o shuffle recién activado:
-                            // Regenerar mezcla centrada en el track
-                            newShuffledQueue = generateShuffledQueue(newQueue, track);
-                            newShuffledIndex = 0;
-                            setShuffledQueue(newShuffledQueue);
-                        }
-                        setShuffledIndex(newShuffledIndex); // Asegurar actualización
-                    }
-                } else {
-                    // Canción NO está en cola (ej: búsqueda suelta) -> Añadir
-                    newQueue = [...newQueue, track];
-                    newIndex = newQueue.length - 1;
-
-                    if (effectiveShuffle) {
-                        newShuffledQueue = [...newShuffledQueue, track];
-                        newShuffledIndex = newShuffledQueue.length - 1;
-                        setShuffledQueue(newShuffledQueue);
-                        setShuffledIndex(newShuffledIndex);
-                    }
+            if (effectiveShuffle) {
+                const canReuseShuffle = !startsNewSession
+                    && newShuffledQueue.length === newQueue.length
+                    && findTrackIndex(newShuffledQueue, selectedTrack) >= 0;
+                if (!canReuseShuffle) {
+                    newShuffledQueue = generateShuffledQueue(newQueue, selectedTrack);
                 }
+                effectiveIndex = findTrackIndex(newShuffledQueue, selectedTrack);
+                setShuffledQueue(newShuffledQueue);
+                setShuffledIndex(effectiveIndex);
+                shuffledQueueRef.current = newShuffledQueue;
+                shuffledIndexRef.current = effectiveIndex;
+            } else if (startsNewSession) {
+                setShuffledQueue([]);
+                setShuffledIndex(-1);
+                shuffledQueueRef.current = [];
+                shuffledIndexRef.current = -1;
             }
 
             setQueue(newQueue);
-            setCurrentIndex(newIndex);
+            setCurrentIndex(originalIndex);
+            queueRef.current = newQueue;
+            indexRef.current = originalIndex;
 
-            // [FIX #6] effectiveQueue/effectiveIndex para reproducción
-            const effectiveQueue = effectiveShuffle ? newShuffledQueue : newQueue;
-            const effectiveIndex = effectiveShuffle ? newShuffledIndex : newIndex;
-
-            playTrackInternal(track, effectiveQueue, effectiveIndex);
+            playTrackInternal(selectedTrack, effectiveIndex, effectiveShuffle);
+            return sessionId;
         },
-        [isShuffle, generateShuffledQueue, playTrackInternal]
+        [isShuffle, generateShuffledQueue, playTrackInternal, clearPrefetch]
     );
 
     const addToQueue = useCallback(
-        (track, silent = false) => {
+        (track, silent = false, sessionId = null) => {
+            if (!track || (sessionId !== null && sessionId !== queueSessionRef.current)) return false;
+            const [preparedTrack] = prepareQueue([track], track);
             setQueue((prev) => {
-                const nextQ = [...prev, track];
-                if (isShuffle) setShuffledQueue((s) => [...s, track]);
+                if (sessionId !== null && sessionId !== queueSessionRef.current) return prev;
+                const nextQ = [...prev, preparedTrack];
+                queueRef.current = nextQ;
+                if (isShuffle) {
+                    setShuffledQueue((s) => {
+                        const nextShuffled = [...s, preparedTrack];
+                        shuffledQueueRef.current = nextShuffled;
+                        return nextShuffled;
+                    });
+                }
                 if (!silent) showError("Agregado a la cola");
                 return nextQ;
             });
+            return true;
         },
         [showError, isShuffle]
     );
 
+    const appendToQueue = useCallback((tracks, { sessionId = null, silent = true, maxSize = Infinity } = {}) => {
+        if (!Array.isArray(tracks) || tracks.length === 0) return false;
+        if (sessionId !== null && sessionId !== queueSessionRef.current) return false;
+
+        setQueue((previous) => {
+            if (sessionId !== null && sessionId !== queueSessionRef.current) return previous;
+            const expandedQueue = appendUniqueTracks(previous, tracks);
+            const expanded = Number.isFinite(maxSize) && previous.length < maxSize
+                ? expandedQueue.slice(0, maxSize)
+                : expandedQueue;
+            const addedEntries = expanded.slice(previous.length);
+            queueRef.current = expanded;
+
+            if (isShuffle && addedEntries.length) {
+                setShuffledQueue((currentShuffle) => {
+                    const nextShuffle = [...currentShuffle, ...addedEntries];
+                    shuffledQueueRef.current = nextShuffle;
+                    return nextShuffle;
+                });
+            }
+            if (!silent && addedEntries.length) showError(`${addedEntries.length} canciones agregadas a la cola`);
+            return expanded;
+        });
+        return true;
+    }, [isShuffle, showError]);
+
     const playNextInQueue = useCallback(
         (track) => {
-            setQueue((prev) => {
-                const existingIndex = findTrackIndex(prev, track);
-                const newQ = [...prev];
+            if (!track) return;
+            let canonical = queueRef.current;
+            let existingIndex = findTrackIndex(canonical, track);
+            let queueTrack = existingIndex >= 0 ? canonical[existingIndex] : prepareQueue([track], track)[0];
 
-                const insertAt = Math.min((indexRef.current ?? -1) + 1, newQ.length);
+            if (existingIndex < 0) {
+                canonical = [...canonical, queueTrack];
+                queueRef.current = canonical;
+                setQueue(canonical);
+            }
 
-                if (existingIndex !== -1) {
-                    const [removed] = newQ.splice(existingIndex, 1);
-                    const adjustedInsert = existingIndex < insertAt ? insertAt - 1 : insertAt;
-                    newQ.splice(adjustedInsert, 0, removed);
-                } else {
-                    newQ.splice(insertAt, 0, track);
-                }
+            if (isShuffle) {
+                const order = shuffledQueueRef.current.filter(item => !isSameTrack(item, queueTrack));
+                const currentPosition = findTrackIndex(order, currentTrack);
+                const insertAt = Math.min(currentPosition + 1, order.length);
+                order.splice(insertAt, 0, queueTrack);
+                shuffledQueueRef.current = order;
+                shuffledIndexRef.current = currentPosition;
+                setShuffledQueue(order);
+                setShuffledIndex(currentPosition);
+            } else {
+                const order = canonical.filter(item => !isSameTrack(item, queueTrack));
+                const currentPosition = findTrackIndex(order, currentTrack);
+                const insertAt = Math.min(currentPosition + 1, order.length);
+                order.splice(insertAt, 0, queueTrack);
+                const nextCurrentIndex = findTrackIndex(order, currentTrack);
+                queueRef.current = order;
+                indexRef.current = nextCurrentIndex;
+                setQueue(order);
+                setCurrentIndex(nextCurrentIndex);
+            }
 
-                if (isShuffle && currentTrack) {
-                    const s = generateShuffledQueue(newQ, currentTrack);
-                    setShuffledQueue(s);
-                    setShuffledIndex(0);
-                }
-
-                showError(existingIndex !== -1 ? "Movido a siguiente" : "Se reproducirá a continuación");
-                return newQ;
-            });
+            showError(existingIndex >= 0 ? "Movido a siguiente" : "Se reproducirá a continuación");
         },
-        [isShuffle, currentTrack, generateShuffledQueue, showError]
+        [isShuffle, currentTrack, showError]
     );
 
     const removeFromQueue = useCallback(
         (indexToRemove) => {
-            setQueue((prev) => {
-                const newQ = [...prev];
-                const removed = newQ[indexToRemove];
-                newQ.splice(indexToRemove, 1);
+            const effectiveQueue = isShuffle ? shuffledQueueRef.current : queueRef.current;
+            const removed = effectiveQueue[indexToRemove];
+            if (!removed) return;
+            if (isSameTrack(removed, currentTrack)) {
+                showError("La canción actual no se puede quitar");
+                return;
+            }
 
-                if (isShuffle && removed) {
-                    setShuffledQueue((s) => s.filter((t) => makeTrackKey(t) !== makeTrackKey(removed)));
-                }
-                return newQ;
-            });
+            const canonical = queueRef.current.filter(track => !isSameTrack(track, removed));
+            const shuffled = shuffledQueueRef.current.filter(track => !isSameTrack(track, removed));
+            const nextOriginalIndex = findTrackIndex(canonical, currentTrack);
+            const nextShuffledIndex = findTrackIndex(shuffled, currentTrack);
 
-            if (indexToRemove < indexRef.current) setCurrentIndex((p) => p - 1);
-            if (isShuffle && indexToRemove < shuffledIndexRef.current) setShuffledIndex((p) => p - 1);
+            queueRef.current = canonical;
+            indexRef.current = nextOriginalIndex;
+            shuffledQueueRef.current = shuffled;
+            shuffledIndexRef.current = nextShuffledIndex;
+            setQueue(canonical);
+            setCurrentIndex(nextOriginalIndex);
+            setShuffledQueue(shuffled);
+            setShuffledIndex(nextShuffledIndex);
         },
-        [isShuffle]
+        [isShuffle, currentTrack, showError]
     );
 
     const reorderQueue = useCallback(
         (sourceIndex, destIndex) => {
-            setQueue((prev) => {
-                const result = [...prev];
-                const [removed] = result.splice(sourceIndex, 1);
-                result.splice(destIndex, 0, removed);
+            const source = isShuffle ? shuffledQueueRef.current : queueRef.current;
+            if (sourceIndex < 0 || destIndex < 0 || sourceIndex >= source.length || destIndex >= source.length) return;
+            const result = [...source];
+            const [removed] = result.splice(sourceIndex, 1);
+            result.splice(destIndex, 0, removed);
 
-                if (isShuffle && currentTrack) {
-                    const s = generateShuffledQueue(result, currentTrack);
-                    setShuffledQueue(s);
-                    setShuffledIndex(0);
-                }
-                return result;
-            });
-
-            setCurrentIndex((ci) => {
-                if (ci === sourceIndex) return destIndex;
-                if (ci > sourceIndex && ci <= destIndex) return ci - 1;
-                if (ci < sourceIndex && ci >= destIndex) return ci + 1;
-                return ci;
-            });
+            if (isShuffle) {
+                const nextIndex = findTrackIndex(result, currentTrack);
+                shuffledQueueRef.current = result;
+                shuffledIndexRef.current = nextIndex;
+                setShuffledQueue(result);
+                setShuffledIndex(nextIndex);
+            } else {
+                const nextIndex = findTrackIndex(result, currentTrack);
+                queueRef.current = result;
+                indexRef.current = nextIndex;
+                setQueue(result);
+                setCurrentIndex(nextIndex);
+            }
         },
-        [isShuffle, currentTrack, generateShuffledQueue]
+        [isShuffle, currentTrack]
     );
 
     const clearQueue = useCallback(() => {
-        setQueue([]);
-        setCurrentIndex(-1);
-        setShuffledQueue([]);
-        setShuffledIndex(-1);
-        showError("Cola limpiada");
-    }, [showError]);
+        const current = currentTrack ? prepareQueue([currentTrack], currentTrack)[0] : null;
+        const remaining = current ? [current] : [];
+        queueRef.current = remaining;
+        indexRef.current = current ? 0 : -1;
+        shuffledQueueRef.current = remaining;
+        shuffledIndexRef.current = current ? 0 : -1;
+        setQueue(remaining);
+        setCurrentIndex(current ? 0 : -1);
+        setShuffledQueue(remaining);
+        setShuffledIndex(current ? 0 : -1);
+        clearPrefetch();
+        showError(current ? "Se limpiaron las canciones siguientes" : "Cola limpiada");
+    }, [currentTrack, clearPrefetch, showError]);
 
     const shuffleQueue = useCallback(() => {
         const q = queueRef.current;
         if (!q.length) return;
         const s = generateShuffledQueue(q, currentTrack);
+        setIsShuffle(true);
         setShuffledQueue(s);
         setShuffledIndex(0);
+        shuffledQueueRef.current = s;
+        shuffledIndexRef.current = 0;
         showError("Cola mezclada");
     }, [generateShuffledQueue, currentTrack, showError]);
 
@@ -1480,9 +1595,14 @@ export const PlayerProvider = ({ children }) => {
                 const s = generateShuffledQueue(q, currentTrack);
                 setShuffledQueue(s);
                 setShuffledIndex(0);
+                shuffledQueueRef.current = s;
+                shuffledIndexRef.current = 0;
             } else if (!next && currentTrack) {
                 const idx = findTrackIndex(q, currentTrack);
-                if (idx !== -1) setCurrentIndex(idx);
+                if (idx !== -1) {
+                    indexRef.current = idx;
+                    setCurrentIndex(idx);
+                }
             }
             return next;
         });
@@ -1496,8 +1616,9 @@ export const PlayerProvider = ({ children }) => {
     const RADIO_THRESHOLD = 3; // Generar más cuando quedan 3 o menos tracks
     const RADIO_DEBOUNCE_MS = 5000; // No generar más seguido que cada 5 segundos
 
-    const generateMoreRadioTracks = useCallback(async (seedTrack) => {
+    const generateMoreRadioTracks = useCallback(async (seedTrack, sessionId) => {
         // Evitar múltiples generaciones simultáneas
+        if (sessionId !== queueSessionRef.current) return [];
         if (isGeneratingRadioRef.current) return [];
         if (Date.now() - lastRadioGenerationRef.current < RADIO_DEBOUNCE_MS) return [];
 
@@ -1512,7 +1633,7 @@ export const PlayerProvider = ({ children }) => {
                 includeSeed: false,
             });
             isGeneratingRadioRef.current = false;
-            return newTracks;
+            return sessionId === queueSessionRef.current ? newTracks : [];
         } catch (err) {
             console.warn('[RadioInfinita] Error generating tracks:', err);
             isGeneratingRadioRef.current = false;
@@ -1522,7 +1643,7 @@ export const PlayerProvider = ({ children }) => {
 
     // Efecto que detecta cuando la cola está por terminarse
     useEffect(() => {
-        if (!currentTrack || !isPlaying) return;
+        if (!currentTrack || !isPlaying || playbackContext?.autoExtend !== true) return;
 
         const q = isShuffle ? shuffledQueueRef.current : queueRef.current;
         const i = isShuffle ? shuffledIndexRef.current : indexRef.current;
@@ -1533,18 +1654,16 @@ export const PlayerProvider = ({ children }) => {
 
         // Si quedan pocas canciones, generar más
         if (remainingTracks <= RADIO_THRESHOLD && remainingTracks >= 0) {
-            generateMoreRadioTracks(currentTrack).then((newTracks) => {
+            const sessionId = queueSessionRef.current;
+            const stationSeed = playbackContext.seedTrack || currentTrack;
+            generateMoreRadioTracks(stationSeed, sessionId).then((newTracks) => {
                 if (newTracks.length > 0) {
-                    // Agregar silenciosamente a la cola
-                    setQueue(prev => [...prev, ...newTracks]);
-                    if (isShuffle) {
-                        setShuffledQueue(prev => [...prev, ...newTracks]);
-                    }
+                    appendToQueue(newTracks, { sessionId, silent: true, maxSize: 200 });
                     console.log(`[RadioInfinita] 📻 Added ${newTracks.length} tracks to queue. New total: ${queueRef.current.length + newTracks.length}`);
                 }
             });
         }
-    }, [currentIndex, shuffledIndex, currentTrack, isPlaying, isShuffle, generateMoreRadioTracks]);
+    }, [currentIndex, shuffledIndex, currentTrack, isPlaying, isShuffle, playbackContext, generateMoreRadioTracks, appendToQueue]);
 
     // =========================
     // Next / Prev
@@ -1590,7 +1709,7 @@ export const PlayerProvider = ({ children }) => {
             const i = isShuffle ? shuffledIndexRef.current : indexRef.current;
 
             if (!q?.length) {
-                if (currentTrack && repeatMode === 2) playTrackInternal(currentTrack, [currentTrack], 0);
+                if (currentTrack && repeatMode === 2) playTrackInternal(currentTrack, 0, isShuffle);
                 else {
                     const a = audioRef.current;
                     if (a) a.pause();
@@ -1603,7 +1722,7 @@ export const PlayerProvider = ({ children }) => {
             if (nextIndex >= q.length) {
                 if (repeatMode === 1) nextIndex = 0;
                 else if (repeatMode === 2) {
-                    playTrackInternal(q[i], q, i);
+                    playTrackInternal(q[i], i, isShuffle);
                     return;
                 } else {
                     const a = audioRef.current;
@@ -1616,7 +1735,7 @@ export const PlayerProvider = ({ children }) => {
             if (isShuffle) setShuffledIndex(nextIndex);
             else setCurrentIndex(nextIndex);
 
-            playTrackInternal(q[nextIndex], q, nextIndex);
+            playTrackInternal(q[nextIndex], nextIndex, isShuffle);
             // Preparar +1 ahora; los timers pueden quedar congelados en iOS.
             primeNextFromCache(nextIndex, q);
         },
@@ -1644,7 +1763,7 @@ export const PlayerProvider = ({ children }) => {
             const prevIndex = i - 1;
             if (isShuffle) setShuffledIndex(prevIndex);
             else setCurrentIndex(prevIndex);
-            playTrackInternal(q[prevIndex], q, prevIndex);
+            playTrackInternal(q[prevIndex], prevIndex, isShuffle);
         } else if (a) {
             a.currentTime = 0;
         }
@@ -1720,8 +1839,11 @@ export const PlayerProvider = ({ children }) => {
         if (isAdvancingRef.current) return;
         isAdvancingRef.current = true;
 
-        // Repeat one
-        if (repeatMode === 2) {
+        const forceAdvance = forceAdvanceRef.current;
+        forceAdvanceRef.current = false;
+
+        // Repeat one solo para fin natural; un botón "siguiente" explícito avanza.
+        if (repeatMode === 2 && !forceAdvance) {
             const a = audioRef.current;
             if (a) {
                 a.currentTime = 0;
@@ -1738,6 +1860,7 @@ export const PlayerProvider = ({ children }) => {
         if (prefetchedNextUrl.current && prefetchedNextTrack.current) {
             const nextTrackObj = prefetchedNextTrack.current;
             const nextUrl = prefetchedNextUrl.current;
+            const prefetchedIndex = prefetchedNextIndex.current;
 
             // Limpiar refs de prefetch
             clearPrefetch();
@@ -1745,52 +1868,76 @@ export const PlayerProvider = ({ children }) => {
             const q = isShuffle ? shuffledQueueRef.current : queueRef.current;
             const i = isShuffle ? shuffledIndexRef.current : indexRef.current;
 
-            let nextIndex = i + 1;
-            if (nextIndex >= q.length && repeatMode === 1) nextIndex = 0;
+            let nextIndex = prefetchedIndex;
 
-            // Si por alguna razón no calza, fallback normal
-            if (!q?.length || nextIndex >= q.length) {
+            // La URL preparada solo es válida si pertenece exactamente a la
+            // siguiente posición lógica de esta cola.
+            const expectedIndex = getNextQueuePosition({ length: q?.length || 0, currentIndex: i, repeatMode });
+            if (!q?.length || nextIndex !== expectedIndex || !isSameTrack(q[nextIndex], nextTrackObj)) {
                 isAdvancingRef.current = false;
                 next(true);
                 return;
             }
 
-            // [CIRUGÍA] Eliminado reset de retry counter - no hay reintentos
-
-            const a = audioRef.current;
-            if (a) {
-                // [GAPLESS OPTIMIZADO]
-                // 1. Asignar SRC directamente (sin resetear currentTime ni pause, es automático)
-                a.src = nextUrl;
-                a.preload = "auto"; // Reforzar preload
-                a.load();
-
-                // 2. Intentar PLAY inmediatamente (Estrategia Optimista)
-                // Esto elimina la latencia de esperar el evento 'canplay' via JS.
-                // El navegador maneja el buffer internamente de forma más eficiente.
-                const playPromise = a.play();
-
-                if (playPromise !== undefined) {
-                    playPromise.catch(err => {
-                        console.warn("[PlayerContext] Gapless play deferred (buffering or iOS restriction):", err);
-
-                        // Fallback para iOS/Slow Network: Esperar a que sea reproducible
-                        const playWhenReady = () => {
-                            a.play().catch(() => showError("Toca play para continuar"));
-                        };
-                        a.addEventListener('canplay', playWhenReady, { once: true });
-                    });
-                }
-            }
-
             setCurrentTrack(nextTrackObj);
-            if (isShuffle) setShuffledIndex(nextIndex);
-            else setCurrentIndex(nextIndex);
+            currentTrackRef.current = nextTrackObj;
+            if (isShuffle) {
+                shuffledIndexRef.current = nextIndex;
+                setShuffledIndex(nextIndex);
+            } else {
+                indexRef.current = nextIndex;
+                setCurrentIndex(nextIndex);
+            }
             setPlayed(0);
             setCurrentTime(0);
 
             // [FIX #6] Sincronizar índices
             syncIndicesByTrackId(nextTrackObj.id, nextTrackObj);
+
+            const activePlayer = audioRef.current;
+            const preparedPlayer = nextAudioRef.current;
+            const preparedUrl = preparedPlayer?.currentSrc || preparedPlayer?.src || '';
+            const canSwapPreparedPlayer = Boolean(
+                preparedPlayer
+                && preparedUrl === nextUrl
+                && preparedPlayer.readyState >= 2,
+            );
+
+            let playerToStart = activePlayer;
+            if (canSwapPreparedPlayer && activePlayer) {
+                // La pista ya está cargada en el segundo elemento. Convertirlo
+                // en el activo evita volver a solicitar el audio al suspender iOS.
+                audioListenersCleanupRef.current?.();
+                audioRef.current = preparedPlayer;
+                nextAudioRef.current = activePlayer;
+                playerToStart = preparedPlayer;
+                playerToStart.volume = volumeRef.current;
+                audioListenersCleanupRef.current = setupAudioEvents(playerToStart);
+
+                try {
+                    activePlayer.pause();
+                    activePlayer.removeAttribute('src');
+                    activePlayer.load();
+                } catch { /* El player anterior ya terminó. */ }
+            } else if (playerToStart) {
+                playerToStart.src = nextUrl;
+                playerToStart.preload = "auto";
+                playerToStart.load();
+            }
+
+            if (playerToStart) {
+                activePlaybackLoadRef.current = true;
+                const playPromise = playerToStart.play();
+                playPromise?.catch((err) => {
+                    console.warn("[PlayerContext] Reproducción siguiente diferida:", err);
+                    const playWhenReady = () => {
+                        playerToStart.play().catch(() => showError("Abre la app y toca play para continuar"));
+                    };
+                    playerToStart.addEventListener('canplay', playWhenReady, { once: true });
+                }).finally(() => {
+                    activePlaybackLoadRef.current = false;
+                });
+            }
 
             // Preparar la pista posterior de forma síncrona antes de que iOS
             // vuelva a suspender la ejecución en segundo plano.
@@ -1807,7 +1954,7 @@ export const PlayerProvider = ({ children }) => {
         // Fallback normal
         isAdvancingRef.current = false;
         next(true);
-    }, [repeatMode, isShuffle, next, nextRequestId, syncIndicesByTrackId, showError, clearPrefetch, primeNextFromCache, runAggressivePrefetch]);
+    }, [repeatMode, isShuffle, next, nextRequestId, syncIndicesByTrackId, showError, clearPrefetch, primeNextFromCache, runAggressivePrefetch, setupAudioEvents]);
 
     // Actualizar ref de ended handler
     useEffect(() => {
@@ -1901,7 +2048,14 @@ export const PlayerProvider = ({ children }) => {
             audioRef.current?.pause();
         };
         const handlePreviousTrack = () => previousRef.current?.();
-        const handleNextTrack = () => skipRef.current?.(false);
+        const handleNextTrack = () => {
+            if (prefetchedNextUrl.current && prefetchedNextTrack.current) {
+                forceAdvanceRef.current = true;
+                handleAudioEndedInternalRef.current?.();
+            } else {
+                skipRef.current?.(false);
+            }
+        };
 
         // [FIX #8] seekto con clamp
         const handleSeekTo = (details) => {
@@ -2054,6 +2208,7 @@ export const PlayerProvider = ({ children }) => {
             clearListeningHistory,
 
             addToQueue,
+            appendToQueue,
             playNextInQueue,
             removeFromQueue,
             reorderQueue,
@@ -2100,6 +2255,7 @@ export const PlayerProvider = ({ children }) => {
             toggleHistoryPaused,
             clearListeningHistory,
             addToQueue,
+            appendToQueue,
             playNextInQueue,
             removeFromQueue,
             reorderQueue,
@@ -2125,6 +2281,7 @@ export const PlayerProvider = ({ children }) => {
             toggleRepeat,
             toggleQueue,
             addToQueue,
+            appendToQueue,
             playNextInQueue,
             removeFromQueue,
             reorderQueue,
@@ -2142,6 +2299,7 @@ export const PlayerProvider = ({ children }) => {
             toggleRepeat,
             toggleQueue,
             addToQueue,
+            appendToQueue,
             playNextInQueue,
             removeFromQueue,
             reorderQueue,

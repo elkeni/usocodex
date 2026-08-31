@@ -131,7 +131,7 @@ export default function ArtistDetail() {
     }, [name, retryKey]);
 
     // ⭐ Función para reproducir una canción
-    const handlePlayTrack = useCallback(async (track) => {
+    const handlePlayTrack = useCallback(async (track, forceShuffle = false) => {
         if (playingTrackId) return;
 
         const trackId = track.id || track.name;
@@ -173,8 +173,14 @@ export default function ArtistDetail() {
                     duration: trackDuration,
                     url: audioUrl,
                     urlSource: resolvedUrl ? 'resolved' : 'preview',
+                    urlResolvedAt: resolvedUrl ? Date.now() : null,
                     album: track.album || 'Top Hits'
-                }, artistQueue);
+                }, artistQueue, {
+                    id: `artist-${artistInfo?.id || name}`,
+                    type: 'artist',
+                    name: artistInfo?.name || name,
+                    autoExtend: false,
+                }, forceShuffle);
             }
         } catch (e) {
             console.error("[ArtistDetail] Error reproduciendo:", e);
@@ -263,8 +269,8 @@ export default function ArtistDetail() {
                             className="artist-action-btn secondary shuffle-btn"
                             onClick={() => {
                                 if (topTracks.length > 0) {
-                                    const shuffled = [...topTracks].sort(() => Math.random() - 0.5);
-                                    handlePlayTrack(shuffled[0]);
+                                    const randomTrack = topTracks[Math.floor(Math.random() * topTracks.length)];
+                                    handlePlayTrack(randomTrack, true);
                                 }
                             }}
                             disabled={topTracks.length === 0}

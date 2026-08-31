@@ -103,6 +103,11 @@ const Icons = {
             <path d="M19 6.41L17.59 5 12 10.59 6.41 5 5 6.41 10.59 12 5 17.59 6.41 19 12 13.41 17.59 19 19 17.59 13.41 12z" />
         </svg>
     ),
+    Remove: () => (
+        <svg viewBox="0 0 24 24">
+            <path d="M6 7h12v2H6V7zm2 3h8l-1 10H9L8 10zm2-6h4l1 2H9l1-2z" />
+        </svg>
+    ),
     MusicNote: () => (
         <svg viewBox="0 0 24 24">
             <path d="M12 3v10.55c-.59-.34-1.27-.55-2-.55-2.21 0-4 1.79-4 4s1.79 4 4 4 4-1.79 4-4V7h4V3h-6z" />
@@ -251,15 +256,20 @@ const LyricLine = memo(({ line, isActive, isPast, onClick }) => {
 /**
  * Item de cola
  */
-const QueueItem = memo(({ track, isCurrent, onClick }) => {
+const QueueItem = memo(({ track, isCurrent, onClick, onRemove }) => {
     const image = getTrackImage(track);
     const title = getTrackTitle(track) || 'Sin título';
     const artist = getTrackArtist(track) || 'Artista desconocido';
 
     return (
-        <button type="button"
+        <div
             className={`ytm-queue-item${isCurrent ? ' current' : ''}`}
             onClick={onClick}
+            onKeyDown={(event) => {
+                if (event.key === 'Enter' || event.key === ' ') onClick();
+            }}
+            role="button"
+            tabIndex={0}
             aria-current={isCurrent ? 'true' : undefined}
         >
             <div className="ytm-queue-item__artwork">
@@ -278,7 +288,20 @@ const QueueItem = memo(({ track, isCurrent, onClick }) => {
                     <Icons.Equalizer />
                 </div>
             )}
-        </button>
+            {!isCurrent && (
+                <button
+                    type="button"
+                    className="ytm-queue-item__remove"
+                    aria-label={`Quitar ${title} de la cola`}
+                    onClick={(event) => {
+                        event.stopPropagation();
+                        onRemove();
+                    }}
+                >
+                    <Icons.Remove />
+                </button>
+            )}
+        </div>
     );
 });
 
@@ -311,7 +334,9 @@ export default function Player() {
         seekTo,
         toggleShuffle,
         toggleRepeat,
-        playTrack
+        playTrack,
+        removeFromQueue,
+        clearQueue,
     } = usePlayer();
 
     // Contexto de Usuario (Favoritos y Playlists)
@@ -607,9 +632,9 @@ export default function Player() {
     }, []);
 
     const handleQueueItemClick = useCallback((track, index) => {
-        playTrack(track, queue);
+        playTrack(track);
         setIsQueueOpen(false);
-    }, [playTrack, queue]);
+    }, [playTrack]);
 
     // Progress bar seeking
     const handleProgressStart = useCallback((e) => {
@@ -1077,6 +1102,11 @@ export default function Player() {
 
                 <div className="ytm-queue-sheet__header">
                     <h2 id="player-queue-title" className="ytm-queue-sheet__title">Cola de reproducción</h2>
+                    {queue.length > 1 && (
+                        <button type="button" className="ytm-queue-sheet__clear" onClick={clearQueue}>
+                            Limpiar siguientes
+                        </button>
+                    )}
                     <button
                         className="ytm-queue-sheet__close"
                         onClick={handleQueueClose}
@@ -1095,6 +1125,7 @@ export default function Player() {
                             track={track}
                             isCurrent={index === currentIndex}
                             onClick={() => handleQueueItemClick(track, index)}
+                            onRemove={() => removeFromQueue(index)}
                         />
                     ))}
                 </div>

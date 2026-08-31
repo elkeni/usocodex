@@ -186,7 +186,7 @@ export default function AlbumDetail() {
         return () => { cancelled = true; };
     }, [albumId, artist, name, retryKey]);
 
-    const handlePlayTrack = useCallback(async (track, queueSource = tracks) => {
+    const handlePlayTrack = useCallback(async (track, queueSource = tracks, forceShuffle = false) => {
         if (playingTrackId) return;
 
         const trackId = track.id || track.name;
@@ -236,8 +236,14 @@ export default function AlbumDetail() {
                     duration: trackDuration,
                     url: audioUrl,
                     urlSource: resolvedUrl ? 'resolved' : 'preview',
+                    urlResolvedAt: resolvedUrl ? Date.now() : null,
                     album: albumInfo?.name || name
-                }, fullQueue);
+                }, fullQueue, {
+                    id: `album-${albumInfo?.id || name}`,
+                    type: 'album',
+                    name: albumInfo?.name || name,
+                    autoExtend: false,
+                }, forceShuffle);
             } else {
                 setPlaybackError(`No encontramos audio disponible para “${trackName}”.`);
             }
@@ -258,7 +264,7 @@ export default function AlbumDetail() {
     const handleShuffle = useCallback(() => {
         if (tracks.length > 0) {
             const shuffled = shuffleAlbumTracks(tracks);
-            handlePlayTrack(shuffled[0], shuffled);
+            handlePlayTrack(shuffled[0], tracks, true);
         }
     }, [tracks, handlePlayTrack]);
 

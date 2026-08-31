@@ -400,7 +400,7 @@ const buildRecentlyPlayed = (history) => {
 // Main Feed Component
 export default function Feed() {
   const navigate = useNavigate();
-  const { playTrack, addToQueue } = usePlayerActions();
+  const { playTrack, appendToQueue } = usePlayerActions();
   const playerState = usePlayer();
   const { user, favorites, playlists, savedArtists, savedAlbums, loading: userLoading } = useUser();
   const artistRadioRequestRef = useRef(0);
@@ -584,7 +584,7 @@ export default function Feed() {
     // Si ya viene con una cola, usarla directamente
     if (contextQueue?.length > 1) {
       console.log('[handlePlay] Using provided contextQueue, skipping radio');
-      playTrack(item, contextQueue);
+      playTrack(item, contextQueue, { id: 'feed-selection', type: 'collection', autoExtend: false });
       return;
     }
 
@@ -596,7 +596,13 @@ export default function Feed() {
     // 1️⃣ REPRODUCIR INMEDIATAMENTE (sin esperar la radio)
     // ⭐ USA LA IMAGEN XL PARA EL REPRODUCTOR
     const trackToPlay = { ...item, image: item.image_xl || item.image };
-    playTrack(trackToPlay, [trackToPlay]);
+    const queueSessionId = playTrack(trackToPlay, [trackToPlay], {
+      id: `radio-${makeTrackKey(trackToPlay)}`,
+      type: 'radio',
+      name: `Radio de ${trackToPlay.artist || trackToPlay.name}`,
+      autoExtend: true,
+      seedTrack: trackToPlay,
+    });
     console.log('[handlePlay] ✅ Track playing NOW!');
 
     // 2️⃣ GENERAR RADIO EN SEGUNDO PLANO (1 segundo después)
@@ -616,9 +622,10 @@ export default function Feed() {
           console.log(`[handlePlay] 🎵 Adding ${tracksToAdd.length} tracks to queue automatically`);
 
           // Agregar cada track a la cola, asegurando imagen XL
-          tracksToAdd.forEach(track => {
-            addToQueue({ ...track, image: track.image_xl || track.image });
-          });
+          appendToQueue(
+            tracksToAdd.map(track => ({ ...track, image: track.image_xl || track.image })),
+            { sessionId: queueSessionId, silent: true, maxSize: 200 },
+          );
 
           console.log(`[handlePlay] ✅ Radio complete! ${tracksToAdd.length} tracks added to queue`);
         } else {
@@ -629,7 +636,7 @@ export default function Feed() {
       }
     }, 1000); // Esperar 1 segundo después de que la canción comience
 
-  }, [navigate, playTrack, addToQueue, buildInstantRadio]);
+  }, [navigate, playTrack, appendToQueue, buildInstantRadio]);
 
   // =========================================================================
   // 🎵 ARTIST RADIO: Genera radio prácticamente infinita basada en un artista
@@ -652,7 +659,13 @@ export default function Feed() {
     // La canción semilla empieza primero; ampliar la radio nunca bloquea la reproducción.
     const trackToPlay = normalizeItem(seedTrack, 'track') || seedTrack;
     recordProductEvent(PRODUCT_EVENTS.RADIO_STARTED);
-    playTrack(trackToPlay, [trackToPlay]);
+    const queueSessionId = playTrack(trackToPlay, [trackToPlay], {
+      id: `radio-${makeTrackKey(trackToPlay)}`,
+      type: 'radio',
+      name: `Radio de ${trackToPlay.artist || trackToPlay.name}`,
+      autoExtend: true,
+      seedTrack: trackToPlay,
+    });
     showToast(`Reproduciendo ${artist.name}. Completando la radio...`, artist.image, true);
 
     try {
@@ -668,9 +681,10 @@ export default function Feed() {
 
       if (requestId !== artistRadioRequestRef.current) return;
 
-      additionalTracks.forEach((track) => {
-        addToQueue({ ...track, image: track.image_xl || track.image }, true);
-      });
+      appendToQueue(
+        additionalTracks.map(track => ({ ...track, image: track.image_xl || track.image })),
+        { sessionId: queueSessionId, silent: true, maxSize: 200 },
+      );
 
       showToast(
         additionalTracks.length > 0
@@ -684,7 +698,7 @@ export default function Feed() {
         showToast(`Radio de ${artist.name} iniciada. No pudimos ampliar la cola.`, artist.image);
       }
     }
-  }, [playTrack, addToQueue, showToast]);
+  }, [playTrack, appendToQueue, showToast]);
 
   const applyCacheIfValid = useCallback(() => {
     const cached = safeJsonParse(cacheKey, null);

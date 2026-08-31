@@ -1100,6 +1100,8 @@
 
 /* Queue Item */
 .ytm-queue-item {
+    content-visibility: auto;
+    contain-intrinsic-size: 72px;
     width: 100%;
     border: 0;
     color: inherit;
@@ -1948,6 +1950,35 @@
     height: 100%;
     background: #fff;
     border-radius: 2px;
+}
+
+.ytm-queue-item__remove {
+    width: 40px;
+    height: 40px;
+    display: grid;
+    place-items: center;
+    flex: 0 0 auto;
+    border: 0;
+    border-radius: 50%;
+    color: rgba(255, 255, 255, 0.64);
+    background: transparent;
+}
+
+.ytm-queue-item__remove svg {
+    width: 20px;
+    height: 20px;
+    fill: currentColor;
+}
+
+.ytm-queue-sheet__clear {
+    margin-left: auto;
+    border: 0;
+    background: transparent;
+    color: var(--ytm-accent, #ff2d78);
+    font: inherit;
+    font-size: 0.82rem;
+    font-weight: 700;
+    padding: 10px 8px;
 }
 
 .ytm-dock__open {
