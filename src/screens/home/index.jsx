@@ -6,6 +6,7 @@ import PageState from '../../components/shared/PageState';
 import NotFound from '../../components/shared/NotFound';
 import { useUser } from '../../context/userContext';
 import { usePlayer } from '../../context/playerContext';
+import useAppViewport from '../../hooks/useAppViewport';
 import './home.css';
 
 const Feed = lazy(() => import('../feed/feed'));
@@ -22,6 +23,8 @@ function RouteLoader() {
 }
 
 export default function Home() {
+  useAppViewport();
+
   const location = useLocation();
   const navigate = useNavigate();
   const { user } = useUser();
