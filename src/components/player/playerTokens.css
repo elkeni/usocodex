@@ -10,22 +10,22 @@
     /* ==========================================
        CORE PALETTE - YouTube Music Inspired
        ========================================== */
-    --ytm-bg: #030303;
-    --ytm-bg-elevated: #0d0d0d;
-    --ytm-surface: #121212;
-    --ytm-surface-variant: #1a1a1a;
-    --ytm-surface-hover: #242424;
+    --ytm-bg: #070609;
+    --ytm-bg-elevated: #100e13;
+    --ytm-surface: rgba(26, 23, 29, 0.88);
+    --ytm-surface-variant: #211e24;
+    --ytm-surface-hover: #302b33;
 
     /* Text Colors */
     --ytm-text-primary: #ffffff;
-    --ytm-text-secondary: #aaaaaa;
-    --ytm-text-tertiary: #717171;
-    --ytm-text-disabled: #4d4d4d;
+    --ytm-text-secondary: #d1cdd4;
+    --ytm-text-tertiary: #99939e;
+    --ytm-text-disabled: #68626c;
 
     /* Accent Colors */
-    --ytm-accent: #ff0000;
-    --ytm-accent-soft: rgba(255, 0, 0, 0.15);
-    --ytm-like-active: #3ea6ff;
+    --ytm-accent: #ff3d7f;
+    --ytm-accent-soft: rgba(255, 61, 127, 0.18);
+    --ytm-like-active: #ff4d7d;
 
     /* Borders & Dividers */
     --ytm-border: rgba(255, 255, 255, 0.1);

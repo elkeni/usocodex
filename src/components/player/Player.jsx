@@ -197,7 +197,13 @@ const getTrackTitle = (track) => {
  * Obtiene el artista del track
  */
 const getTrackArtist = (track) => {
-    return track?.artist;
+    if (typeof track?.artist === 'string') return track.artist;
+    return track?.artist?.name || track?.artist?.['#text'] || '';
+};
+
+const getTrackAlbum = (track) => {
+    if (typeof track?.album === 'string') return track.album;
+    return track?.album?.name || track?.album?.title || '';
 };
 
 /**
@@ -328,6 +334,7 @@ export default function Player() {
         currentIndex,
         isShuffle,
         repeatMode,
+        playbackContext,
         togglePlay,
         next,
         prev,
@@ -399,10 +406,15 @@ export default function Player() {
     // ========================================================================
     const trackImage = useMemo(() => getTrackImage(currentTrack), [currentTrack]);
     const trackTitle = getTrackTitle(currentTrack) || 'Sin título';
-    const trackArtist = getTrackArtist(currentTrack) || 'Artista desconocido';
-    const trackAlbum = currentTrack?.album || '';
+    const trackArtistName = getTrackArtist(currentTrack);
+    const trackArtist = trackArtistName || 'Artista desconocido';
+    const trackAlbum = getTrackAlbum(currentTrack);
     const currentTimeSeconds = played * duration;
     const progressPercent = duration > 0 ? (played * 100) : 0;
+    const repeatLabel = repeatMode === 2 ? 'Repetir esta canción' : repeatMode === 1 ? 'Repetir toda la cola' : 'Activar repetición';
+    const queuePosition = currentIndex >= 0 && queue.length > 0
+        ? `${currentIndex + 1} de ${queue.length}`
+        : `${queue.length} canciones`;
 
     // Letras parseadas
     const parsedLyrics = useMemo(() => {
@@ -450,31 +462,33 @@ export default function Player() {
 
     // Cargar info del artista
     useEffect(() => {
-        if (!currentTrack?.artist) {
+        const artistName = trackArtistName;
+        if (!artistName) {
             setArtistInfo(null);
             return;
         }
 
-        getArtistInfo(currentTrack.artist)
+        getArtistInfo(artistName)
             .then(info => {
                 if (info) setArtistInfo(info);
             })
             .catch(() => { });
-    }, [currentTrack?.artist]);
+    }, [trackArtistName]);
 
     // Cargar More About Artist (Top Tracks with Variety)
     useEffect(() => {
-        if (!currentTrack?.artist) {
+        const artistName = trackArtistName;
+        if (!artistName) {
             setArtistTracks([]);
             return;
         }
 
         // Pedimos más canciones (20) para tener de donde elegir y variar
-        artistGetTopTracks({ artist: currentTrack.artist, limit: 20 })
+        artistGetTopTracks({ artist: artistName, limit: 20 })
             .then(data => {
                 const tracks = data?.toptracks?.track || [];
                 // Filtrar el track actual
-                const filtered = tracks.filter(t => t.name?.toLowerCase() !== currentTrack.name?.toLowerCase());
+                const filtered = tracks.filter(t => t.name?.toLowerCase() !== trackTitle.toLowerCase());
 
                 // Shuffle simple para aleatorizar el orden
                 const shuffled = filtered.sort(() => 0.5 - Math.random());
@@ -483,22 +497,24 @@ export default function Player() {
                 setArtistTracks(shuffled.slice(0, 5));
             })
             .catch(() => setArtistTracks([]));
-    }, [currentTrack?.artist, currentTrack?.name]); // Se ejecuta al cambiar la canción
+    }, [trackArtistName, trackTitle]); // Se ejecuta al cambiar la canción
 
     // Cargar creditos (info del album)
     useEffect(() => {
-        if (!currentTrack?.album || !currentTrack?.artist) {
+        const albumName = trackAlbum;
+        const artistName = trackArtistName;
+        if (!albumName || !artistName) {
             setCredits(null);
             return;
         }
 
         setCredits(null);
-        getAlbumDetails(currentTrack.album, currentTrack.artist)
+        getAlbumDetails(albumName, artistName)
             .then(data => {
                 if (data) setCredits(data);
             })
             .catch(() => { });
-    }, [currentTrack?.album, currentTrack?.artist]);
+    }, [trackAlbum, trackArtistName]);
 
     // Sincronizar letras con el tiempo actual
     useEffect(() => {
@@ -583,29 +599,30 @@ export default function Player() {
 
     const handleMenuOpen = useCallback(() => {
         setMenuView('main'); // Reset view on open
+        setIsQueueOpen(false);
         setIsMenuOpen(true);
     }, []);
     const handleMenuClose = useCallback(() => setIsMenuOpen(false), []);
 
     const handleViewArtist = useCallback(() => {
-        if (currentTrack?.artist) {
-            navigate(getArtistPath({ id: currentTrack.artistId, name: currentTrack.artist }));
+        if (trackArtistName) {
+            navigate(getArtistPath({ id: currentTrack.artistId, name: trackArtistName }));
             closeFullscreen();
             handleMenuClose();
         }
-    }, [currentTrack, navigate, closeFullscreen, handleMenuClose]);
+    }, [currentTrack, trackArtistName, navigate, closeFullscreen, handleMenuClose]);
 
     const handleViewAlbum = useCallback(() => {
-        if (currentTrack?.artist && currentTrack?.album) {
+        if (trackArtistName && trackAlbum) {
             navigate(getAlbumPath({
                 id: currentTrack.albumId,
-                name: currentTrack.album,
-                artist: currentTrack.artist,
+                name: trackAlbum,
+                artist: trackArtistName,
             }));
             closeFullscreen();
             handleMenuClose();
         }
-    }, [currentTrack, navigate, closeFullscreen, handleMenuClose]);
+    }, [currentTrack, trackArtistName, trackAlbum, navigate, closeFullscreen, handleMenuClose]);
 
     const handlePlayMoreAbout = useCallback((track) => {
         playTrack(track, artistTracks);
@@ -624,6 +641,7 @@ export default function Player() {
     }, [currentTrack, addTrackToPlaylist, handleMenuClose, notify]);
 
     const handleQueueOpen = useCallback(() => {
+        setIsMenuOpen(false);
         setIsQueueOpen(true);
     }, []);
 
@@ -631,7 +649,7 @@ export default function Player() {
         setIsQueueOpen(false);
     }, []);
 
-    const handleQueueItemClick = useCallback((track, index) => {
+    const handleQueueItemClick = useCallback((track) => {
         playTrack(track);
         setIsQueueOpen(false);
     }, [playTrack]);
@@ -639,7 +657,7 @@ export default function Player() {
     // Progress bar seeking
     const handleProgressStart = useCallback((e) => {
         setIsSeeking(true);
-        setIsSeeking(true);
+        e.currentTarget.setPointerCapture?.(e.pointerId);
         const fraction = calculateSeekFraction(e);
         setSeekValue(fraction * 100);
     }, []);
@@ -657,9 +675,28 @@ export default function Player() {
         setIsSeeking(false);
     }, [isSeeking, seekTo]);
 
+    const handleProgressCancel = useCallback(() => {
+        setIsSeeking(false);
+    }, []);
+
+    const handleProgressKeyDown = useCallback((event) => {
+        if (!duration) return;
+        const step = 5;
+        let nextTime = currentTimeSeconds;
+
+        if (event.key === 'ArrowLeft' || event.key === 'ArrowDown') nextTime -= step;
+        else if (event.key === 'ArrowRight' || event.key === 'ArrowUp') nextTime += step;
+        else if (event.key === 'Home') nextTime = 0;
+        else if (event.key === 'End') nextTime = duration;
+        else return;
+
+        event.preventDefault();
+        seekTo(Math.max(0, Math.min(nextTime, duration)) / duration);
+    }, [currentTimeSeconds, duration, seekTo]);
+
     // Drawer gestures (swipe down to close)
     const handleDragStart = useCallback((e) => {
-        // Solo iniciar drag desde el header o hero
+        if (e.target.closest('button')) return;
         const target = e.target;
         const isScrollable = target.closest('.ytm-scroll');
         const scrollEl = fullscreenRef.current?.querySelector('.ytm-scroll');
@@ -710,6 +747,10 @@ export default function Player() {
             seekTo(fraction);
         }
     }, [hasSyncedLyrics, duration, seekTo]);
+
+    const handleLyricsOpen = useCallback(() => {
+        if (parsedLyrics.length > 0) setIsLyricsOpen(true);
+    }, [parsedLyrics.length]);
 
     // ========================================================================
     // RENDER CONDITIONS
@@ -781,21 +822,24 @@ export default function Player() {
                 ============================================================ */}
             <div
                 ref={fullscreenRef}
-                className={`ytm-fullscreen${playerView === 'fullscreen' ? ' open' : ''}${isDragging ? ' dragging' : ''}`}
+                className={`ytm-fullscreen${playerView === 'fullscreen' ? ' open' : ''}${isDragging ? ' dragging' : ''}${isPlaying ? ' is-playing' : ''}`}
+                style={{ '--track-image': `url(${trackImage || ''})` }}
                 role="dialog"
                 aria-modal={playerView === 'fullscreen' ? 'true' : undefined}
                 aria-hidden={playerView !== 'fullscreen'}
                 aria-label="Reproductor en pantalla completa"
-                onTouchStart={handleDragStart}
-                onTouchMove={handleDragMove}
-                onTouchEnd={handleDragEnd}
-                onMouseDown={handleDragStart}
-                onMouseMove={handleDragMove}
-                onMouseUp={handleDragEnd}
-                onMouseLeave={handleDragEnd}
             >
                 {/* Header */}
-                <header className="ytm-header">
+                <header
+                    className="ytm-header"
+                    onTouchStart={handleDragStart}
+                    onTouchMove={handleDragMove}
+                    onTouchEnd={handleDragEnd}
+                    onMouseDown={handleDragStart}
+                    onMouseMove={handleDragMove}
+                    onMouseUp={handleDragEnd}
+                    onMouseLeave={handleDragEnd}
+                >
                     <button
                         className="ytm-header__btn"
                         onClick={closeFullscreen}
@@ -804,12 +848,16 @@ export default function Player() {
                         <Icons.ChevronDown />
                     </button>
 
-                    <span className="ytm-header__title">REPRODUCIENDO</span>
+                    <div className="ytm-header__copy">
+                        <span className="ytm-header__title">REPRODUCIENDO</span>
+                        <span className="ytm-header__context">{playbackContext?.name || queuePosition}</span>
+                    </div>
 
                     <button
                         className="ytm-header__btn"
                         onClick={handleMenuOpen}
                         aria-label="Más opciones"
+                        aria-expanded={isMenuOpen}
                     >
                         <Icons.MoreVert />
                     </button>
@@ -821,11 +869,11 @@ export default function Player() {
                     <section className="ytm-hero">
                         <div
                             className="ytm-hero-ambient"
-                            style={{ '--track-image': `url(${trackImage || ''})` }}
+                            aria-hidden="true"
                         />
                         <div className="ytm-artwork">
                             {trackImage ? (
-                                <img src={trackImage} alt="" />
+                                <img src={trackImage} alt={`Portada de ${trackTitle}`} />
                             ) : (
                                 <Icons.MusicNote />
                             )}
@@ -834,13 +882,21 @@ export default function Player() {
                         <div className="ytm-meta">
                             <div className="ytm-meta__text">
                                 <h1 className="ytm-meta__title">{trackTitle}</h1>
-                                <p className="ytm-meta__artist">{trackArtist}</p>
+                                <button type="button" className="ytm-meta__artist" onClick={handleViewArtist}>
+                                    {trackArtist}
+                                </button>
+                                {trackAlbum && (
+                                    <button type="button" className="ytm-meta__album" onClick={handleViewAlbum}>
+                                        {trackAlbum}
+                                    </button>
+                                )}
                             </div>
 
                             <button
                                 className={`ytm-meta__like${isLiked ? ' active' : ''}`}
                                 onClick={handleLike}
                                 aria-label={isLiked ? 'Quitar me gusta' : 'Me gusta'}
+                                aria-pressed={isLiked}
                             >
                                 {isLiked ? <Icons.Heart /> : <Icons.HeartOutline />}
                             </button>
@@ -851,13 +907,18 @@ export default function Player() {
                     <div className="ytm-progress">
                         <div
                             className={`ytm-progress__track${isSeeking ? ' active' : ''}`}
-                            onMouseDown={handleProgressStart}
-                            onMouseMove={handleProgressMove}
-                            onMouseUp={handleProgressEnd}
-                            onMouseLeave={() => isSeeking && handleProgressEnd({ clientX: 0 })}
-                            onTouchStart={handleProgressStart}
-                            onTouchMove={handleProgressMove}
-                            onTouchEnd={handleProgressEnd}
+                            role="slider"
+                            tabIndex={0}
+                            aria-label="Progreso de la canción"
+                            aria-valuemin={0}
+                            aria-valuemax={Math.round(duration || 0)}
+                            aria-valuenow={Math.round(displayTime || 0)}
+                            aria-valuetext={`${formatTime(displayTime)} de ${formatTime(duration)}`}
+                            onPointerDown={handleProgressStart}
+                            onPointerMove={handleProgressMove}
+                            onPointerUp={handleProgressEnd}
+                            onPointerCancel={handleProgressCancel}
+                            onKeyDown={handleProgressKeyDown}
                         >
                             <div className="ytm-progress__bg">
                                 <div
@@ -892,7 +953,8 @@ export default function Player() {
                         <button
                             className={`ytm-ctrl-btn${isShuffle ? ' active' : ''}`}
                             onClick={handleToggleShuffle}
-                            aria-label="Aleatorio"
+                            aria-label={isShuffle ? 'Desactivar aleatorio' : 'Activar aleatorio'}
+                            aria-pressed={isShuffle}
                         >
                             <Icons.Shuffle />
                         </button>
@@ -930,9 +992,33 @@ export default function Player() {
                         <button
                             className={`ytm-ctrl-btn${repeatMode > 0 ? ' active' : ''}`}
                             onClick={handleToggleRepeat}
-                            aria-label="Repetir"
+                            aria-label={repeatLabel}
+                            aria-pressed={repeatMode > 0}
                         >
                             {repeatMode === 2 ? <Icons.RepeatOne /> : <Icons.Repeat />}
+                        </button>
+                    </div>
+
+                    <div className="ytm-quick-actions" aria-label="Acciones de reproducción">
+                        <button
+                            type="button"
+                            className="ytm-quick-action"
+                            onClick={handleQueueOpen}
+                            aria-expanded={isQueueOpen}
+                        >
+                            <Icons.Queue />
+                            <span>Cola</span>
+                            <span className="ytm-quick-action__detail">{queuePosition}</span>
+                        </button>
+                        <button
+                            type="button"
+                            className="ytm-quick-action"
+                            onClick={handleLyricsOpen}
+                            disabled={lyricsLoading || parsedLyrics.length === 0}
+                        >
+                            <Icons.MusicNote />
+                            <span>{lyricsLoading ? 'Buscando letra' : 'Letra'}</span>
+                            <span className="ytm-quick-action__detail">{hasSyncedLyrics ? 'Sincronizada' : parsedLyrics.length ? 'Disponible' : 'No disponible'}</span>
                         </button>
                     </div>
 
@@ -947,8 +1033,9 @@ export default function Player() {
                             </div>
                             <button
                                 className="ytm-lyrics__expand-btn"
-                                onClick={() => setIsLyricsOpen(true)}
+                                onClick={handleLyricsOpen}
                                 aria-label="Pantalla completa"
+                                disabled={parsedLyrics.length === 0}
                             >
                                 <Icons.Maximize />
                             </button>
@@ -983,7 +1070,8 @@ export default function Player() {
                     {/* About Artist */}
                     {/* About Artist */}
                     {artistInfo && (
-                        <section
+                        <button
+                            type="button"
                             className="ytm-about"
                             onClick={() => setIsArtistSheetOpen(true)}
                         >
@@ -1003,7 +1091,7 @@ export default function Player() {
                             <div className="ytm-about__arrow">
                                 <Icons.ChevronRight />
                             </div>
-                        </section>
+                        </button>
                     )}
 
                     {/* More About Artist (Top Tracks) */}
@@ -1012,7 +1100,8 @@ export default function Player() {
                             <h3 className="ytm-moreaboutartist__title">Más de {trackArtist}</h3>
                             <div className="ytm-moreaboutartist__list">
                                 {artistTracks.map((track, i) => (
-                                    <div
+                                    <button
+                                        type="button"
                                         key={track.id || i}
                                         className="ytm-moreaboutartist__item"
                                         onClick={() => handlePlayMoreAbout(track)}
@@ -1024,7 +1113,7 @@ export default function Player() {
                                             <div className="ytm-moreaboutartist__track">{track.name}</div>
                                             <div className="ytm-moreaboutartist__album">{track.album?.title || track.album || 'Sencillo'}</div>
                                         </div>
-                                    </div>
+                                    </button>
                                 ))}
                             </div>
                         </section>
@@ -1073,14 +1162,6 @@ export default function Player() {
                     </section>
                 </div>
 
-                {/* Queue FAB */}
-                <button
-                    className="ytm-queue-fab"
-                    onClick={handleQueueOpen}
-                    aria-label="Cola de reproducción"
-                >
-                    <Icons.Queue />
-                </button>
             </div>
 
             {/* ============================================================
@@ -1124,7 +1205,7 @@ export default function Player() {
                             key={`${track.id || 'unknown'}-${index}`}
                             track={track}
                             isCurrent={index === currentIndex}
-                            onClick={() => handleQueueItemClick(track, index)}
+                            onClick={() => handleQueueItemClick(track)}
                             onRemove={() => removeFromQueue(index)}
                         />
                     ))}
@@ -1156,6 +1237,7 @@ export default function Player() {
                         }}>
                             <button
                                 onClick={() => setMenuView('main')}
+                                aria-label="Volver a opciones"
                                 style={{
                                     background: 'transparent', border: 'none', color: '#aaa',
                                     display: 'flex', alignItems: 'center', gap: '8px', fontSize: '14px', padding: '0'
@@ -1201,7 +1283,7 @@ export default function Player() {
                             <div className="ytm-menu-item__text">Ver artista</div>
                         </button>
 
-                        {currentTrack?.album && (
+                        {trackAlbum && (
                             <button type="button" className="ytm-menu-item" onClick={handleViewAlbum}>
                                 <div className="ytm-menu-item__icon"><Icons.Album /></div>
                                 <div className="ytm-menu-item__text">Ver álbum</div>
@@ -1236,6 +1318,7 @@ export default function Player() {
                                 <button
                                     className="ytm-artist-sheet__close"
                                     onClick={() => setIsArtistSheetOpen(false)}
+                                    aria-label="Cerrar información del artista"
                                 >
                                     <Icons.Close />
                                 </button>
