@@ -2,6 +2,7 @@ import { useEffect } from 'react';
 
 // Memoria volátil para la sesión actual
 const cache = {};
+const listeners = new Map();
 
 // Clave para localStorage (persistencia entre recargas)
 const STORAGE_KEY = 'app_screen_state_v1';
@@ -30,6 +31,15 @@ const screenStateCache = {
             cache[screen] = {};
         }
         cache[screen][key] = value;
+        listeners.get(screen)?.forEach((listener) => listener(cache[screen], key));
+    },
+    subscribe: (screen, listener) => {
+        if (!listeners.has(screen)) listeners.set(screen, new Set());
+        listeners.get(screen).add(listener);
+        return () => {
+            listeners.get(screen)?.delete(listener);
+            if (listeners.get(screen)?.size === 0) listeners.delete(screen);
+        };
     },
     getAll: () => cache,
     clear: () => {

@@ -22,7 +22,25 @@ describe('Sesión de Descubrir', () => {
         expect(cache.get('search_state', 'query')).toBe('conservar');
     });
 
-    it('no revalida las canciones al regresar durante la misma sesión', () => {
-        expect(feedSource).toContain('if (userLoading || wasRestoredFromMemoryRef.current) return;');
+    it('no inicia una segunda generación al regresar durante la misma sesión', () => {
+        expect(feedSource).toContain("Boolean(screenStateCache.get('feed', 'generationStarted'))");
+        expect(feedSource).toContain('if (userLoading || generationStartedRef.current) return;');
+        expect(feedSource).not.toContain('applyCacheIfValid');
+    });
+
+    it('entrega a la vista restaurada las secciones que terminan en segundo plano', async () => {
+        const { default: cache } = await import('../../services/screenStateCache');
+        const listener = vi.fn();
+        const unsubscribe = cache.subscribe('feed', listener);
+
+        cache.set('feed', 'sections', { smartRecommendations: [{ id: 'new-track' }] });
+
+        expect(listener).toHaveBeenCalledWith(
+            expect.objectContaining({ sections: { smartRecommendations: [{ id: 'new-track' }] } }),
+            'sections',
+        );
+        unsubscribe();
+        cache.set('feed', 'sections', { smartRecommendations: [] });
+        expect(listener).toHaveBeenCalledTimes(1);
     });
 });
