@@ -1681,3 +1681,260 @@ body.modal-open {
     background: var(--lib-accent);
     box-shadow: 0 0 8px var(--lib-accent-glow);
 }
+
+/* =============================================================================
+   LIBRARY 4.0 — Mobile sizing and visual consistency
+   Kept last so legacy declarations cannot alter the active library layout.
+   ============================================================================= */
+.library-page {
+    min-height: 0;
+    contain: style;
+    overscroll-behavior-y: contain;
+    scrollbar-gutter: stable;
+}
+
+.library-page.loading,
+.library-page.unauthenticated {
+    min-height: 100%;
+}
+
+.library-content {
+    width: 100%;
+    max-width: 1100px;
+    margin: 0 auto;
+    content-visibility: visible;
+}
+
+.library-hero-section {
+    padding: var(--lib-space-lg);
+    margin: var(--lib-space-md) max(var(--lib-space-lg), env(safe-area-inset-left)) var(--lib-space-lg);
+    background: linear-gradient(135deg, rgba(255, 45, 85, 0.11), rgba(255, 255, 255, 0.035));
+    border: 1px solid rgba(255, 255, 255, 0.08);
+    border-radius: var(--lib-radius-xl);
+}
+
+.library-main-buttons {
+    padding: 0;
+    margin: 0 max(var(--lib-space-lg), env(safe-area-inset-left)) var(--lib-space-sm);
+}
+
+.recent-songs-grid {
+    display: grid;
+    grid-auto-flow: column;
+    grid-auto-columns: clamp(132px, 39vw, 158px);
+    grid-template-columns: none;
+    gap: var(--lib-space-md);
+    overflow-x: auto;
+    overscroll-behavior-inline: contain;
+    scroll-snap-type: inline proximity;
+    scrollbar-width: none;
+    padding-bottom: var(--lib-space-sm);
+}
+
+.recent-songs-grid::-webkit-scrollbar {
+    display: none;
+}
+
+.recent-song-wrapper {
+    min-width: 0;
+    scroll-snap-align: start;
+}
+
+.subsection-hero {
+    padding: var(--lib-space-xl) var(--lib-space-lg) var(--lib-space-lg);
+}
+
+.subsection-actions--sorting {
+    justify-content: flex-end;
+    padding-bottom: var(--lib-space-lg);
+}
+
+.subsection-sort-wrap {
+    position: relative;
+}
+
+.subsection-sort-btn {
+    width: var(--lib-touch-target-comfortable);
+    max-width: var(--lib-touch-target-comfortable);
+    padding: 0;
+    flex: 0 0 var(--lib-touch-target-comfortable);
+}
+
+.song-list-item {
+    min-height: 68px;
+}
+
+.song-list-item:focus-visible,
+.library-card:focus-visible,
+.library-main-btn:focus-visible,
+.see-all-btn:focus-visible {
+    outline: 2px solid var(--lib-accent);
+    outline-offset: 2px;
+}
+
+.song-cover {
+    width: 48px;
+    height: 48px;
+}
+
+.song-cover-fallback,
+.library-card-fallback {
+    position: absolute;
+    inset: 0;
+}
+
+.song-cover img,
+.library-card-img img {
+    position: absolute;
+    inset: 0;
+    z-index: 1;
+}
+
+.song-play-overlay {
+    z-index: 2;
+}
+
+.song-cover.has-image-error img,
+.library-card-img.has-image-error img {
+    display: none;
+}
+
+.library-grid {
+    overflow: visible;
+}
+
+.library-grid .app-card .app-card-img-wrapper {
+    width: 100%;
+    height: auto;
+}
+
+.library-grid .app-card-meta,
+.library-card-info {
+    min-width: 0;
+}
+
+.library-grid:not(.artists-grid) .app-card-title,
+.library-card-title {
+    display: -webkit-box;
+    min-height: 2.55em;
+    white-space: normal;
+    overflow: hidden;
+    -webkit-box-orient: vertical;
+    -webkit-line-clamp: 2;
+    line-clamp: 2;
+}
+
+.library-card {
+    overflow: visible;
+}
+
+.library-floating-back {
+    position: sticky;
+    top: 10px;
+    left: auto;
+    margin: 10px 0 -54px max(16px, env(safe-area-inset-left));
+}
+
+.modal-tabs {
+    display: grid;
+    grid-template-columns: repeat(2, minmax(0, 1fr));
+    gap: 4px;
+    margin: 0 var(--lib-space-lg) var(--lib-space-md);
+    padding: 4px;
+    border-radius: var(--lib-radius-md);
+    background: rgba(255, 255, 255, 0.055);
+}
+
+.modal-tab {
+    min-height: 42px;
+    border: 0;
+    border-radius: calc(var(--lib-radius-md) - 3px);
+    background: transparent;
+    color: var(--lib-text-muted);
+    font: inherit;
+    font-size: 14px;
+    font-weight: 650;
+    cursor: pointer;
+}
+
+.modal-tab.active {
+    background: rgba(255, 255, 255, 0.12);
+    color: var(--lib-text-primary);
+    box-shadow: 0 1px 8px rgba(0, 0, 0, 0.2);
+}
+
+.field-hint {
+    margin: var(--lib-space-sm) 0 0;
+    color: var(--lib-text-muted);
+    font-size: 12px;
+    line-height: 1.45;
+}
+
+@media (hover: none) and (pointer: coarse) {
+    .card-play-btn {
+        opacity: 1;
+        transform: scale(1);
+    }
+
+    .card-delete-btn {
+        opacity: 1;
+        background: rgba(20, 20, 20, 0.82);
+        color: #ff6b72;
+    }
+}
+
+@media (max-width: 374px) {
+    .library-hero-icon {
+        width: 56px;
+        height: 56px;
+        font-size: 25px;
+    }
+
+    .library-hero-title {
+        font-size: 1.4rem;
+    }
+
+    .library-hero-stats,
+    .subsection-meta {
+        font-size: 11px;
+    }
+
+    .subsection-hero-art {
+        width: 76px;
+        height: 76px;
+        font-size: 34px;
+    }
+
+    .library-grid.artists-grid {
+        grid-template-columns: repeat(2, minmax(0, 1fr));
+        gap: var(--lib-space-lg) var(--lib-space-md);
+    }
+
+    .subsection-action-btn {
+        padding-inline: var(--lib-space-md);
+        font-size: 13px;
+    }
+}
+
+@media (min-width: 600px) {
+    .recent-songs-grid {
+        grid-auto-flow: row;
+        grid-auto-columns: auto;
+        grid-template-columns: repeat(4, minmax(0, 1fr));
+        overflow: visible;
+    }
+
+    .library-hero-section {
+        margin-inline: var(--lib-space-2xl);
+    }
+
+    .library-main-buttons {
+        margin-inline: var(--lib-space-2xl);
+    }
+}
+
+@media (min-width: 900px) {
+    .recent-songs-grid {
+        grid-template-columns: repeat(6, minmax(0, 1fr));
+    }
+}

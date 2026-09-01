@@ -1,4 +1,4 @@
-import { useState, useCallback, useMemo } from 'react';
+import { useState, useCallback, useEffect, useMemo } from 'react';
 import { useNavigate } from 'react-router-dom';
 import { getArtistPath } from '../../services/artistIdentity';
 import { getAlbumPath } from '../../services/albumNavigation';
@@ -84,6 +84,11 @@ export default function Card({
 
         return finalImage;
     }, [item, image]);
+
+    useEffect(() => {
+        setImgLoaded(false);
+        setImgError(false);
+    }, [displayImage]);
 
     // Determine default icon based on type/variant
     const FallbackIcon = useMemo(() => {

@@ -5,7 +5,7 @@ import { useNavigate } from 'react-router-dom';
 // React Icons
 import {
     FaPlus, FaPlay, FaMusic, FaCompactDisc, FaTimes, FaTrash,
-    FaHeart, FaUser, FaListAlt, FaArrowLeft, FaRandom, FaEllipsisH,
+    FaHeart, FaUser, FaListAlt, FaArrowLeft, FaRandom,
     FaChevronRight, FaSortAmountDown, FaSortAlphaDown
 } from 'react-icons/fa';
 import { MdLibraryMusic } from "react-icons/md";
@@ -18,7 +18,6 @@ import useBodyScrollLock from '../../hooks/useBodyScrollLock';
 import screenStateCache, { useScrollPersistence } from '../../services/screenStateCache';
 
 import './library.css';
-import './library-modal.css';
 import Card from '../../components/shared/Card';
 import { libraryGenerator } from '../../services/libraryGenerator';
 import { PRODUCT_EVENTS, recordProductEvent } from '../../services/productMetrics';
@@ -55,7 +54,10 @@ export default function Library() {
     // Estado de UI - Con caché en memoria para persistir activeSection
     const [activeSection, setActiveSectionInternal] = useState(() => {
         // Restaurar sección activa del caché si existe
-        return screenStateCache.get('library', 'activeSection') || null;
+        const cachedSection = screenStateCache.get('library', 'activeSection');
+        return ['songs', 'playlists', 'albums', 'artists'].includes(cachedSection)
+            ? cachedSection
+            : null;
     });
 
     // Wrapper para setActiveSection que también actualiza el caché
@@ -121,6 +123,7 @@ export default function Library() {
 
     const [showCreateModal, setShowCreateModal] = useState(false);
     useBodyScrollLock(showCreateModal);
+    const [playlistMode, setPlaylistMode] = useState('manual');
     const [newPlaylistName, setNewPlaylistName] = useState('');
     const [newPlaylistDesc, setNewPlaylistDesc] = useState('');
     const [isCreating, setIsCreating] = useState(false);
@@ -162,7 +165,7 @@ export default function Library() {
         try {
             let result;
 
-            if (activeSection === 'magic') {
+            if (playlistMode === 'magic') {
                 // --- MODO MÁGICO ---
                 console.log('[Library] Generando playlist mágica para:', newPlaylistName);
 
@@ -198,8 +201,7 @@ export default function Library() {
             setShowCreateModal(false);
             setNewPlaylistName('');
             setNewPlaylistDesc('');
-            // Resetear tab si estaba en magic para la próxima vez
-            if (activeSection === 'magic') setActiveSection(null);
+            setPlaylistMode('manual');
 
             if (result?.id) {
                 navigate(`/playlist/${result.id}`);
@@ -210,13 +212,14 @@ export default function Library() {
         } finally {
             setIsCreating(false);
         }
-    }, [newPlaylistName, newPlaylistDesc, createPlaylist, navigate, activeSection, user, favorites, listeningHistory, setActiveSection, notify]);
+    }, [newPlaylistName, newPlaylistDesc, createPlaylist, navigate, playlistMode, user, favorites, listeningHistory, notify]);
 
     // Cerrar modal y limpiar
     const onCloseModal = useCallback(() => {
         setShowCreateModal(false);
         setNewPlaylistName('');
         setNewPlaylistDesc('');
+        setPlaylistMode('manual');
     }, []);
 
     useEffect(() => {
@@ -278,7 +281,11 @@ export default function Library() {
         if (!item) finalImage = DEFAULT_IMAGE;
         else if (typeof item.image === 'string' && item.image) finalImage = item.image;
         else if (item.picture_medium) finalImage = item.picture_medium;
+        else if (item.cover_medium) finalImage = item.cover_medium;
+        else if (item.album?.cover_medium) finalImage = item.album.cover_medium;
         else if (item.picture_xl) finalImage = item.picture_xl;
+        else if (item.cover_xl) finalImage = item.cover_xl;
+        else if (item.album?.cover_xl) finalImage = item.album.cover_xl;
         else if (Array.isArray(item.image)) {
             const best = item.image.find(i => i.size === 'medium') ||
                 item.image.find(i => i.size === 'large') ||
@@ -293,6 +300,19 @@ export default function Library() {
                 .replace(/\/\d+x\d+(\.jpg)/, '/250x250$1');
         }
         return finalImage;
+    };
+
+    const getArtistName = (item) => (
+        typeof item?.artist === 'object' ? item.artist?.name : item?.artist
+    ) || 'Artista desconocido';
+
+    const getAlbumName = (item) => (
+        typeof item?.album === 'object' ? item.album?.title || item.album?.name : item?.album
+    ) || 'Single';
+
+    const handleArtworkError = (event) => {
+        event.currentTarget.hidden = true;
+        event.currentTarget.parentElement?.classList.add('has-image-error');
     };
 
     // ==========================================================================
@@ -310,6 +330,7 @@ export default function Library() {
                     </div>
                     <div className="library-hero-text">
                         <span className="library-hero-label">TU BIBLIOTECA</span>
+                        <h1 className="library-hero-title">Tu música</h1>
                         <p className="library-hero-stats">
                             {favorites.length} canciones • {totalPlaylists} playlists • {savedAlbums.length} álbumes
                         </p>
@@ -495,10 +516,11 @@ export default function Library() {
                     <span>Aleatorio</span>
                 </button>
                 <button
-                    className="subsection-action-btn secondary"
+                    className="subsection-action-btn secondary subsection-sort-btn"
                     onClick={() => setShowSortMenu(!showSortMenu)}
                     disabled={favorites.length === 0}
-                    style={{ maxWidth: '60px', padding: '0' }}
+                    aria-label="Ordenar canciones"
+                    aria-expanded={showSortMenu}
                 >
                     {sortOrder.includes('alpha') ? <FaSortAlphaDown /> : <FaSortAmountDown />}
                 </button>
@@ -540,20 +562,31 @@ export default function Library() {
                 <div className="songs-list">
                     {sortedFavorites.slice(0, displayedSongsLimit).map((track, index) => (
                         <div
-                            key={`${track.name}-${index}`}
+                            key={track.id || track.url || `${getArtistName(track)}-${track.name}`}
                             className="song-list-item"
                             onClick={() => playTrack(track, sortedFavorites, { id: 'library-songs', type: 'library' })}
+                            onKeyDown={(event) => {
+                                if (event.key === 'Enter' || event.key === ' ') {
+                                    event.preventDefault();
+                                    playTrack(track, sortedFavorites, { id: 'library-songs', type: 'library' });
+                                }
+                            }}
+                            role="button"
+                            tabIndex={0}
+                            aria-label={`Reproducir ${track.name} de ${getArtistName(track)}`}
                         >
                             <span className="song-index">{index + 1}</span>
 
                             <div className="song-cover">
-                                {track.image ? (
-                                    <img src={getImageUrl(track)} alt={track.name} />
-                                ) : (
-                                    <div className="song-cover-fallback">
-                                        <FaMusic />
-                                    </div>
-                                )}
+                                <div className="song-cover-fallback" aria-hidden="true">
+                                    <FaMusic />
+                                </div>
+                                <img
+                                    src={getImageUrl(track)}
+                                    alt=""
+                                    loading="lazy"
+                                    onError={handleArtworkError}
+                                />
                                 <div className="song-play-overlay">
                                     <FaPlay />
                                 </div>
@@ -562,7 +595,7 @@ export default function Library() {
                             <div className="song-info">
                                 <span className="song-title">{track.name}</span>
                                 <span className="song-artist">
-                                    {track.album || 'Single'} • {typeof track.artist === 'object' ? track.artist.name : track.artist}
+                                    {getAlbumName(track)} • {getArtistName(track)}
                                 </span>
                             </div>
 
@@ -572,17 +605,9 @@ export default function Library() {
                                     e.stopPropagation();
                                     toggleFavorite(track);
                                 }}
+                                aria-label={`Quitar ${track.name} de canciones guardadas`}
                             >
                                 <FaHeart />
-                            </button>
-
-
-
-                            <button
-                                className="song-menu-btn"
-                                onClick={(e) => e.stopPropagation()}
-                            >
-                                <FaEllipsisH />
                             </button>
                         </div>
                     ))}
@@ -631,33 +656,41 @@ export default function Library() {
                             key={pl.id}
                             className="library-card"
                             onClick={() => navigate(`/playlist/${pl.id}`)}
+                            onKeyDown={(event) => {
+                                if (event.key === 'Enter' || event.key === ' ') {
+                                    event.preventDefault();
+                                    navigate(`/playlist/${pl.id}`);
+                                }
+                            }}
+                            role="button"
+                            tabIndex={0}
+                            aria-label={`Abrir playlist ${pl.name}`}
                         >
                             <div className="library-card-img">
-                                {pl.image ? (
-                                    <img src={getImageUrl(pl)} alt={pl.name} loading="lazy" />
-                                ) : (
-                                    <div className="library-card-fallback">
-                                        <FaMusic />
-                                    </div>
-                                )}
+                                <div className="library-card-fallback" aria-hidden="true">
+                                    <FaMusic />
+                                </div>
+                                <img src={getImageUrl(pl)} alt="" loading="lazy" onError={handleArtworkError} />
                                 {!pl.isUserCreated && (
                                     <span className="card-badge">Guardada</span>
                                 )}
-                                <button
-                                    className="card-play-btn"
-                                    onClick={(e) => {
-                                        e.stopPropagation();
-                                        if (pl.tracks?.length > 0) {
-                                            playTrack(pl.tracks[0], pl.tracks);
-                                        }
-                                    }}
-                                >
-                                    <FaPlay />
-                                </button>
+                                {pl.tracks?.length > 0 && (
+                                    <button
+                                        className="card-play-btn"
+                                        onClick={(e) => {
+                                            e.stopPropagation();
+                                            playTrack(pl.tracks[0], pl.tracks, { id: pl.id, type: 'playlist', name: pl.name });
+                                        }}
+                                        aria-label={`Reproducir ${pl.name}`}
+                                    >
+                                        <FaPlay />
+                                    </button>
+                                )}
                                 {pl.isUserCreated && (
                                     <button
                                         className="card-delete-btn"
                                         onClick={(e) => handleDeletePlaylist(pl.id, e)}
+                                        aria-label={`Eliminar playlist ${pl.name}`}
                                     >
                                         <FaTrash />
                                     </button>
@@ -709,13 +742,14 @@ export default function Library() {
             </div>
 
             {/* Sort for Albums */}
-            <div className="subsection-actions" style={{ justifyContent: 'flex-end', paddingBottom: '16px' }}>
-                <div style={{ position: 'relative' }}>
+            <div className="subsection-actions subsection-actions--sorting">
+                <div className="subsection-sort-wrap">
                     <button
-                        className="subsection-action-btn secondary"
+                        className="subsection-action-btn secondary subsection-sort-btn"
                         onClick={() => setShowSortMenu(!showSortMenu)}
                         disabled={savedAlbums.length === 0}
-                        style={{ maxWidth: '60px', padding: '0' }}
+                        aria-label="Ordenar álbumes"
+                        aria-expanded={showSortMenu}
                     >
                         {albumSortOrder.includes('alpha') ? <FaSortAlphaDown /> : <FaSortAmountDown />}
                     </button>
@@ -754,7 +788,7 @@ export default function Library() {
             ) : (
                 <div className="library-grid">
                     {sortedAlbums.map((album, i) => (
-                        <div key={`album-${i}`} className="library-card-wrapper">
+                        <div key={album.id || album.url || `${album.artist?.name || album.artist || 'album'}-${album.title || album.name || i}`} className="library-card-wrapper">
                             <Card
                                 item={album}
                                 variant="vertical"
@@ -786,13 +820,14 @@ export default function Library() {
             </div>
 
             {/* Sort for Artists */}
-            <div className="subsection-actions" style={{ justifyContent: 'flex-end', paddingBottom: '16px' }}>
-                <div style={{ position: 'relative' }}>
+            <div className="subsection-actions subsection-actions--sorting">
+                <div className="subsection-sort-wrap">
                     <button
-                        className="subsection-action-btn secondary"
+                        className="subsection-action-btn secondary subsection-sort-btn"
                         onClick={() => setShowSortMenu(!showSortMenu)}
                         disabled={savedArtists.length === 0}
-                        style={{ maxWidth: '60px', padding: '0' }}
+                        aria-label="Ordenar artistas"
+                        aria-expanded={showSortMenu}
                     >
                         {artistSortOrder.includes('alpha') ? <FaSortAlphaDown /> : <FaSortAmountDown />}
                     </button>
@@ -831,7 +866,7 @@ export default function Library() {
             ) : (
                 <div className="library-grid artists-grid">
                     {sortedArtists.map((artist, i) => (
-                        <div key={`artist-${i}`} className="library-card-wrapper">
+                        <div key={artist.id || artist.url || `${artist.name || 'artist'}-${i}`} className="library-card-wrapper">
                             <Card
                                 item={artist}
                                 variant="circle"
@@ -910,21 +945,23 @@ export default function Library() {
                         {/* TABS SELECTOR */}
                         <div className="modal-tabs">
                             <button
-                                className={`modal-tab ${!isCreating && activeSection !== 'magic' ? 'active' : ''}`}
-                                onClick={() => setActiveSection(null)}
+                                className={`modal-tab ${playlistMode === 'manual' ? 'active' : ''}`}
+                                onClick={() => setPlaylistMode('manual')}
+                                aria-pressed={playlistMode === 'manual'}
                             >
                                 Manual
                             </button>
                             <button
-                                className={`modal-tab ${activeSection === 'magic' ? 'active' : ''}`}
-                                onClick={() => setActiveSection('magic')}
+                                className={`modal-tab ${playlistMode === 'magic' ? 'active' : ''}`}
+                                onClick={() => setPlaylistMode('magic')}
+                                aria-pressed={playlistMode === 'magic'}
                             >
                                 ✨ Mágica
                             </button>
                         </div>
 
                         <div className="modal-body">
-                            {activeSection !== 'magic' ? (
+                            {playlistMode === 'manual' ? (
                                 /* --- MODO MANUAL --- */
                                 <>
                                     <div className="modal-field">
@@ -981,7 +1018,7 @@ export default function Library() {
                                 onClick={handleCreatePlaylist}
                                 disabled={!newPlaylistName.trim() || isCreating}
                             >
-                                {isCreating ? 'Creando...' : (activeSection === 'magic' ? '✨ Generar' : 'Crear')}
+                                {isCreating ? 'Creando...' : (playlistMode === 'magic' ? '✨ Generar' : 'Crear')}
                             </button>
                         </div>
                     </div>
