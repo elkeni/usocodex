@@ -16,6 +16,7 @@ import { getAlbumPath } from "../../services/albumNavigation";
 import { getArtistPath } from "../../services/artistIdentity";
 import { getPrefetchLimitForQuality, playbackPrefetchService, getPlaybackPrefetchKey } from "../../services/playbackPrefetchService";
 import { getResolvedAudioQualityMode } from "../../services/audioQuality";
+import { getSmartPrefetchPreference } from "../../services/experiencePreferences";
 import {
   buildDiscoveryTasteProfile,
   getDiscoveryArtistName,
@@ -1136,12 +1137,31 @@ export default function Feed() {
         candidate.track.image !== DEFAULT_IMAGE &&
         !alreadyVisibleTrackKeys.has(makeTrackKey(candidate.track))
       ));
-      const recommendations = selectDiscoveryTracks({
+      const rankedRecommendations = selectDiscoveryTracks({
         candidates,
         profile: tasteProfile,
         sessionSeed,
-        limit: 27,
+        limit: 36,
       });
+      const qualityMode = getResolvedAudioQualityMode();
+      const validationLimit = Math.min(6, getPrefetchLimitForQuality(qualityMode, 'discovery'));
+      let rejectedRecommendationKeys = new Set();
+      if (getSmartPrefetchPreference() && validationLimit > 0) {
+        const tracksToValidate = rankedRecommendations.slice(0, validationLimit);
+        const validationResults = await playbackPrefetchService.prefetchMany(tracksToValidate, {
+          limit: validationLimit,
+          concurrency: 4,
+          qualityMode,
+          signal: controller.signal,
+        });
+        if (controller.signal.aborted || reqIdRef.current !== requestId) return;
+        rejectedRecommendationKeys = new Set(tracksToValidate
+          .filter((_, index) => !validationResults[index]?.audioUrl)
+          .map(makeTrackKey));
+      }
+      const recommendations = rankedRecommendations
+        .filter((track) => !rejectedRecommendationKeys.has(makeTrackKey(track)))
+        .slice(0, 27);
       const discoveredArtists = new Set(recommendations
         .map((track) => getDiscoveryArtistName(track.artist))
         .filter((artist) => artist && !tasteProfile.knownArtists.has(normalizeDiscoveryText(artist))));

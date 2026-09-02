@@ -3,10 +3,18 @@ import {
     AUDIO_QUALITY_CHANGE_EVENT,
     getResolvedAudioQualityMode,
 } from './audioQuality';
+import { getSmartPrefetchPreference } from './experiencePreferences';
+import {
+    clearTrackUnavailable,
+    clearUnavailableTracks,
+    getTrackUnavailable,
+    markTrackUnavailable,
+} from './playbackAvailability';
 
 const SAAVN_TTL_MS = 90 * 60 * 1000;
 const SHORT_LIVED_TTL_MS = 3 * 60 * 1000;
-const MAX_LOW_PRIORITY_REQUESTS = 2;
+const MAX_LOW_PRIORITY_REQUESTS = 4;
+const MAX_PREFETCH_BATCH_SIZE = 6;
 
 export const resolvedPlaybacks = new Map();
 export const inFlightPlaybacks = new Map();
@@ -138,13 +146,18 @@ const createInFlightEntry = (track, qualityMode, endpoint, priority) => {
                 const response = await fetch(buildRequestUrl(track, qualityMode, endpoint), {
                     signal: entry.controller.signal,
                 });
+                if (response.ok) clearTrackUnavailable(track);
                 const payload = await response.json().catch(() => null);
                 if (!response.ok || !payload?.success) {
+                    if (response.status === 404 || payload?.reason === 'NO_MATCH') {
+                        markTrackUnavailable(track, payload?.reason || 'NO_MATCH');
+                    }
                     entry.finish(null);
                     return;
                 }
                 const playback = normalizePlayback(payload, qualityMode);
                 if (playback) {
+                    clearTrackUnavailable(track);
                     const cachedPlayback = cachePlayback(key, playback);
                     entry.finish(cachedPlayback);
                     return;
@@ -201,8 +214,10 @@ const resolve = (track, {
     endpoint = 'prefetch',
     priority = 'high',
     signal,
+    bypassNegativeCache = false,
 } = {}) => {
     if (!getArtist(track) || !getTitle(track) || signal?.aborted) return Promise.resolve(null);
+    if (!bypassNegativeCache && getTrackUnavailable(track)) return Promise.resolve(null);
     const cached = get(track, qualityMode);
     if (cached) return Promise.resolve(cached);
     const key = getPlaybackPrefetchKey(track, qualityMode);
@@ -247,6 +262,7 @@ const clear = () => {
         entry.controller.abort();
         entry.finish(null);
     }
+    clearUnavailableTracks();
 };
 
 export const playbackPrefetchService = {
@@ -256,10 +272,12 @@ export const playbackPrefetchService = {
     },
     resolve,
     prefetch(track, options = {}) {
+        if (!getSmartPrefetchPreference()) return Promise.resolve(null);
         return resolve(track, { ...options, endpoint: 'prefetch', priority: options.priority || 'low' });
     },
-    async prefetchMany(tracks, { limit = 3, concurrency = 2, signal, qualityMode } = {}) {
-        const selected = (tracks || []).filter(Boolean).slice(0, limit);
+    async prefetchMany(tracks, { limit = 4, concurrency = 4, signal, qualityMode } = {}) {
+        if (!getSmartPrefetchPreference()) return [];
+        const selected = (tracks || []).filter(Boolean).slice(0, Math.min(limit, MAX_PREFETCH_BATCH_SIZE));
         const results = new Array(selected.length).fill(null);
         let cursor = 0;
         const worker = async () => {
@@ -274,7 +292,7 @@ export const playbackPrefetchService = {
                 });
             }
         };
-        await Promise.all(Array.from({ length: Math.min(concurrency, selected.length) }, worker));
+        await Promise.all(Array.from({ length: Math.min(concurrency, MAX_LOW_PRIORITY_REQUESTS, selected.length) }, worker));
         return results;
     },
     store,

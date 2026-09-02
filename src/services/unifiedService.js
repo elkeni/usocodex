@@ -10,6 +10,11 @@ import { AuthService } from './authService';
 import { CONFIG } from './config';
 import { isArtistCreditMatch, normalizeArtistName } from './artistIdentity';
 import { getResolvedAudioQualityMode } from './audioQuality';
+import {
+    clearTrackUnavailable,
+    getTrackUnavailable,
+    markTrackUnavailable,
+} from './playbackAvailability';
 
 // =============================================================================
 // UTILIDADES DE LIMPIEZA Y NORMALIZACIÓN (para metadatos UI, NO para decisiones)
@@ -394,9 +399,12 @@ export const buildInstantPlayUrl = (backend, trackInfo, qualityMode) => (
     + `&quality=${encodeURIComponent(qualityMode)}`
 );
 
-async function fetchAudioUrl(artistOrTrack, title, duration) {
+async function fetchAudioUrl(artistOrTrack, title, duration, legacyOptions = {}) {
     // Normalizar entrada
     const isTrackObject = typeof artistOrTrack === 'object' && artistOrTrack !== null;
+    const requestOptions = isTrackObject && title && typeof title === 'object'
+        ? title
+        : legacyOptions;
     const track = isTrackObject
         ? artistOrTrack
         : { artist: artistOrTrack, title, duration };
@@ -419,10 +427,18 @@ async function fetchAudioUrl(artistOrTrack, title, duration) {
     if (cached) {
         if (Date.now() - cached.timestamp < CACHE_TTL_MS) {
             console.log(`[UnifiedService] ⚡ MEMORY CACHE HIT: ${trackInfo.title}`);
+            clearTrackUnavailable(trackInfo);
             return cached.data;
         } else {
             audioUrlCache.delete(cacheKey);
         }
+    }
+
+    const negativeCacheEntry = requestOptions?.bypassNegativeCache
+        ? null
+        : getTrackUnavailable(trackInfo);
+    if (negativeCacheEntry) {
+        return unavailable(trackInfo, negativeCacheEntry.reason || 'NO_MATCH');
     }
 
     // ═══════════════════════════════════════════════════════════════════
@@ -530,6 +546,7 @@ async function fetchAudioUrl(artistOrTrack, title, duration) {
             clearTimeout(timeout);
 
             if (!res.ok) throw new Error('Instant-play failed');
+            clearTrackUnavailable(trackInfo);
 
             const data = await res.json();
             if (!data?.audioUrl) throw new Error('No audioUrl');
@@ -566,11 +583,13 @@ async function fetchAudioUrl(artistOrTrack, title, duration) {
 
         // Guardar en caché
         audioUrlCache.set(cacheKey, { timestamp: Date.now(), data: result });
+        clearTrackUnavailable(trackInfo);
 
         return result;
     } catch (aggregateError) {
         // Ambos fallaron
         console.warn(`[UnifiedService] ⚠️ NO_MATCH: ${trackInfo.artist} - ${trackInfo.title}`);
+        markTrackUnavailable(trackInfo, 'NO_MATCH');
         return unavailable(trackInfo, "NO_MATCH");
     }
 }

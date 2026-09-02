@@ -2,10 +2,13 @@
 import { beforeEach, describe, expect, it, vi } from 'vitest';
 import {
     REDUCED_MOTION_STORAGE_KEY,
+    SMART_PREFETCH_STORAGE_KEY,
     applyReducedMotionPreference,
     getReducedMotionPreference,
     initializeExperiencePreferences,
+    getSmartPrefetchPreference,
     setReducedMotionPreference,
+    setSmartPrefetchPreference,
 } from './experiencePreferences';
 
 describe('experiencePreferences', () => {
@@ -39,5 +42,12 @@ describe('experiencePreferences', () => {
         localStorage.setItem(REDUCED_MOTION_STORAGE_KEY, 'true');
         initializeExperiencePreferences();
         expect(document.documentElement.dataset.reducedMotion).toBe('true');
+    });
+
+    it('activa la precarga inteligente por defecto y permite desactivarla', () => {
+        expect(getSmartPrefetchPreference()).toBe(true);
+        expect(setSmartPrefetchPreference(false)).toBe(false);
+        expect(localStorage.getItem(SMART_PREFETCH_STORAGE_KEY)).toBe('false');
+        expect(getSmartPrefetchPreference()).toBe(false);
     });
 });

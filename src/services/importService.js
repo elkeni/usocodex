@@ -640,6 +640,8 @@ const SpotifyClient = {
             originalId: track.id,
             isrc: track.external_ids?.isrc || null,
             source: 'spotify',
+            spotifyUrl: track.external_urls?.spotify
+                || (track.id ? `https://open.spotify.com/track/${track.id}` : null),
 
             // === Metadata principal (GARANTIZADA) ===
             title: track.name || 'Unknown Track',

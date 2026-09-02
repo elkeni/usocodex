@@ -220,7 +220,7 @@ export default function AlbumDetail() {
                 artistId: track.artistId || albumInfo?.artistId,
                 albumId: track.albumId || albumInfo?.id,
                 duration: trackDuration,
-            });
+            }, { bypassNegativeCache: true });
             const resolvedUrl = resolution.status === 'ok' ? resolution.audio?.url : null;
             const audioUrl = resolvedUrl || track.preview || null;
 

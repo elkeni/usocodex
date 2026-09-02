@@ -90,6 +90,7 @@ export function finalizeTrack(originalTrack, matchedTrack = null, source = 'unkn
         videoId: matchedTrack?.videoId || originalTrack?.videoId || null,
         isrc: originalTrack?.isrc || matchedTrack?.isrc || null,
         originalId: originalTrack?.originalId || null,
+        spotifyUrl: originalTrack?.spotifyUrl || matchedTrack?.spotifyUrl || null,
         matchConfidence: originalTrack?.matchConfidence || matchedTrack?.matchConfidence || 0
     };
 

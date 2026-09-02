@@ -2020,11 +2020,35 @@
     background: rgba(255, 255, 255, 0.06);
     font-size: var(--ytm-font-size-sm);
     text-align: center;
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    gap: 10px;
+    flex-wrap: wrap;
 }
 
 .ytm-playback-notice.is-error {
     color: #ffb0b0;
     background: rgba(255, 70, 70, 0.1);
+}
+
+.ytm-spotify-fallback {
+    display: inline-flex;
+    min-height: 34px;
+    align-items: center;
+    padding: 7px 12px;
+    border: 1px solid rgba(29, 185, 84, 0.55);
+    border-radius: 999px;
+    color: #d9ffe5;
+    background: rgba(29, 185, 84, 0.14);
+    font-size: 0.78rem;
+    font-weight: 700;
+    text-decoration: none;
+    white-space: nowrap;
+}
+
+.ytm-spotify-fallback:active {
+    transform: scale(0.97);
 }
 
 .ytm-queue-sheet__empty {

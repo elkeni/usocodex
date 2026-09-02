@@ -148,7 +148,7 @@ export default function ArtistDetail() {
                 artist: trackArtist,
                 artistId: track.artistId || artistInfo?.id,
                 duration: trackDuration,
-            });
+            }, { bypassNegativeCache: true });
             const resolvedUrl = resolution.status === 'ok' ? resolution.audio?.url : null;
             const audioUrl = resolvedUrl || track.preview || null;
 

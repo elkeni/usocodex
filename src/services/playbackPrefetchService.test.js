@@ -1,11 +1,12 @@
 // @vitest-environment jsdom
-import { afterEach, describe, expect, it, vi } from 'vitest';
+import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest';
 import {
     getPlaybackPrefetchKey,
     getPrefetchLimitForQuality,
     playbackPrefetchService,
     resolvedPlaybacks,
 } from './playbackPrefetchService';
+import { setSmartPrefetchPreference } from './experiencePreferences';
 
 const track = { artist: 'CA7RIEL & Paco Amoroso', name: 'DUMBAI' };
 const playback = (source = 'saavn', qualityMode = 'high') => ({
@@ -16,6 +17,8 @@ const playback = (source = 'saavn', qualityMode = 'high') => ({
     cacheStatus: 'miss',
     track: { title: 'DUMBAI', artist: 'CA7RIEL & Paco Amoroso', source },
 });
+
+beforeEach(() => localStorage.clear());
 
 afterEach(() => {
     playbackPrefetchService.clear();
@@ -86,5 +89,30 @@ describe('PlaybackPrefetchService', () => {
         expect(getPrefetchLimitForQuality('data_saver', 'discovery')).toBe(0);
         expect(getPrefetchLimitForQuality('high', 'discovery')).toBe(6);
     });
-});
 
+    it('respeta la preferencia de desactivar la precarga inteligente', async () => {
+        setSmartPrefetchPreference(false);
+        const fetchMock = vi.spyOn(globalThis, 'fetch');
+        expect(await playbackPrefetchService.prefetch(track, { qualityMode: 'high' })).toBeNull();
+        expect(await playbackPrefetchService.prefetchMany([track], { qualityMode: 'high' })).toEqual([]);
+        expect(fetchMock).not.toHaveBeenCalled();
+    });
+
+    it('reutiliza temporalmente un NO_MATCH pero permite omitirlo de forma explícita', async () => {
+        const fetchMock = vi.spyOn(globalThis, 'fetch')
+            .mockResolvedValueOnce({ ok: false, status: 404, json: async () => ({ success: false, reason: 'NO_MATCH' }) })
+            .mockResolvedValueOnce({ ok: true, status: 200, json: async () => ({ success: true, playback: playback() }) });
+
+        expect(await playbackPrefetchService.prefetch(track, { qualityMode: 'high' })).toBeNull();
+        expect(await playbackPrefetchService.prefetch(track, { qualityMode: 'high' })).toBeNull();
+        expect(fetchMock).toHaveBeenCalledTimes(1);
+
+        const recovered = await playbackPrefetchService.resolve(track, {
+            qualityMode: 'high',
+            endpoint: 'prefetch',
+            bypassNegativeCache: true,
+        });
+        expect(recovered?.audioUrl).toContain('saavn');
+        expect(fetchMock).toHaveBeenCalledTimes(2);
+    });
+});

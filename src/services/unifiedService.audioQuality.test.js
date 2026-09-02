@@ -1,11 +1,14 @@
 // @vitest-environment jsdom
 import { beforeEach, describe, expect, it, vi } from 'vitest';
 import { setAudioQualityPreference } from './audioQuality';
-import { buildInstantPlayUrl, fetchAudioUrl } from './unifiedService';
+import { buildInstantPlayUrl, clearAudioUrlCache, fetchAudioUrl } from './unifiedService';
+import { clearUnavailableTracks, getTrackUnavailable } from './playbackAvailability';
 
 describe('instant-play audio quality', () => {
     beforeEach(() => {
         localStorage.clear();
+        clearAudioUrlCache();
+        clearUnavailableTracks();
         vi.restoreAllMocks();
     });
 
@@ -80,4 +83,34 @@ describe('instant-play audio quality', () => {
             expect(result).toMatchObject({ status: 'unavailable', reason: 'NO_MATCH' });
         },
     );
+
+    it('omite temporalmente un NO_MATCH y el clic explícito lo reintenta una vez', async () => {
+        const target = { id: 'manual-retry', artist: 'KATANAZ', title: 'Prayer', duration: 180 };
+        let backendAvailable = false;
+        const fetchMock = vi.spyOn(globalThis, 'fetch').mockImplementation(async (input) => {
+            const url = String(input);
+            if (url.includes('/api/search')) return { ok: false, json: async () => ({ results: [] }) };
+            if (!backendAvailable) return { ok: false, status: 404, json: async () => ({ success: false, reason: 'NO_MATCH' }) };
+            return {
+                ok: true,
+                status: 200,
+                json: async () => ({
+                    success: true,
+                    audioUrl: 'https://audio.test/prayer.m4a',
+                    quality: '160kbps',
+                    qualityMode: 'balanced',
+                    track: { artist: 'KATANAZ' },
+                }),
+            };
+        });
+
+        expect((await fetchAudioUrl(target)).status).toBe('unavailable');
+        const callsAfterFailure = fetchMock.mock.calls.length;
+        expect((await fetchAudioUrl(target)).status).toBe('unavailable');
+        expect(fetchMock).toHaveBeenCalledTimes(callsAfterFailure);
+
+        backendAvailable = true;
+        expect((await fetchAudioUrl(target, { bypassNegativeCache: true })).status).toBe('ok');
+        expect(getTrackUnavailable(target)).toBeNull();
+    });
 });

@@ -5,6 +5,9 @@ import {
     FaSignOutAlt,
     FaEdit,
     FaCamera,
+    FaTimes,
+    FaCheckCircle,
+    FaEnvelope,
     FaLock,
     FaPause,
     FaPlay,
@@ -18,7 +21,9 @@ import {
     FaUserShield,
     FaCompactDisc,
     FaCalendarAlt,
-    FaBolt
+    FaBolt,
+    FaCloudDownloadAlt,
+    FaCog,
 } from 'react-icons/fa';
 
 import './profile.css';
@@ -39,7 +44,9 @@ import {
 } from '../../services/audioQuality';
 import {
     getReducedMotionPreference,
+    getSmartPrefetchPreference,
     setReducedMotionPreference as persistReducedMotionPreference,
+    setSmartPrefetchPreference as persistSmartPrefetchPreference,
 } from '../../services/experiencePreferences';
 import { playbackPrefetchService } from '../../services/playbackPrefetchService';
 import { clearAudioUrlCache } from '../../services/unifiedService';
@@ -52,6 +59,7 @@ const Profile = () => {
         historyPaused,
         toggleHistoryPaused,
         clearListeningHistory,
+        clearPlaybackCacheState,
         currentAudioQuality,
         isCrossfadeEnabled,
         toggleCrossfade,
@@ -63,19 +71,36 @@ const Profile = () => {
     const [successSummary, setSuccessSummary] = useState(() => getSuccessSummary());
     const [audioQualityPreference, setAudioQualityPreference] = useState(getAudioQualityPreference);
     const [reducedMotion, setReducedMotion] = useState(getReducedMotionPreference);
+    const [smartPrefetch, setSmartPrefetch] = useState(getSmartPrefetchPreference);
 
     // Estados de edición
+    const [isEditProfileOpen, setIsEditProfileOpen] = useState(false);
     const [isEditingName, setIsEditingName] = useState(false);
     const [editedName, setEditedName] = useState('');
+    const [displayNamePreview, setDisplayNamePreview] = useState('');
+    const [photoPreview, setPhotoPreview] = useState('');
     const [isUploadingPhoto, setIsUploadingPhoto] = useState(false);
     const [isSavingName, setIsSavingName] = useState(false);
 
     // Inicializar nombre editado cuando cambie el usuario
     useEffect(() => {
-        if (user?.displayName) {
-            setEditedName(user.displayName);
-        }
-    }, [user?.displayName]);
+        const nextName = user?.displayName || '';
+        setEditedName(nextName);
+        setDisplayNamePreview(nextName);
+        setPhotoPreview(user?.photoURL || '');
+    }, [user?.displayName, user?.photoURL]);
+
+    useEffect(() => {
+        if (!isEditProfileOpen) return undefined;
+        const closeOnEscape = (event) => {
+            if (event.key === 'Escape' && !isSavingName && !isUploadingPhoto) {
+                setIsEditProfileOpen(false);
+                setIsEditingName(false);
+            }
+        };
+        document.addEventListener('keydown', closeOnEscape);
+        return () => document.removeEventListener('keydown', closeOnEscape);
+    }, [isEditProfileOpen, isSavingName, isUploadingPhoto]);
 
     const showNotification = useCallback((message, type = 'success') => {
         notify(message, { type });
@@ -94,6 +119,13 @@ const Profile = () => {
         const nextValue = persistReducedMotionPreference(!reducedMotion);
         setReducedMotion(nextValue);
         notify(nextValue ? 'Animaciones reducidas.' : 'Animaciones completas activadas.', { type: 'success' });
+    };
+
+    const handleSmartPrefetchChange = () => {
+        const nextValue = persistSmartPrefetchPreference(!smartPrefetch);
+        setSmartPrefetch(nextValue);
+        if (!nextValue) playbackPrefetchService.clear();
+        notify(nextValue ? 'Precarga inteligente activada.' : 'Precarga inteligente desactivada.', { type: 'success' });
     };
 
     const handleSignOut = async () => {
@@ -117,30 +149,33 @@ const Profile = () => {
 
     // ========== EDICIÓN DE NOMBRE ==========
     const handleStartEditName = () => {
-        setEditedName(user?.displayName || '');
+        setEditedName(displayNamePreview || user?.displayName || '');
         setIsEditingName(true);
+        setIsEditProfileOpen(true);
     };
 
     const handleCancelEditName = () => {
-        setEditedName(user?.displayName || '');
+        setEditedName(displayNamePreview || user?.displayName || '');
         setIsEditingName(false);
+        setIsEditProfileOpen(false);
     };
 
     const handleSaveName = async () => {
         const normalizedName = editedName.trim().replace(/\s+/g, ' ');
         if (!normalizedName) {
             showNotification('El nombre no puede estar vacío', 'error');
-            return;
+            return false;
         }
 
         if (normalizedName.length > 40) {
             showNotification('El nombre puede tener hasta 40 caracteres', 'error');
-            return;
+            return false;
         }
 
-        if (normalizedName === user?.displayName) {
+        if (normalizedName === displayNamePreview) {
             setIsEditingName(false);
-            return;
+            setIsEditProfileOpen(false);
+            return true;
         }
 
         setIsSavingName(true);
@@ -157,11 +192,15 @@ const Profile = () => {
                 displayName: normalizedName
             });
 
+            setDisplayNamePreview(normalizedName);
             setIsEditingName(false);
+            setIsEditProfileOpen(false);
             showNotification('Nombre actualizado correctamente');
+            return true;
         } catch (error) {
             console.error('Error updating name:', error);
             showNotification('Error al actualizar el nombre', 'error');
+            return false;
         } finally {
             setIsSavingName(false);
         }
@@ -353,6 +392,7 @@ const Profile = () => {
             });
             console.log('[Profile] Firestore actualizado');
 
+            setPhotoPreview(downloadURL);
             showNotification('Foto de perfil actualizada');
         } catch (error) {
             console.error('[Profile] Error en handleFileSelect:', error);
@@ -388,6 +428,7 @@ const Profile = () => {
     const handleClearPlaybackCache = () => {
         playbackPrefetchService.clear();
         clearAudioUrlCache();
+        clearPlaybackCacheState();
         showNotification('Caché temporal de reproducción liberada');
     };
 
@@ -402,9 +443,14 @@ const Profile = () => {
     };
 
     const getUserInitial = () => {
-        if (user?.displayName) return user.displayName.charAt(0).toUpperCase();
+        if (displayNamePreview) return displayNamePreview.charAt(0).toUpperCase();
         if (user?.email) return user.email.charAt(0).toUpperCase();
         return '?';
+    };
+
+    const getJoinLabel = () => {
+        if (!user?.metadata?.creationTime) return `Desde ${getJoinYear()}`;
+        return `Desde ${new Intl.DateTimeFormat('es-ES', { month: 'short', year: 'numeric' }).format(new Date(user.metadata.creationTime))}`;
     };
 
     const resolvedAudioQualityMode = getResolvedAudioQualityMode();
@@ -429,152 +475,162 @@ const Profile = () => {
 
     return createPortal(
         <div className="profile-wrapper">
-            {/* Header */}
-            <PageHeader
-                title="Perfil"
-                onClose={handleClose}
-                className="profile-page-header"
-                sticky={false}
-            />
+            <PageHeader title="Tu perfil" onClose={handleClose} className="profile-page-header" sticky={false} />
 
             <div className="profile-content">
-                <section className="profile-identity-card" aria-label="Información de la cuenta">
-                    <div className="profile-identity-glow" aria-hidden="true" />
-                    <button
-                        type="button"
-                        className="profile-avatar profile-avatar--button"
-                        onClick={handleAvatarClick}
-                        disabled={isUploadingPhoto}
-                        aria-label="Cambiar foto de perfil"
-                    >
-                        {user?.photoURL ? <img src={user.photoURL} alt="" /> : <span className="profile-avatar-initial">{getUserInitial()}</span>}
-                        <span className="profile-avatar-edit-overlay">
-                            {isUploadingPhoto ? <span className="btn-spinner" /> : <FaCamera />}
-                        </span>
+                <section className="profile-hero" aria-label="Información de la cuenta">
+                    <div className="profile-hero-orb profile-hero-orb--one" aria-hidden="true" />
+                    <div className="profile-hero-orb profile-hero-orb--two" aria-hidden="true" />
+                    <button type="button" className="profile-avatar profile-avatar--button" onClick={handleStartEditName} aria-label="Editar perfil">
+                        {photoPreview ? <img src={photoPreview} alt="" /> : <span className="profile-avatar-initial">{getUserInitial()}</span>}
+                        <span className="profile-avatar-status" aria-hidden="true" />
                     </button>
-                    <input ref={fileInputRef} type="file" accept="image/*" onChange={handleFileSelect} hidden />
 
                     <div className="profile-user-info">
-                        {isEditingName ? (
-                            <div className="profile-edit-container">
-                                <label htmlFor="profile-display-name">Nombre visible</label>
-                                <input
-                                    id="profile-display-name"
-                                    type="text"
-                                    value={editedName}
-                                    onChange={(event) => setEditedName(event.target.value)}
-                                    className="profile-name-input"
-                                    placeholder="Tu nombre"
-                                    maxLength={40}
-                                    autoFocus
-                                    onKeyDown={(event) => {
-                                        if (event.key === 'Enter') handleSaveName();
-                                        if (event.key === 'Escape') handleCancelEditName();
-                                    }}
-                                />
-                                <div className="profile-edit-footer">
-                                    <span>{editedName.trim().length}/40</span>
-                                    <div className="profile-name-actions">
-                                        <button type="button" className="profile-name-btn cancel" onClick={handleCancelEditName} disabled={isSavingName}>Cancelar</button>
-                                        <button type="button" className="profile-name-btn save" onClick={handleSaveName} disabled={isSavingName || !editedName.trim()}>
-                                            {isSavingName ? <span className="btn-spinner" /> : 'Guardar'}
-                                        </button>
-                                    </div>
-                                </div>
-                            </div>
-                        ) : (
-                            <>
-                                <div className="profile-name-line">
-                                    <h1 className="profile-user-name">{user?.displayName || 'Usuario'}</h1>
-                                    <button type="button" className="profile-edit-name-button" onClick={handleStartEditName} aria-label="Editar nombre"><FaEdit /></button>
-                                </div>
-                                <p className="profile-user-email">{user?.email}</p>
-                                <div className="profile-privacy-badge"><FaUserShield /><span>Cuenta privada</span></div>
-                            </>
-                        )}
+                        <p className="profile-eyebrow">MI CUENTA</p>
+                        <h1 className="profile-user-name">{displayNamePreview || 'Usuario'}</h1>
+                        <p className="profile-user-email">{user?.email}</p>
+                        <div className="profile-badges">
+                            <span><FaUserShield /> Privada</span>
+                            <span><FaCalendarAlt /> {getJoinLabel()}</span>
+                        </div>
                     </div>
+
+                    <button type="button" className="profile-edit-button" onClick={handleStartEditName}>
+                        <FaEdit aria-hidden="true" />
+                        <span>Editar perfil</span>
+                    </button>
                 </section>
 
-                <section className="profile-stats" aria-label="Resumen de la biblioteca">
-                    <div className="profile-stat"><FaHeadphonesAlt /><span className="profile-stat-value">{formatNumber(favorites?.length || 0)}</span><span className="profile-stat-label">Canciones</span></div>
-                    <div className="profile-stat"><FaPlay /><span className="profile-stat-value">{formatNumber(playlists?.length || 0)}</span><span className="profile-stat-label">Playlists</span></div>
-                    <div className="profile-stat"><FaCompactDisc /><span className="profile-stat-value">{formatNumber(savedAlbums?.length || 0)}</span><span className="profile-stat-label">Álbumes</span></div>
-                    <div className="profile-stat"><FaCalendarAlt /><span className="profile-stat-value">{getJoinYear()}</span><span className="profile-stat-label">Desde</span></div>
+                <section className="profile-stats" aria-label="Resumen de tu biblioteca">
+                    <div className="profile-stat"><span className="profile-stat-icon"><FaHeadphonesAlt /></span><strong>{formatNumber(favorites?.length || 0)}</strong><small>Canciones</small></div>
+                    <div className="profile-stat"><span className="profile-stat-icon"><FaPlay /></span><strong>{formatNumber(playlists?.length || 0)}</strong><small>Playlists</small></div>
+                    <div className="profile-stat"><span className="profile-stat-icon"><FaCompactDisc /></span><strong>{formatNumber(savedAlbums?.length || 0)}</strong><small>Álbumes</small></div>
                 </section>
 
                 <main className="profile-main">
-                    <section className="profile-section">
-                        <div className="profile-section-heading"><div><span>SONIDO</span><h2>Reproducción</h2></div><FaHeadphonesAlt /></div>
+                    <section className="profile-section profile-section--wide">
+                        <div className="profile-section-heading"><div><span>PREFERENCIAS</span><h2>Reproducción</h2><p>Ajusta el sonido y el consumo de datos.</p></div><FaHeadphonesAlt /></div>
                         <div className="profile-panel profile-quality-panel">
                             <div className="profile-setting-header">
-                                <div className="profile-setting-icon"><FaSlidersH /></div>
-                                <div className="profile-setting-info"><h3>Calidad de audio</h3><p>Se aplica a las siguientes canciones.</p></div>
+                                <span className="profile-setting-icon profile-setting-icon--accent"><FaSlidersH /></span>
+                                <span className="profile-setting-info"><strong>Calidad de audio</strong><small>El cambio se aplicará al reproducir la siguiente canción.</small></span>
+                                <span className="profile-current-value">{resolvedAudioQualityLabel}</span>
                             </div>
                             <div className="profile-quality-options" role="radiogroup" aria-label="Calidad de audio">
                                 {[
-                                    { value: 'automatic', label: 'Automática', detail: 'Se adapta a tu conexión' },
+                                    { value: 'automatic', label: 'Automática', detail: 'Wi-Fi y datos' },
                                     { value: 'high', label: 'Alta', detail: 'Hasta 320 kbps' },
                                     { value: 'data_saver', label: 'Ahorro', detail: '96 kbps' },
                                 ].map((option) => (
                                     <button key={option.value} type="button" role="radio" aria-checked={audioQualityPreference === option.value} className={`profile-quality-option ${audioQualityPreference === option.value ? 'active' : ''}`} onClick={() => handleAudioQualityChange(option.value)}>
-                                        <span>{option.label}</span><small>{option.detail}</small>
+                                        <span className="profile-radio-dot" aria-hidden="true" />
+                                        <span><strong>{option.label}</strong><small>{option.detail}</small></span>
                                     </button>
                                 ))}
                             </div>
-                            <p className="profile-quality-status">Modo resuelto: {resolvedAudioQualityLabel}{currentAudioQuality ? ` · ${currentAudioQuality}` : ''}</p>
+                            {currentAudioQuality && <p className="profile-quality-status"><FaCheckCircle /> Reproduciendo ahora a {currentAudioQuality}</p>}
                         </div>
 
-                        <button type="button" className="profile-setting clickable" onClick={toggleCrossfade} aria-pressed={isCrossfadeEnabled}>
-                            <span className="profile-setting-icon"><FaVolumeUp /></span>
-                            <span className="profile-setting-info"><strong>Transiciones suaves</strong><small>Mezcla el final y el inicio entre canciones cuando la app está visible.</small></span>
-                            <span className={`profile-toggle ${isCrossfadeEnabled ? 'active' : ''}`} aria-hidden="true"><span /></span>
-                        </button>
-                        <button type="button" className="profile-setting clickable" onClick={handleClearPlaybackCache}>
-                            <span className="profile-setting-icon"><FaBolt /></span>
-                            <span className="profile-setting-info"><strong>Liberar caché temporal</strong><small>Fuerza URLs nuevas sin detener la canción actual.</small></span>
-                            <FaChevronRight className="profile-setting-action" />
-                        </button>
-                    </section>
-
-                    <section className="profile-section">
-                        <div className="profile-section-heading"><div><span>COMODIDAD</span><h2>Experiencia</h2></div><FaEye /></div>
-                        <button type="button" className="profile-setting clickable" onClick={handleReducedMotionChange} aria-pressed={reducedMotion}>
-                            <span className="profile-setting-icon"><FaEye /></span>
-                            <span className="profile-setting-info"><strong>Reducir animaciones</strong><small>Disminuye movimientos, brillos y transiciones en toda la aplicación.</small></span>
-                            <span className={`profile-toggle ${reducedMotion ? 'active' : ''}`} aria-hidden="true"><span /></span>
-                        </button>
-                    </section>
-
-                    <section className="profile-section">
-                        <div className="profile-section-heading"><div><span>CONTROL</span><h2>Privacidad y datos</h2></div><FaLock /></div>
-                        <div className="profile-privacy-note"><FaUserShield /><div><strong>Tu actividad es privada</strong><p>No hay perfiles públicos ni actividad social visible.</p></div></div>
-                        <button type="button" className="profile-setting clickable" onClick={toggleHistoryPaused} aria-pressed={historyPaused}>
-                            <span className="profile-setting-icon">{historyPaused ? <FaPlay /> : <FaPause />}</span>
-                            <span className="profile-setting-info"><strong>{historyPaused ? 'Reanudar historial' : 'Pausar historial'}</strong><small>{historyPaused ? 'Las nuevas escuchas no se guardan.' : `${listeningHistory.length} escuchas guardadas en este dispositivo.`}</small></span>
-                            <span className={`profile-toggle ${!historyPaused ? 'active' : ''}`} aria-hidden="true"><span /></span>
-                        </button>
-                        <button type="button" className="profile-setting clickable" onClick={handleClearHistory} disabled={!listeningHistory.length}>
-                            <span className="profile-setting-icon profile-setting-icon--danger"><FaTrash /></span>
-                            <span className="profile-setting-info"><strong>Borrar historial</strong><small>No elimina favoritos, álbumes ni playlists.</small></span>
-                            <FaChevronRight className="profile-setting-action" />
-                        </button>
-                        <div className="profile-panel profile-metrics-card">
-                            <div><FaDatabase /><strong>Medición privada local</strong></div>
-                            <p>{successSummary.meaningfulPlayback} escuchas de 30 s · {successSummary.radioStarted} radios · {successSummary.magicPlaylists} playlists mágicas.</p>
-                            <button type="button" onClick={handleClearMetrics}>Borrar contadores locales</button>
+                        <div className="profile-settings-group">
+                            <button type="button" className="profile-setting" onClick={toggleCrossfade} aria-pressed={isCrossfadeEnabled}>
+                                <span className="profile-setting-icon"><FaVolumeUp /></span>
+                                <span className="profile-setting-info"><strong>Transiciones suaves</strong><small>Mezcla brevemente canciones compatibles.</small></span>
+                                <span className={`profile-toggle ${isCrossfadeEnabled ? 'active' : ''}`} aria-hidden="true"><span /></span>
+                            </button>
+                            <button type="button" className="profile-setting" onClick={handleSmartPrefetchChange} aria-pressed={smartPrefetch}>
+                                <span className="profile-setting-icon"><FaCloudDownloadAlt /></span>
+                                <span className="profile-setting-info"><strong>Precarga inteligente</strong><small>Prepara las próximas canciones para reducir esperas.</small></span>
+                                <span className={`profile-toggle ${smartPrefetch ? 'active' : ''}`} aria-hidden="true"><span /></span>
+                            </button>
                         </div>
                     </section>
 
-                    <section className="profile-section profile-session-section">
-                        <div className="profile-section-heading"><div><span>CUENTA</span><h2>Sesión</h2></div></div>
-                        <button type="button" className="profile-setting clickable profile-setting--danger" onClick={handleSignOut}>
-                            <span className="profile-setting-icon"><FaSignOutAlt /></span>
-                            <span className="profile-setting-info"><strong>Cerrar sesión</strong><small>Salir de {user?.email || 'esta cuenta'}.</small></span>
-                            <FaChevronRight className="profile-setting-action" />
-                        </button>
+                    <section className="profile-section">
+                        <div className="profile-section-heading"><div><span>COMODIDAD</span><h2>Experiencia</h2><p>Adapta la interfaz a tu forma de usarla.</p></div><FaEye /></div>
+                        <div className="profile-settings-group">
+                            <button type="button" className="profile-setting" onClick={handleReducedMotionChange} aria-pressed={reducedMotion}>
+                                <span className="profile-setting-icon"><FaEye /></span>
+                                <span className="profile-setting-info"><strong>Reducir animaciones</strong><small>Disminuye movimientos y brillos en toda la app.</small></span>
+                                <span className={`profile-toggle ${reducedMotion ? 'active' : ''}`} aria-hidden="true"><span /></span>
+                            </button>
+                            <button type="button" className="profile-setting" onClick={handleClearPlaybackCache}>
+                                <span className="profile-setting-icon"><FaBolt /></span>
+                                <span className="profile-setting-info"><strong>Renovar audio temporal</strong><small>Úsalo si una canción dejó de cargar correctamente.</small></span>
+                                <FaChevronRight className="profile-setting-action" />
+                            </button>
+                        </div>
+                    </section>
+
+                    <section className="profile-section">
+                        <div className="profile-section-heading"><div><span>PRIVACIDAD</span><h2>Actividad y datos</h2><p>Tú decides qué se conserva en el dispositivo.</p></div><FaLock /></div>
+                        <div className="profile-privacy-note"><FaUserShield /><div><strong>Tu actividad no es pública</strong><p>El historial y los contadores de uso se mantienen únicamente para personalizar tu experiencia.</p></div></div>
+                        <div className="profile-settings-group">
+                            <button type="button" className="profile-setting" onClick={toggleHistoryPaused} aria-pressed={!historyPaused}>
+                                <span className="profile-setting-icon">{historyPaused ? <FaPause /> : <FaPlay />}</span>
+                                <span className="profile-setting-info"><strong>Guardar historial</strong><small>{historyPaused ? 'Pausado: las nuevas escuchas no se guardan.' : `Activo: ${listeningHistory.length} escuchas en este dispositivo.`}</small></span>
+                                <span className={`profile-toggle ${!historyPaused ? 'active' : ''}`} aria-hidden="true"><span /></span>
+                            </button>
+                            <button type="button" className="profile-setting" onClick={handleClearHistory} disabled={!listeningHistory.length}>
+                                <span className="profile-setting-icon profile-setting-icon--danger"><FaTrash /></span>
+                                <span className="profile-setting-info"><strong>Borrar historial</strong><small>Tus favoritos, álbumes y playlists no cambian.</small></span>
+                                <FaChevronRight className="profile-setting-action" />
+                            </button>
+                        </div>
+                        <details className="profile-data-details">
+                            <summary><span><FaDatabase /> Datos de uso locales</span><FaChevronRight /></summary>
+                            <div className="profile-data-details__body">
+                                <p>{successSummary.meaningfulPlayback} escuchas completas · {successSummary.radioStarted} radios iniciadas · {successSummary.magicPlaylists} playlists creadas.</p>
+                                <button type="button" onClick={handleClearMetrics}>Borrar estos contadores</button>
+                            </div>
+                        </details>
+                    </section>
+
+                    <section className="profile-section profile-section--wide profile-session-section">
+                        <div className="profile-section-heading"><div><span>CUENTA</span><h2>Acceso</h2><p>Información de inicio de sesión.</p></div><FaCog /></div>
+                        <div className="profile-account-card">
+                            <span className="profile-setting-icon"><FaEnvelope /></span>
+                            <span className="profile-setting-info"><strong>{user?.email || 'Correo no disponible'}</strong><small>{user?.emailVerified ? 'Correo verificado' : 'Correo de acceso'}</small></span>
+                            {user?.emailVerified && <FaCheckCircle className="profile-verified-icon" aria-label="Correo verificado" />}
+                        </div>
+                        <button type="button" className="profile-signout-button" onClick={handleSignOut}><FaSignOutAlt /><span>Cerrar sesión</span></button>
+                        <p className="profile-version">ParadisQuo · experiencia personal de música</p>
                     </section>
                 </main>
             </div>
+
+            <input ref={fileInputRef} type="file" accept="image/jpeg,image/png,image/webp" onChange={handleFileSelect} hidden />
+
+            {isEditProfileOpen && (
+                <div className="profile-editor-backdrop" role="presentation" onMouseDown={(event) => {
+                    if (event.target === event.currentTarget && !isSavingName && !isUploadingPhoto) handleCancelEditName();
+                }}>
+                    <section className="profile-editor" role="dialog" aria-modal="true" aria-labelledby="profile-editor-title">
+                        <div className="profile-editor-handle" aria-hidden="true" />
+                        <header className="profile-editor-header">
+                            <div><span>CUENTA</span><h2 id="profile-editor-title">Editar perfil</h2></div>
+                            <button type="button" onClick={handleCancelEditName} disabled={isSavingName || isUploadingPhoto} aria-label="Cerrar editor"><FaTimes /></button>
+                        </header>
+                        <div className="profile-editor-avatar-wrap">
+                            <button type="button" className="profile-avatar profile-avatar--editor" onClick={handleAvatarClick} disabled={isUploadingPhoto} aria-label="Seleccionar nueva foto">
+                                {photoPreview ? <img src={photoPreview} alt="" /> : <span className="profile-avatar-initial">{getUserInitial()}</span>}
+                                {isUploadingPhoto && <span className="profile-avatar-loading"><span className="btn-spinner" /></span>}
+                            </button>
+                            <button type="button" className="profile-photo-action" onClick={handleAvatarClick} disabled={isUploadingPhoto}><FaCamera /> {isUploadingPhoto ? 'Subiendo…' : 'Cambiar foto'}</button>
+                            <small>JPG, PNG o WebP. La imagen se optimiza automáticamente.</small>
+                        </div>
+                        <div className="profile-edit-field">
+                            <label htmlFor="profile-display-name">Nombre visible</label>
+                            <input id="profile-display-name" type="text" value={editedName} onChange={(event) => setEditedName(event.target.value)} className="profile-name-input" placeholder="Tu nombre" maxLength={40} autoFocus={isEditingName} onKeyDown={(event) => { if (event.key === 'Enter') handleSaveName(); }} />
+                            <span>{editedName.trim().length}/40 caracteres</span>
+                        </div>
+                        <div className="profile-editor-actions">
+                            <button type="button" className="profile-editor-cancel" onClick={handleCancelEditName} disabled={isSavingName || isUploadingPhoto}>Cancelar</button>
+                            <button type="button" className="profile-editor-save" onClick={handleSaveName} disabled={isSavingName || isUploadingPhoto || !editedName.trim()}>{isSavingName ? <><span className="btn-spinner" /> Guardando</> : 'Guardar cambios'}</button>
+                        </div>
+                    </section>
+                </div>
+            )}
         </div>,
         document.body
     );

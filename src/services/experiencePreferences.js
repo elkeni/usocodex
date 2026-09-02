@@ -1,4 +1,5 @@
 export const REDUCED_MOTION_STORAGE_KEY = 'paradox_reduced_motion';
+export const SMART_PREFETCH_STORAGE_KEY = 'paradox_smart_prefetch';
 
 export const getReducedMotionPreference = (storage = globalThis.localStorage) => {
     try {
@@ -25,7 +26,21 @@ export const setReducedMotionPreference = (enabled, storage = globalThis.localSt
     return normalized;
 };
 
+export const getSmartPrefetchPreference = (storage = globalThis.localStorage) => {
+    try {
+        const stored = storage?.getItem(SMART_PREFETCH_STORAGE_KEY);
+        return stored === null || stored === undefined ? true : stored === 'true';
+    } catch {
+        return true;
+    }
+};
+
+export const setSmartPrefetchPreference = (enabled, storage = globalThis.localStorage) => {
+    const normalized = Boolean(enabled);
+    try { storage?.setItem(SMART_PREFETCH_STORAGE_KEY, String(normalized)); } catch { /* opcional */ }
+    return normalized;
+};
+
 export const initializeExperiencePreferences = () => {
     applyReducedMotionPreference(getReducedMotionPreference());
 };
-

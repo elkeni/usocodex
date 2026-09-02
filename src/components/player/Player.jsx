@@ -25,6 +25,7 @@ import { useFeedback } from '../../context/feedbackContext';
 import { fetchLyrics, getArtistInfo, getAlbumDetails, artistGetTopTracks } from '../../services/unifiedService';
 import { getArtistPath } from '../../services/artistIdentity';
 import { getAlbumPath } from '../../services/albumNavigation';
+import { getSpotifyListeningUrl } from '../../services/externalListening';
 import useBodyScrollLock from '../../hooks/useBodyScrollLock';
 
 import './Player.css';
@@ -409,6 +410,10 @@ export default function Player() {
     const trackArtistName = getTrackArtist(currentTrack);
     const trackArtist = trackArtistName || 'Artista desconocido';
     const trackAlbum = getTrackAlbum(currentTrack);
+    const spotifyListeningUrl = useMemo(
+        () => getSpotifyListeningUrl(currentTrack),
+        [currentTrack]
+    );
     const currentTimeSeconds = played * duration;
     const progressPercent = duration > 0 ? (played * 100) : 0;
     const repeatLabel = repeatMode === 2 ? 'Repetir esta canción' : repeatMode === 1 ? 'Repetir toda la cola' : 'Activar repetición';
@@ -944,7 +949,17 @@ export default function Player() {
 
                     {(isLoading || isBuffering || errorMsg) && (
                         <div className={`ytm-playback-notice${errorMsg ? ' is-error' : ''}`} role={errorMsg ? 'alert' : 'status'} aria-live="polite">
-                            {errorMsg || (isBuffering ? 'La conexión está lenta. Recuperando el audio…' : 'Preparando la canción…')}
+                            <span>{errorMsg || (isBuffering ? 'La conexión está lenta. Recuperando el audio…' : 'Preparando la canción…')}</span>
+                            {errorMsg && spotifyListeningUrl && (
+                                <a
+                                    className="ytm-spotify-fallback"
+                                    href={spotifyListeningUrl}
+                                    target="_blank"
+                                    rel="noopener noreferrer"
+                                >
+                                    Escuchar en Spotify
+                                </a>
+                            )}
                         </div>
                     )}
 

@@ -15,6 +15,7 @@ import {
     getResolvedAudioQualityMode,
 } from "../services/audioQuality";
 import { playbackPrefetchService } from "../services/playbackPrefetchService";
+import { getSmartPrefetchPreference } from "../services/experiencePreferences";
 import {
     appendUniqueTracks,
     findQueueIndex,
@@ -934,7 +935,7 @@ export const PlayerProvider = ({ children }) => {
     // URL fetch con cache - CONTRATO FORMAL
     // =========================
     const resolveAudioUrl = useCallback(
-        async (track) => {
+        async (track, { bypassNegativeCache = false } = {}) => {
             const artistName = getSafeString(track?.artist);
             const trackName = getSafeString(track?.name || track?.title);
             const trackDuration = track?.duration || 0;
@@ -1021,7 +1022,7 @@ export const PlayerProvider = ({ children }) => {
                 albumId: track?.albumId || null,
                 title: trackName,
                 duration: trackDuration,
-            });
+            }, { bypassNegativeCache });
 
             // [CONTRATO] Interpretar resultado según status
             if (result.status === "unavailable") {
@@ -1218,121 +1219,91 @@ export const PlayerProvider = ({ children }) => {
         return false;
     }, [clearPrefetch, repeatMode]);
 
-    // Motor de Prefetching
+    // Motor de prefetch: usa el endpoint dedicado y limita la concurrencia.
     const runAggressivePrefetch = useCallback(async (startIndex, queueSource) => {
-        if (!queueSource?.length || startIndex < 0 || isPrefetching.current) return;
+        if (!getSmartPrefetchPreference() || !queueSource?.length || startIndex < 0 || isPrefetching.current) return;
 
         const cache = prefetchCacheRef.current;
         const sessionId = queueSessionRef.current;
         const runId = ++prefetchRunRef.current;
-        isPrefetching.current = true;
-        let pIndex = startIndex;
+        const qualityMode = getResolvedAudioQualityMode();
+        const candidates = [];
         const processedKeys = new Set();
-        const MAX_LOOKAHEAD_TOTAL = 5; // Limite total de tracks a revisar
+        let candidateIndex = startIndex;
 
-        // Precargar audio bytes SOLO de la inmediata siguiente (para gapless real)
-        let immediateNextFound = false;
-        let lookaheadCount = 0;
-
-        try {
-        for (let offset = 1; offset <= MAX_LOOKAHEAD_TOTAL; offset++) {
-            if (sessionId !== queueSessionRef.current || runId !== prefetchRunRef.current) return;
-            pIndex++;
-            // Wrap around logic
-            if (pIndex >= queueSource.length) {
-                if (repeatMode === 1) pIndex = 0; // Loop simple o infinito
-                else break; // Fin de la cola
+        for (let offset = 1; offset <= 6 && candidates.length < PREFETCH_LOOKAHEAD; offset += 1) {
+            candidateIndex += 1;
+            if (candidateIndex >= queueSource.length) {
+                if (repeatMode === 1) candidateIndex = 0;
+                else break;
             }
-
-            const track = queueSource[pIndex];
+            const track = queueSource[candidateIndex];
             if (!track) continue;
-
-            const key = makeAudioCacheKey(track);
-            if (processedKeys.has(key)) continue; // Evitar duplicados en el mismo ciclo (si la cola repite tracks)
+            const key = makeAudioCacheKey(track, qualityMode);
+            if (processedKeys.has(key)) continue;
             processedKeys.add(key);
 
-            // Solo hacemos 'prefetch' activo de los primeros 3 válidos
-            if (lookaheadCount >= PREFETCH_LOOKAHEAD) break;
+            const cachedEntry = cache.get(key);
+            const expiredError = cachedEntry?.status === 'error' && Date.now() - cachedEntry.timestamp >= 45 * 1000;
+            const expiredAudio = cachedEntry?.status === 'ok' && cachedEntry.expiresAt && Date.now() >= cachedEntry.expiresAt;
+            if (expiredError || expiredAudio) cache.delete(key);
+            candidates.push({ track, index: candidateIndex, key });
+        }
 
-            // Si ya está en caché y es válido, pasamos (pero revisamos si necesitamos cargar el audio object)
-            if (cache.has(key)) {
-                const cachedEntry = cache.get(key);
-                if (cachedEntry.status === 'error' && Date.now() - cachedEntry.timestamp > 10 * 1000) {
-                    cache.delete(key);
-                } else if (cachedEntry.status === 'ok' && cachedEntry.expiresAt && Date.now() >= cachedEntry.expiresAt) {
-                    cache.delete(key);
-                } else {
-                    if (cachedEntry.status === 'ok') {
-                        // Solo contamos como "prefetch exitoso" los que están OK
-                        lookaheadCount++;
+        if (!candidates.length) return;
+        isPrefetching.current = true;
 
-                        if (offset === 1 && !immediateNextFound) {
-                            // Cargar bytes en el segundo player para zero-latency
-                            nextAudioRef.current.src = cachedEntry.url;
-                            nextAudioRef.current.preload = "auto";
-                            nextAudioRef.current.load();
-                            immediateNextFound = true;
+        try {
+            const pendingCandidates = candidates.filter(({ key }) => !cache.has(key));
+            const results = await playbackPrefetchService.prefetchMany(
+                pendingCandidates.map(({ track }) => track),
+                { limit: 6, concurrency: 4, qualityMode },
+            );
+            if (sessionId !== queueSessionRef.current || runId !== prefetchRunRef.current) return;
 
-                            // [FIX LOOP] Sync legacy refs to satisfy onTimeUpdate check & playTrackInternal
-                            // SOLO actualizar para el INMEDIATO siguiente, no para los futuros
-                            prefetchedNextUrl.current = cachedEntry.url;
-                            prefetchedNextTrack.current = track;
-                            prefetchedNextIndex.current = pIndex;
-                            prefetchTriggeredForTrack.current = key;
-                        }
-                    }
-                    continue;
-                }
-            }
-
-            // Resolver URL
-            // console.log(`[Prefetch] 🔮 Resolving lookahead +${offset}: ${track.name}`);
-            try {
-                const result = await resolveAudioUrl(track);
-                if (sessionId !== queueSessionRef.current || runId !== prefetchRunRef.current) return;
-
-                if (result.status === 'ok' && result.url) {
+            pendingCandidates.forEach(({ key }, index) => {
+                const playback = results[index];
+                if (playback?.audioUrl) {
                     cache.set(key, {
-                        url: result.url,
+                        url: playback.audioUrl,
                         status: 'ok',
                         timestamp: Date.now(),
-                        quality: result.quality || null,
-                        qualityMode: result.qualityMode || getResolvedAudioQualityMode(),
-                        cacheStatus: result.cacheStatus,
-                        source: result.source,
-                        timings: result.timings,
-                        expiresAt: result.expiresAt,
+                        quality: playback.quality || null,
+                        qualityMode: playback.qualityMode || qualityMode,
+                        cacheStatus: playback.cacheStatus,
+                        source: playback.track?.source,
+                        timings: playback.timings,
+                        expiresAt: playback.expiresAt,
                     });
-                    lookaheadCount++;
-
-                    // Si es la inmediata siguiente, cargar bytes
-                    if (offset === 1 && !immediateNextFound) {
-                        nextAudioRef.current.src = result.url;
-                        nextAudioRef.current.preload = "auto";
-                        nextAudioRef.current.load();
-                        immediateNextFound = true;
-
-                        // [FIX LOOP] Sync legacy refs to satisfy onTimeUpdate check & playTrackInternal
-                        prefetchedNextUrl.current = result.url;
-                        prefetchedNextTrack.current = track;
-                        prefetchedNextIndex.current = pIndex;
-                        prefetchTriggeredForTrack.current = key;
-                    }
                 } else {
-                    // El error solo evita repetir de inmediato esta precarga.
                     cache.set(key, { status: 'error', timestamp: Date.now() });
                 }
-            } catch (err) {
-                if (sessionId === queueSessionRef.current && runId === prefetchRunRef.current) {
-                    cache.set(key, { status: 'error', timestamp: Date.now() });
-                }
+            });
+
+            const nextPlayable = candidates.find(({ key }) => {
+                const entry = cache.get(key);
+                return entry?.status === 'ok' && entry.url && (!entry.expiresAt || Date.now() < entry.expiresAt);
+            });
+            if (!nextPlayable) {
+                clearPrefetch();
+                return;
             }
-        }
+
+            const cachedPlayback = cache.get(nextPlayable.key);
+            prefetchedNextUrl.current = cachedPlayback.url;
+            prefetchedNextTrack.current = nextPlayable.track;
+            prefetchedNextIndex.current = nextPlayable.index;
+            prefetchTriggeredForTrack.current = nextPlayable.key;
+            if (nextAudioRef.current && nextAudioRef.current.src !== cachedPlayback.url) {
+                nextAudioRef.current.src = cachedPlayback.url;
+                nextAudioRef.current.preload = 'auto';
+                nextAudioRef.current.load();
+            }
         } finally {
             if (runId === prefetchRunRef.current) isPrefetching.current = false;
             prunePrefetchCache();
         }
-    }, [resolveAudioUrl, repeatMode, prunePrefetchCache]);
+    }, [repeatMode, prunePrefetchCache, clearPrefetch]);
 
     // Trigger de prefetch cuando cambia la canción O cuando crece la cola.
     // Las radios del Feed empiezan con una pista y agregan el resto después.
@@ -1383,7 +1354,7 @@ export const PlayerProvider = ({ children }) => {
     // Core play (Modificado para usar Buffer)
     // =========================
     const playTrackInternal = useCallback(
-        async (track, newIndex, useShuffledIndex = false) => {
+        async (track, newIndex, useShuffledIndex = false, explicitIntent = false) => {
             if (!track) return;
 
             window.clearTimeout(pendingSkipTimeoutRef.current);
@@ -1468,7 +1439,7 @@ export const PlayerProvider = ({ children }) => {
 
             // No hay prefetch o cache no válido - hacer fetch normal
             try {
-                const result = await resolveAudioUrl(track);
+                const result = await resolveAudioUrl(track, { bypassNegativeCache: explicitIntent });
 
                 if (activeRequestId.current !== requestId) return;
 
@@ -1670,7 +1641,7 @@ export const PlayerProvider = ({ children }) => {
             queueRef.current = newQueue;
             indexRef.current = originalIndex;
 
-            playTrackInternal(selectedTrack, effectiveIndex, effectiveShuffle);
+            playTrackInternal(selectedTrack, effectiveIndex, effectiveShuffle, true);
             return sessionId;
         },
         [isShuffle, generateShuffledQueue, playTrackInternal, clearPrefetch]
@@ -2008,7 +1979,7 @@ export const PlayerProvider = ({ children }) => {
             if (isShuffle) setShuffledIndex(nextIndex);
             else setCurrentIndex(nextIndex);
 
-            playTrackInternal(q[nextIndex], nextIndex, isShuffle);
+            playTrackInternal(q[nextIndex], nextIndex, isShuffle, !isAuto);
             // Preparar +1 ahora; los timers pueden quedar congelados en iOS.
             primeNextFromCache(nextIndex, q);
         },
@@ -2036,7 +2007,7 @@ export const PlayerProvider = ({ children }) => {
             const prevIndex = i - 1;
             if (isShuffle) setShuffledIndex(prevIndex);
             else setCurrentIndex(prevIndex);
-            playTrackInternal(q[prevIndex], prevIndex, isShuffle);
+            playTrackInternal(q[prevIndex], prevIndex, isShuffle, true);
         } else if (a) {
             a.currentTime = 0;
         }
@@ -2083,7 +2054,7 @@ export const PlayerProvider = ({ children }) => {
             } else {
                 setIsLoading(true);
                 try {
-                    const result = await resolveAudioUrl(currentTrack);
+                    const result = await resolveAudioUrl(currentTrack, { bypassNegativeCache: true });
                     if (result.status === "ok" && result.url) {
                         setCurrentAudioQuality(result.quality || null);
                         setCurrentAudioQualityMode(result.qualityMode || getResolvedAudioQualityMode());
@@ -2458,6 +2429,10 @@ export const PlayerProvider = ({ children }) => {
     const toggleQueue = useCallback(() => setIsQueueOpen((p) => !p), []);
     const toggleHistoryPaused = useCallback(() => setHistoryPaused((paused) => !paused), []);
     const clearListeningHistory = useCallback(() => setListeningHistory([]), []);
+    const clearPlaybackCacheState = useCallback(() => {
+        setCachedAudioUrl(null);
+        try { localStorage.removeItem("paradox_audio_cache"); } catch { }
+    }, []);
 
     // =========================
     // Value memo (menos renders)
@@ -2505,6 +2480,7 @@ export const PlayerProvider = ({ children }) => {
             primeResolvedTrack,
             toggleHistoryPaused,
             clearListeningHistory,
+            clearPlaybackCacheState,
 
             addToQueue,
             appendToQueue,
@@ -2556,6 +2532,7 @@ export const PlayerProvider = ({ children }) => {
             primeResolvedTrack,
             toggleHistoryPaused,
             clearListeningHistory,
+            clearPlaybackCacheState,
             addToQueue,
             appendToQueue,
             playNextInQueue,
