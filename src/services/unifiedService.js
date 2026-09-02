@@ -2,13 +2,14 @@
  * UNIFIED MUSIC SERVICE 2025
  * REFACTORIZADO: Frontend ORQUESTA, Backend DECIDE
  * 
- * El frontend NO busca, NO filtra, NO puntúa, NO elige calidad.
- * Solo pide al backend y reproduce lo que el backend decide.
+ * El frontend NO busca, NO filtra ni puntúa resultados de audio.
+ * Solo comunica la preferencia de calidad y reproduce lo que el backend decide.
  */
 
 import { AuthService } from './authService';
 import { CONFIG } from './config';
 import { isArtistCreditMatch, normalizeArtistName } from './artistIdentity';
+import { getResolvedAudioQualityMode } from './audioQuality';
 
 // =============================================================================
 // UTILIDADES DE LIMPIEZA Y NORMALIZACIÓN (para metadatos UI, NO para decisiones)
@@ -215,6 +216,7 @@ const DeezerClient = {
 
         return data.data.map(album => ({
             id: album.id,
+            deezerId: album.id,
             name: album.title,
             artist: album.artist?.name || resolvedArtistName,
             artistId: album.artist?.id || artistId,
@@ -309,6 +311,7 @@ const DeezerClient = {
 
         return {
             id: albumData.id,
+            deezerId: albumData.id,
             name: albumData.title,
             artist: albumData.artist?.name,
             artistId: albumData.artist?.id,
@@ -376,7 +379,20 @@ function unavailable(trackInfo, reason) {
  * ========================================================================
  */
 const audioUrlCache = new Map();
+
+export const clearAudioUrlCache = () => {
+    audioUrlCache.clear();
+};
 const CACHE_TTL_MS = 20 * 60 * 1000; // Las URLs de streaming son temporales.
+
+export const buildInstantPlayUrl = (backend, trackInfo, qualityMode) => (
+    `${backend}/api/instant-play?artist=${encodeURIComponent(trackInfo.artist)}`
+    + `&track=${encodeURIComponent(trackInfo.title)}`
+    + (trackInfo.artistId ? `&artistId=${encodeURIComponent(trackInfo.artistId)}` : '')
+    + (trackInfo.id ? `&trackId=${encodeURIComponent(trackInfo.id)}` : '')
+    + (trackInfo.albumId ? `&albumId=${encodeURIComponent(trackInfo.albumId)}` : '')
+    + `&quality=${encodeURIComponent(qualityMode)}`
+);
 
 async function fetchAudioUrl(artistOrTrack, title, duration) {
     // Normalizar entrada
@@ -397,7 +413,8 @@ async function fetchAudioUrl(artistOrTrack, title, duration) {
 
     // 0. CACHÉ EN MEMORIA (Instantánea)
     // Evita round-trips al servidor para tracks recientes
-    const cacheKey = `${trackInfo.artistId || trackInfo.artist}|${trackInfo.albumId || ''}|${trackInfo.id || trackInfo.title}|${trackInfo.duration}`.toLowerCase();
+    const qualityMode = getResolvedAudioQualityMode();
+    const cacheKey = `${trackInfo.artistId || trackInfo.artist}|${trackInfo.albumId || ''}|${trackInfo.id || trackInfo.title}|${trackInfo.duration}|quality:${qualityMode}`.toLowerCase();
     const cached = audioUrlCache.get(cacheKey);
     if (cached) {
         if (Date.now() - cached.timestamp < CACHE_TTL_MS) {
@@ -419,8 +436,9 @@ async function fetchAudioUrl(artistOrTrack, title, duration) {
     const BACKEND = CONFIG.MUSIC_API_URL;
     console.log(`[UnifiedService] 🎵 Solicitando: "${trackInfo.artist} - ${trackInfo.title}"`);
 
-    // Detectar modo Ahorro de Datos (Mobile)
-    const saveData = (navigator.connection && navigator.connection.saveData === true) ? 'on' : 'off';
+    // El modo resuelto también guía al endpoint de índice existente mediante
+    // su encabezado, sin alterar su lógica de matching ni sus reintentos.
+    const saveData = qualityMode === 'data_saver' ? 'on' : 'off';
     if (saveData === 'on') console.log('[UnifiedService] 📱 Modo Ahorro de Datos detectado');
 
     // ═══════════════════════════════════════════════════════════════
@@ -481,7 +499,13 @@ async function fetchAudioUrl(artistOrTrack, title, duration) {
             return {
                 status: "ok",
                 track: trackInfo,
-                audio: { url: audioUrl, bitrate: bestStream.bitrate || 128, source: "index" },
+                audio: {
+                    url: audioUrl,
+                    bitrate: bestStream.bitrate || 128,
+                    quality: `${bestStream.bitrate || 128}kbps`,
+                    qualityMode,
+                    source: "index"
+                },
                 confidence: 1.0
             };
         } catch (e) {
@@ -492,12 +516,7 @@ async function fetchAudioUrl(artistOrTrack, title, duration) {
 
     // --- Promesa B: INSTANT-PLAY (siempre disponible) ---
     const tryInstantPlay = async () => {
-        const instantPlayUrl = `${BACKEND}/api/instant-play?artist=${encodeURIComponent(
-            trackInfo.artist
-        )}&track=${encodeURIComponent(trackInfo.title)}`
-            + (trackInfo.artistId ? `&artistId=${encodeURIComponent(trackInfo.artistId)}` : '')
-            + (trackInfo.id ? `&trackId=${encodeURIComponent(trackInfo.id)}` : '')
-            + (trackInfo.albumId ? `&albumId=${encodeURIComponent(trackInfo.albumId)}` : '');
+        const instantPlayUrl = buildInstantPlayUrl(BACKEND, trackInfo, qualityMode);
 
         const controller = new AbortController();
         // TURBO: Solo 4s para instant-play
@@ -524,7 +543,15 @@ async function fetchAudioUrl(artistOrTrack, title, duration) {
             return {
                 status: "ok",
                 track: trackInfo,
-                audio: { url: data.audioUrl, bitrate: 128, source: "youtube" },
+                audio: {
+                    url: data.audioUrl,
+                    bitrate: Number.parseInt(data.quality, 10) || 128,
+                    quality: data.quality || null,
+                    qualityMode: data.qualityMode || qualityMode,
+                    cacheStatus: data.cacheStatus,
+                    timings: data.timings,
+                    source: data.track?.source || "youtube"
+                },
                 confidence: data.confidence ?? 0.8
             };
         } catch (e) {

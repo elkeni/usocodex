@@ -57,6 +57,21 @@ describe('Player: reproducción en segundo plano', () => {
         expect(playerSource).toContain('url: track.url');
     });
 
+    it('consume una resolución prefetched antes de volver a instant-play', () => {
+        const cacheLookup = playerSource.indexOf('playbackPrefetchService.get(track, qualityMode)');
+        const backendFallback = playerSource.indexOf('const result = await fetchAudioUrl({', cacheLookup);
+        expect(cacheLookup).toBeGreaterThan(-1);
+        expect(backendFallback).toBeGreaterThan(cacheLookup);
+        expect(playerSource).toContain('if (pendingPlayback) prefetchedPlayback = await pendingPlayback');
+    });
+
+    it('renueva una URL prefetched como máximo una vez antes del manejo normal', () => {
+        expect(playerSource).toContain('!activePlaybackRefreshAttemptedRef.current');
+        expect(playerSource).toContain('activePlaybackRefreshAttemptedRef.current = true');
+        expect(playerSource).toContain('playbackPrefetchService.invalidate(track, qualityMode)');
+        expect(playerSource).toContain('activePlaybackWasPrefetchedRef.current = false');
+    });
+
     it('nunca convierte un fallo de precarga en un bloqueo permanente', () => {
         expect(playerSource).not.toContain('Skipping known bad track');
         expect(playerSource).not.toContain('reason: "ALREADY_FAILED"');

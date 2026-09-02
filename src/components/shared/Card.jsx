@@ -1,4 +1,4 @@
-import { useState, useCallback, useEffect, useMemo } from 'react';
+import { useState, useCallback, useEffect, useMemo, useRef } from 'react';
 import { useNavigate } from 'react-router-dom';
 import { getArtistPath } from '../../services/artistIdentity';
 import { getAlbumPath } from '../../services/albumNavigation';
@@ -33,11 +33,15 @@ export default function Card({
     onPlay,
     isLoading = false,
     isPlaying = false,
-    className = ''
+    className = '',
+    onPrefetchIntent,
+    onPlaybackPointerDown,
+    prefetchOnVisible = false,
 }) {
     const navigate = useNavigate();
     const [imgLoaded, setImgLoaded] = useState(false);
     const [imgError, setImgError] = useState(false);
+    const cardRef = useRef(null);
 
     // =========================================================================
     // DATA NORMALIZATION
@@ -89,6 +93,25 @@ export default function Card({
         setImgLoaded(false);
         setImgError(false);
     }, [displayImage]);
+
+    useEffect(() => {
+        if (!prefetchOnVisible || !onPrefetchIntent || !cardRef.current || typeof IntersectionObserver !== 'function') return undefined;
+        let controller = null;
+        const observer = new IntersectionObserver(([entry]) => {
+            if (entry?.isIntersecting) {
+                controller ??= new AbortController();
+                onPrefetchIntent(item, { signal: controller.signal, reason: 'visible' });
+            } else if (controller) {
+                controller.abort();
+                controller = null;
+            }
+        }, { rootMargin: '160px 80px', threshold: 0.05 });
+        observer.observe(cardRef.current);
+        return () => {
+            controller?.abort();
+            observer.disconnect();
+        };
+    }, [item, onPrefetchIntent, prefetchOnVisible]);
 
     // Determine default icon based on type/variant
     const FallbackIcon = useMemo(() => {
@@ -162,11 +185,14 @@ export default function Card({
     // 2. LOADED STATE
     return (
         <div
+            ref={cardRef}
             role="button"
             tabIndex={0}
             className={`app-card variant-${effectiveVariant} ${isPlaying ? 'playing' : ''} ${className}`}
             onClick={handleClick}
             onKeyDown={handleKeyDown}
+            onPointerEnter={() => onPrefetchIntent?.(item, { reason: 'pointer' })}
+            onPointerDown={() => onPlaybackPointerDown?.(item)}
             title={displayTitle}
         >
             {/* Image Container */}

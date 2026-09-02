@@ -1,4 +1,4 @@
-import { useEffect, useState, useCallback, useRef } from 'react';
+import { useEffect, useState, useCallback, useMemo, useRef } from 'react';
 import { useParams, useNavigate } from 'react-router-dom';
 import {
     getAlbumDetails,
@@ -11,7 +11,12 @@ import { FaPlay, FaRandom, FaCompactDisc, FaArrowLeft, FaPlus, FaCheck } from 'r
 import { usePlayerActions } from '../../context/playerContext';
 import { useUser } from '../../context/userContext';
 import PageState from '../../components/shared/PageState';
-import { getAlbumPath, shuffleAlbumTracks } from '../../services/albumNavigation';
+import {
+    getAlbumPath,
+    loadAlbumDetailsDeduped,
+    resolveAlbumIdentity,
+    shuffleAlbumTracks,
+} from '../../services/albumNavigation';
 import { getArtistPath } from '../../services/artistIdentity';
 
 // getBestImage removed - images now come as strings from API
@@ -96,13 +101,18 @@ export default function AlbumDetail() {
     const { playTrack } = usePlayerActions();
     const { isAlbumSaved, toggleSaveAlbum } = useUser();
     const containerRef = useRef(null);
+    const albumLoadGenerationRef = useRef(0);
+
+    const albumIdentity = useMemo(() => resolveAlbumIdentity({ albumId, artist, name }), [albumId, artist, name]);
+    const stableAlbumIdentifier = albumIdentity.stableKey;
+    const albumIdentityRef = useRef(albumIdentity);
+    albumIdentityRef.current = albumIdentity;
 
     const [albumInfo, setAlbumInfo] = useState(null);
     const [relatedAlbums, setRelatedAlbums] = useState([]);
     const [tracks, setTracks] = useState([]);
     const [loading, setLoading] = useState(true);
     const [loadError, setLoadError] = useState(null);
-    const [retryKey, setRetryKey] = useState(0);
     const [playingTrackId, setPlayingTrackId] = useState(null);
     const [playbackError, setPlaybackError] = useState(null);
     const [isScrolled, setIsScrolled] = useState(false);
@@ -124,18 +134,17 @@ export default function AlbumDetail() {
         return () => container.removeEventListener('scroll', handleScroll);
     }, []);
 
-    useEffect(() => {
-        let cancelled = false;
-
-        const fetchData = async () => {
+    const loadAlbumData = useCallback(async () => {
+            const generation = ++albumLoadGenerationRef.current;
+            const identity = albumIdentityRef.current;
             setLoading(true);
             setLoadError(null);
             setPlaybackError(null);
             setRelatedAlbums([]);
             setTracks([]);
             if (containerRef.current) containerRef.current.scrollTop = 0;
-            const safeName = decodeURIComponent(albumId || name || '');
-            const safeArtist = artist ? decodeURIComponent(artist) : '';
+            const safeName = identity.title || identity.deezerId || '';
+            const safeArtist = identity.artist || '';
 
             try {
                 // ⭐ CAMBIO CRÍTICO: Usar getAlbumDetails para obtener datos EXACTOS
@@ -143,8 +152,8 @@ export default function AlbumDetail() {
                 // 1. Busca el álbum exacto del artista correcto
                 // 2. Obtiene el tracklist COMPLETO con orden correcto (track_position)
                 // 3. Incluye metadata precisa (tipo, fecha, duración, explicit, etc.)
-                const albumData = await getAlbumDetails(safeName, safeArtist);
-                if (cancelled) return;
+                const albumData = await loadAlbumDetailsDeduped(identity, getAlbumDetails);
+                if (generation !== albumLoadGenerationRef.current) return;
 
                 if (albumData) {
                     setAlbumInfo(albumData);
@@ -157,7 +166,7 @@ export default function AlbumDetail() {
                     if (albumData.artistId) {
                         try {
                             const otherAlbums = await getArtistAlbums(albumData.artistId, 10);
-                            if (cancelled) return;
+                            if (generation !== albumLoadGenerationRef.current) return;
                             // Filtrar el álbum actual
                             const filtered = otherAlbums
                                 .filter(a => a.id !== albumData.id && a.name !== albumData.name)
@@ -173,18 +182,21 @@ export default function AlbumDetail() {
                     setLoadError('No encontramos un álbum que coincida con este enlace.');
                 }
             } catch (e) {
-                if (cancelled) return;
+                if (generation !== albumLoadGenerationRef.current) return;
                 console.error("[AlbumDetail] Error cargando álbum:", e);
                 setAlbumInfo(null);
                 setLoadError('No pudimos cargar el álbum. Revisa tu conexión e inténtalo otra vez.');
             } finally {
-                if (!cancelled) setLoading(false);
+                if (generation === albumLoadGenerationRef.current) setLoading(false);
             }
-        };
+    }, []);
 
-        if (albumId || (artist && name)) fetchData();
-        return () => { cancelled = true; };
-    }, [albumId, artist, name, retryKey]);
+    useEffect(() => {
+        if (stableAlbumIdentifier) loadAlbumData();
+        return () => { albumLoadGenerationRef.current += 1; };
+        // La identidad estable es la única causa de una nueva carga de álbum.
+        // eslint-disable-next-line react-hooks/exhaustive-deps
+    }, [stableAlbumIdentifier]);
 
     const handlePlayTrack = useCallback(async (track, queueSource = tracks, forceShuffle = false) => {
         if (playingTrackId) return;
@@ -237,6 +249,8 @@ export default function AlbumDetail() {
                     url: audioUrl,
                     urlSource: resolvedUrl ? 'resolved' : 'preview',
                     urlResolvedAt: resolvedUrl ? Date.now() : null,
+                    urlQualityMode: resolvedUrl ? resolution.audio?.qualityMode : null,
+                    audioQuality: resolvedUrl ? resolution.audio?.quality : null,
                     album: albumInfo?.name || name
                 }, fullQueue, {
                     id: `album-${albumInfo?.id || name}`,
@@ -272,7 +286,7 @@ export default function AlbumDetail() {
 
     if (loading) return <PageState variant="loading" title="Cargando álbum" />;
 
-    if (!albumInfo) return <PageState variant="error" title="Álbum no encontrado" message={loadError} actionLabel="Reintentar" onAction={() => setRetryKey(key => key + 1)} secondaryLabel="Volver" onSecondary={() => navigate(-1)} />;
+    if (!albumInfo) return <PageState variant="error" title="Álbum no encontrado" message={loadError} actionLabel="Reintentar" onAction={loadAlbumData} secondaryLabel="Volver" onSecondary={() => navigate(-1)} />;
 
     // CSS Variables para color adaptativo
     const dynamicStyles = {

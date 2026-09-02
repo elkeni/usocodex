@@ -1,4 +1,5 @@
 const STORAGE_KEY = 'paradox_product_metrics_v1';
+const PLAYBACK_PERFORMANCE_KEY = 'paradox_playback_performance_v1';
 
 export const PRODUCT_EVENTS = Object.freeze({
     PLAYBACK_STARTED: 'playback_started',
@@ -37,8 +38,55 @@ export const recordProductEvent = (eventName) => {
     }
 };
 
+const safeMetricDimension = (value, allowed, fallback = 'unknown') => (
+    allowed.has(String(value || '').toLowerCase()) ? String(value).toLowerCase() : fallback
+);
+
+/** Agrega rendimiento sin guardar canciones, consultas, IDs ni URLs. */
+export const recordPlaybackPerformance = ({
+    clickToPlayingMs,
+    bufferMs,
+    backendMs,
+    usedPrefetch,
+    cacheStatus,
+    quality,
+    source,
+} = {}) => {
+    try {
+        const parsed = JSON.parse(localStorage.getItem(PLAYBACK_PERFORMANCE_KEY) || 'null');
+        const metrics = parsed?.version === 1 ? parsed : {
+            version: 1,
+            count: 0,
+            totals: { clickToPlayingMs: 0, bufferMs: 0, backendMs: 0 },
+            prefetched: 0,
+            byCache: {},
+            byQuality: {},
+            bySource: {},
+        };
+        const bounded = (value) => Math.max(0, Math.min(Number(value) || 0, 120_000));
+        const cache = safeMetricDimension(cacheStatus, new Set(['memory', 'redis', 'inflight', 'miss', 'local']));
+        const qualityKey = /^\d+kbps$/i.test(String(quality || '')) ? String(quality).toLowerCase() : 'unknown';
+        const sourceKey = safeMetricDimension(source, new Set(['saavn', 'youtube', 'audiomack', 'soundcloud', 'index', 'preview']));
+        metrics.count += 1;
+        metrics.totals.clickToPlayingMs += bounded(clickToPlayingMs);
+        metrics.totals.bufferMs += bounded(bufferMs);
+        metrics.totals.backendMs += bounded(backendMs);
+        if (usedPrefetch) metrics.prefetched += 1;
+        metrics.byCache[cache] = (metrics.byCache[cache] || 0) + 1;
+        metrics.byQuality[qualityKey] = (metrics.byQuality[qualityKey] || 0) + 1;
+        metrics.bySource[sourceKey] = (metrics.bySource[sourceKey] || 0) + 1;
+        localStorage.setItem(PLAYBACK_PERFORMANCE_KEY, JSON.stringify(metrics));
+        return true;
+    } catch {
+        return false;
+    }
+};
+
 export const clearProductMetrics = () => {
-    try { localStorage.removeItem(STORAGE_KEY); } catch { /* almacenamiento no disponible */ }
+    try {
+        localStorage.removeItem(STORAGE_KEY);
+        localStorage.removeItem(PLAYBACK_PERFORMANCE_KEY);
+    } catch { /* almacenamiento no disponible */ }
 };
 
 export const getSuccessSummary = () => {

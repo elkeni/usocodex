@@ -174,6 +174,8 @@ export default function ArtistDetail() {
                     url: audioUrl,
                     urlSource: resolvedUrl ? 'resolved' : 'preview',
                     urlResolvedAt: resolvedUrl ? Date.now() : null,
+                    urlQualityMode: resolvedUrl ? resolution.audio?.qualityMode : null,
+                    audioQuality: resolvedUrl ? resolution.audio?.quality : null,
                     album: track.album || 'Top Hits'
                 }, artistQueue, {
                     id: `artist-${artistInfo?.id || name}`,

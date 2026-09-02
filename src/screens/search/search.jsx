@@ -21,9 +21,10 @@ import { usePlayerActions } from '../../context/playerContext';
 import { useUser } from '../../context/userContext';
 import useBodyScrollLock from '../../hooks/useBodyScrollLock';
 import {
-    searchGlobal,
-    fetchAudioUrl
+    searchGlobal
 } from '../../services/unifiedService';
+import { getPrefetchLimitForQuality, playbackPrefetchService } from '../../services/playbackPrefetchService';
+import { getResolvedAudioQualityMode } from '../../services/audioQuality';
 import { buildRadioQueue } from '../../services/radioService';
 import { PRODUCT_EVENTS, recordProductEvent } from '../../services/productMetrics';
 import { getAlbumPath } from '../../services/albumNavigation';
@@ -472,7 +473,7 @@ const LongPressMenu = ({ track, onClose }) => {
 };
 
 // Track Row - Lista de canciones estilo Apple Music (mejorado)
-const TrackRow = ({ track, isLoading, onPlay, showRank = false, index = 0, onLongPress }) => {
+const TrackRow = ({ track, isLoading, onPlay, showRank = false, index = 0, onLongPress, onPrefetch, onPrime }) => {
     const img = getImageUrl(track);
     const duration = formatDuration(track.duration);
 
@@ -509,6 +510,8 @@ const TrackRow = ({ track, isLoading, onPlay, showRank = false, index = 0, onLon
         <button type="button"
             className="track-row"
             onClick={handleClick}
+            onPointerEnter={() => onPrefetch?.(track)}
+            onPointerDown={() => onPrime?.(track)}
             onMouseDown={startPress}
             onMouseUp={cancelPress}
             onMouseLeave={cancelPress}
@@ -574,7 +577,7 @@ const TrackRow = ({ track, isLoading, onPlay, showRank = false, index = 0, onLon
 // =============================================================================
 export default function Search() {
     const navigate = useNavigate();
-    const { playTrack, appendToQueue } = usePlayerActions();
+    const { playTrack, appendToQueue, primeResolvedTrack } = usePlayerActions();
 
     // Referencias
     const inputRef = useRef(null);
@@ -589,6 +592,8 @@ export default function Search() {
     const [query, setQuery] = useState('');
     const [filter, setFilter] = useState('all'); // all, artist, album, track, playlist
     const [results, setResults] = useState(createEmptyResults);
+    const [resultsQuery, setResultsQuery] = useState('');
+    const [resultsFilter, setResultsFilter] = useState('all');
     const [isLoading, setIsLoading] = useState(false);
     const [searchNotice, setSearchNotice] = useState(null);
     const [hasSearched, setHasSearched] = useState(false);
@@ -634,6 +639,8 @@ export default function Search() {
         if (cachedState) {
             if (cachedState.query) setQuery(cachedState.query);
             if (cachedState.results) setResults(cachedState.results);
+            if (cachedState.query && cachedState.results) setResultsQuery(cachedState.query);
+            if (cachedState.filter) setResultsFilter(cachedState.filter);
             if (cachedState.hasSearched) setHasSearched(cachedState.hasSearched);
             if (cachedState.filter) setFilter(cachedState.filter);
             if (cachedState.query && cachedState.results) {
@@ -660,6 +667,7 @@ export default function Search() {
         if (!searchQuery || searchQuery.trim().length < 2) {
             searchRequestRef.current += 1;
             setResults(createEmptyResults());
+            setResultsQuery('');
             setHasSearched(false);
             setIsLoading(false);
             setSearchNotice(null);
@@ -672,6 +680,8 @@ export default function Search() {
 
         if (searchCacheRef.current[cacheKey]) {
             setResults(searchCacheRef.current[cacheKey]);
+            setResultsQuery(cleanQuery);
+            setResultsFilter(filter);
             setHasSearched(true);
             setIsLoading(false);
             setSearchNotice(null);
@@ -682,6 +692,7 @@ export default function Search() {
         setHasSearched(true);
         setSearchNotice(null);
         setResults(createEmptyResults());
+        setResultsQuery('');
 
         try {
             const requestedTypes = filter === 'all' ? SEARCH_TYPES : [filter];
@@ -730,6 +741,7 @@ export default function Search() {
 
             const mapAlbum = a => ({
                 id: a.id,
+                deezerId: a.id,
                 name: a.title,
                 artist: a.artist?.name,
                 artistId: a.artist?.id || null,
@@ -771,6 +783,8 @@ export default function Search() {
             };
 
             setResults(resultsData);
+            setResultsQuery(cleanQuery);
+            setResultsFilter(filter);
             setSearchNotice(failedRequests > 0
                 ? (failedRequests === requestedTypes.length
                     ? 'No pudimos consultar el catálogo. Revisa tu conexión e inténtalo otra vez.'
@@ -875,11 +889,40 @@ export default function Search() {
                 performSearch(query);
             } else {
                 setResults({ tracks: [], artists: [], albums: [], playlists: [] });
+                setResultsQuery('');
                 setHasSearched(false);
             }
         }, 400);
         return () => clearTimeout(timer);
     }, [query, performSearch]);
+
+    // Los resultados deben permanecer estables antes de iniciar trabajo de
+    // baja prioridad. El AbortController descarta la consulta anterior.
+    useEffect(() => {
+        if (!query.trim() || filter !== resultsFilter || normalizeSearchText(query) !== normalizeSearchText(resultsQuery)
+            || isLoading || !results.tracks.length) return undefined;
+        const controller = new AbortController();
+        const timer = window.setTimeout(() => {
+            const qualityMode = getResolvedAudioQualityMode();
+            playbackPrefetchService.prefetchMany(results.tracks, {
+                limit: getPrefetchLimitForQuality(qualityMode, 'search'),
+                concurrency: 2,
+                qualityMode,
+                signal: controller.signal,
+            });
+        }, 300);
+        return () => {
+            window.clearTimeout(timer);
+            controller.abort();
+        };
+    }, [query, resultsQuery, resultsFilter, filter, isLoading, results.tracks]);
+
+    const handlePrefetchIntent = useCallback((track) => {
+        playbackPrefetchService.prefetch(track, {
+            qualityMode: getResolvedAudioQualityMode(),
+            priority: 'low',
+        });
+    }, []);
 
     // ⭐ Reproducir track - Con RADIO INSTANTÁNEA (artistas relacionados vía API)
     const handlePlayTrack = useCallback(async (track) => {
@@ -910,19 +953,7 @@ export default function Search() {
                 duration: track.duration || 0
             };
 
-            if (import.meta.env.DEV) {
-                console.log(`[Search] 🔍 Buscando audio en backend...`);
-            }
-            const resolution = await fetchAudioUrl(track);
-            const resolvedUrl = resolution.status === 'ok' ? resolution.audio?.url : null;
-            trackToPlay.url = resolvedUrl || track.preview || null;
-            trackToPlay.urlSource = resolvedUrl ? 'resolved' : 'preview';
-            trackToPlay.urlResolvedAt = resolvedUrl ? Date.now() : null;
-
-            if (!trackToPlay.url) {
-                console.warn(`[Search] ❌ No se encontró audio para: "${track.artist} - ${track.name}"`);
-                return;
-            }
+            trackToPlay.preview = track.preview || null;
 
             const queueSessionId = playTrack(trackToPlay, [trackToPlay], {
                 id: `search-radio-${trackToPlay.id || trackToPlay.name}`,
@@ -966,6 +997,7 @@ export default function Search() {
         searchRequestRef.current += 1;
         setQuery('');
         setResults(createEmptyResults());
+        setResultsQuery('');
         setHasSearched(false);
         setIsLoading(false);
         setSearchNotice(null);
@@ -1034,6 +1066,8 @@ export default function Search() {
                                             isLoading={playingTrackId === (track.id || track.name)}
                                             onPlay={handlePlayTrack}
                                             onLongPress={setMenuTrack}
+                                            onPrefetch={handlePrefetchIntent}
+                                            onPrime={primeResolvedTrack}
                                         />
                                     ))}
                                 </div>
@@ -1145,6 +1179,8 @@ export default function Search() {
         results,
         playingTrackId,
         handlePlayTrack,
+        handlePrefetchIntent,
+        primeResolvedTrack,
         setFilter,
         navigate
     ]);
@@ -1343,6 +1379,8 @@ export default function Search() {
                                         isLoading={playingTrackId === (track.id || track.name)}
                                         onPlay={handlePlayTrack}
                                         onLongPress={setMenuTrack}
+                                        onPrefetch={handlePrefetchIntent}
+                                        onPrime={primeResolvedTrack}
                                     />
                                 ))}
                             </div>

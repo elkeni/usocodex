@@ -2,15 +2,23 @@ import { useState, useEffect, useRef, useCallback } from 'react';
 import { createPortal } from 'react-dom';
 import { useNavigate } from 'react-router-dom';
 import {
-    FaTimes,
     FaSignOutAlt,
-    FaCheck,
     FaEdit,
     FaCamera,
     FaLock,
     FaPause,
     FaPlay,
-    FaTrash
+    FaTrash,
+    FaSlidersH,
+    FaChevronRight,
+    FaHeadphonesAlt,
+    FaVolumeUp,
+    FaEye,
+    FaDatabase,
+    FaUserShield,
+    FaCompactDisc,
+    FaCalendarAlt,
+    FaBolt
 } from 'react-icons/fa';
 
 import './profile.css';
@@ -24,28 +32,43 @@ import { updateProfile } from 'firebase/auth';
 import { ref, uploadBytes, getDownloadURL } from 'firebase/storage';
 import { doc, updateDoc } from 'firebase/firestore';
 import { clearProductMetrics, getSuccessSummary } from '../../services/productMetrics';
+import {
+    getAudioQualityPreference,
+    getResolvedAudioQualityMode,
+    setAudioQualityPreference as persistAudioQualityPreference,
+} from '../../services/audioQuality';
+import {
+    getReducedMotionPreference,
+    setReducedMotionPreference as persistReducedMotionPreference,
+} from '../../services/experiencePreferences';
+import { playbackPrefetchService } from '../../services/playbackPrefetchService';
+import { clearAudioUrlCache } from '../../services/unifiedService';
 
 const Profile = () => {
     const navigate = useNavigate();
-    const { user, favorites, playlists, loading: userLoading } = useUser();
-    const { listeningHistory, historyPaused, toggleHistoryPaused, clearListeningHistory } = usePlayer();
+    const { user, favorites, playlists, savedAlbums, loading: userLoading } = useUser();
+    const {
+        listeningHistory,
+        historyPaused,
+        toggleHistoryPaused,
+        clearListeningHistory,
+        currentAudioQuality,
+        isCrossfadeEnabled,
+        toggleCrossfade,
+    } = usePlayer();
     const { notify, confirm } = useFeedback();
     const fileInputRef = useRef(null);
 
     // Estados UI
-    const [theme] = useState(() => localStorage.getItem('paradox_theme') || 'dark');
     const [successSummary, setSuccessSummary] = useState(() => getSuccessSummary());
+    const [audioQualityPreference, setAudioQualityPreference] = useState(getAudioQualityPreference);
+    const [reducedMotion, setReducedMotion] = useState(getReducedMotionPreference);
 
     // Estados de edición
     const [isEditingName, setIsEditingName] = useState(false);
     const [editedName, setEditedName] = useState('');
     const [isUploadingPhoto, setIsUploadingPhoto] = useState(false);
     const [isSavingName, setIsSavingName] = useState(false);
-
-    useEffect(() => {
-        document.body.setAttribute('data-theme', theme);
-        return () => document.body.removeAttribute('data-theme');
-    }, [theme]);
 
     // Inicializar nombre editado cuando cambie el usuario
     useEffect(() => {
@@ -60,6 +83,18 @@ const Profile = () => {
 
     // Handlers
     const handleClose = () => navigate(-1);
+
+    const handleAudioQualityChange = (value) => {
+        const preference = persistAudioQualityPreference(value);
+        setAudioQualityPreference(preference);
+        notify('Calidad de reproducción actualizada.', { type: 'success' });
+    };
+
+    const handleReducedMotionChange = () => {
+        const nextValue = persistReducedMotionPreference(!reducedMotion);
+        setReducedMotion(nextValue);
+        notify(nextValue ? 'Animaciones reducidas.' : 'Animaciones completas activadas.', { type: 'success' });
+    };
 
     const handleSignOut = async () => {
         const userName = user?.displayName || user?.email || 'tu cuenta';
@@ -92,12 +127,18 @@ const Profile = () => {
     };
 
     const handleSaveName = async () => {
-        if (!editedName.trim()) {
+        const normalizedName = editedName.trim().replace(/\s+/g, ' ');
+        if (!normalizedName) {
             showNotification('El nombre no puede estar vacío', 'error');
             return;
         }
 
-        if (editedName.trim() === user?.displayName) {
+        if (normalizedName.length > 40) {
+            showNotification('El nombre puede tener hasta 40 caracteres', 'error');
+            return;
+        }
+
+        if (normalizedName === user?.displayName) {
             setIsEditingName(false);
             return;
         }
@@ -106,14 +147,14 @@ const Profile = () => {
         try {
             // Actualizar en Firebase Auth
             await updateProfile(auth.currentUser, {
-                displayName: editedName.trim()
+                displayName: normalizedName
             });
 
             // Actualizar en Firestore
             const userDocRef = doc(db, 'users', user.uid);
             await updateDoc(userDocRef, {
-                username: editedName.trim(),
-                displayName: editedName.trim()
+                username: normalizedName,
+                displayName: normalizedName
             });
 
             setIsEditingName(false);
@@ -344,6 +385,12 @@ const Profile = () => {
         showNotification('Contadores locales borrados');
     };
 
+    const handleClearPlaybackCache = () => {
+        playbackPrefetchService.clear();
+        clearAudioUrlCache();
+        showNotification('Caché temporal de reproducción liberada');
+    };
+
     // Helpers
     const formatNumber = (num) => new Intl.NumberFormat('es-ES').format(num || 0);
 
@@ -359,6 +406,13 @@ const Profile = () => {
         if (user?.email) return user.email.charAt(0).toUpperCase();
         return '?';
     };
+
+    const resolvedAudioQualityMode = getResolvedAudioQualityMode();
+    const resolvedAudioQualityLabel = {
+        high: 'Alta',
+        balanced: 'Equilibrada',
+        data_saver: 'Ahorro de datos',
+    }[resolvedAudioQualityMode] || 'Equilibrada';
 
     // Loading state
     if (userLoading) {
@@ -383,214 +437,142 @@ const Profile = () => {
                 sticky={false}
             />
 
-            {/* Content */}
             <div className="profile-content">
-                {/* Sidebar / User Card */}
-                <aside className="profile-sidebar">
-                    <div className="profile-user-card">
-                        {/* Avatar (Editable only in Edit Mode) */}
-                        <div
-                            className={`profile-avatar ${isEditingName ? 'editable' : ''}`}
-                            onClick={isEditingName ? handleAvatarClick : undefined}
-                            style={{ cursor: isEditingName ? 'pointer' : 'default' }}
-                        >
-                            {user?.photoURL ? (
-                                <img src={user.photoURL} alt="Avatar" />
-                            ) : (
-                                <span className="profile-avatar-initial">{getUserInitial()}</span>
-                            )}
+                <section className="profile-identity-card" aria-label="Información de la cuenta">
+                    <div className="profile-identity-glow" aria-hidden="true" />
+                    <button
+                        type="button"
+                        className="profile-avatar profile-avatar--button"
+                        onClick={handleAvatarClick}
+                        disabled={isUploadingPhoto}
+                        aria-label="Cambiar foto de perfil"
+                    >
+                        {user?.photoURL ? <img src={user.photoURL} alt="" /> : <span className="profile-avatar-initial">{getUserInitial()}</span>}
+                        <span className="profile-avatar-edit-overlay">
+                            {isUploadingPhoto ? <span className="btn-spinner" /> : <FaCamera />}
+                        </span>
+                    </button>
+                    <input ref={fileInputRef} type="file" accept="image/*" onChange={handleFileSelect} hidden />
 
-                            {/* Overlay de edición explícito */}
-                            {isEditingName && (
-                                <div className="profile-avatar-edit-overlay">
-                                    <FaCamera />
-                                    <span>Cambiar</span>
-                                </div>
-                            )}
-
-                        </div>
-
-                        {/* Input de archivo oculto */}
-                        <input
-                            ref={fileInputRef}
-                            type="file"
-                            accept="image/*"
-                            onChange={handleFileSelect}
-                            style={{ display: 'none' }}
-                        />
-
-                        <div className="profile-user-info">
-                            {/* Nombre editable (Solo activado desde Ajustes) */}
-                            {isEditingName ? (
-                                <div className="profile-edit-container">
-                                    <div className="profile-name-edit">
-                                        <input
-                                            type="text"
-                                            value={editedName}
-                                            onChange={(e) => setEditedName(e.target.value)}
-                                            className="profile-name-input"
-                                            placeholder="Tu nombre"
-                                            autoFocus
-                                            onKeyDown={(e) => {
-                                                if (e.key === 'Enter') handleSaveName();
-                                                if (e.key === 'Escape') handleCancelEditName();
-                                            }}
-                                        />
-                                        <div className="profile-name-actions">
-                                            <button
-                                                className="profile-name-btn save"
-                                                onClick={handleSaveName}
-                                                disabled={isSavingName}
-                                            >
-                                                {isSavingName ? (
-                                                    <div className="btn-spinner" />
-                                                ) : (
-                                                    <FaCheck />
-                                                )}
-                                            </button>
-                                            <button
-                                                className="profile-name-btn cancel"
-                                                onClick={handleCancelEditName}
-                                                disabled={isSavingName}
-                                            >
-                                                <FaTimes />
-                                            </button>
-                                        </div>
+                    <div className="profile-user-info">
+                        {isEditingName ? (
+                            <div className="profile-edit-container">
+                                <label htmlFor="profile-display-name">Nombre visible</label>
+                                <input
+                                    id="profile-display-name"
+                                    type="text"
+                                    value={editedName}
+                                    onChange={(event) => setEditedName(event.target.value)}
+                                    className="profile-name-input"
+                                    placeholder="Tu nombre"
+                                    maxLength={40}
+                                    autoFocus
+                                    onKeyDown={(event) => {
+                                        if (event.key === 'Enter') handleSaveName();
+                                        if (event.key === 'Escape') handleCancelEditName();
+                                    }}
+                                />
+                                <div className="profile-edit-footer">
+                                    <span>{editedName.trim().length}/40</span>
+                                    <div className="profile-name-actions">
+                                        <button type="button" className="profile-name-btn cancel" onClick={handleCancelEditName} disabled={isSavingName}>Cancelar</button>
+                                        <button type="button" className="profile-name-btn save" onClick={handleSaveName} disabled={isSavingName || !editedName.trim()}>
+                                            {isSavingName ? <span className="btn-spinner" /> : 'Guardar'}
+                                        </button>
                                     </div>
-
                                 </div>
-                            ) : (
-                                <div className="profile-name-display">
-                                    <h2 className="profile-user-name">
-                                        {user?.displayName || 'Usuario'}
-                                    </h2>
+                            </div>
+                        ) : (
+                            <>
+                                <div className="profile-name-line">
+                                    <h1 className="profile-user-name">{user?.displayName || 'Usuario'}</h1>
+                                    <button type="button" className="profile-edit-name-button" onClick={handleStartEditName} aria-label="Editar nombre"><FaEdit /></button>
                                 </div>
-                            )}
-                            <p className="profile-user-email">{user?.email}</p>
-
-                            {/* Badge de privacidad (Solo cuando NO se edita) */}
-                            {!isEditingName && (
-                                <div className="profile-privacy-badge private">
-                                    <FaLock />
-                                    <span>Perfil privado</span>
-                                </div>
-                            )}
-                        </div>
+                                <p className="profile-user-email">{user?.email}</p>
+                                <div className="profile-privacy-badge"><FaUserShield /><span>Cuenta privada</span></div>
+                            </>
+                        )}
                     </div>
+                </section>
 
-                    <div className="profile-stats">
-                        <div className="profile-stat">
-                            <span className="profile-stat-value">{formatNumber(favorites?.length || 0)}</span>
-                            <span className="profile-stat-label">Canciones</span>
-                        </div>
-                        <div className="profile-stat">
-                            <span className="profile-stat-value">{formatNumber(playlists?.length || 0)}</span>
-                            <span className="profile-stat-label">Playlists</span>
-                        </div>
-                        <div className="profile-stat">
-                            <span className="profile-stat-value">{getJoinYear()}</span>
-                            <span className="profile-stat-label">Miembro</span>
-                        </div>
-                    </div>
+                <section className="profile-stats" aria-label="Resumen de la biblioteca">
+                    <div className="profile-stat"><FaHeadphonesAlt /><span className="profile-stat-value">{formatNumber(favorites?.length || 0)}</span><span className="profile-stat-label">Canciones</span></div>
+                    <div className="profile-stat"><FaPlay /><span className="profile-stat-value">{formatNumber(playlists?.length || 0)}</span><span className="profile-stat-label">Playlists</span></div>
+                    <div className="profile-stat"><FaCompactDisc /><span className="profile-stat-value">{formatNumber(savedAlbums?.length || 0)}</span><span className="profile-stat-label">Álbumes</span></div>
+                    <div className="profile-stat"><FaCalendarAlt /><span className="profile-stat-value">{getJoinYear()}</span><span className="profile-stat-label">Desde</span></div>
+                </section>
 
-
-                </aside>
-
-                {/* Main Area */}
                 <main className="profile-main">
-                    {/* Settings Content (Formerly a tab, now the only content) */}
-                    <div className="profile-tab-content">
-                        <section className="profile-section">
-                            {/* Sección de Perfil */}
-                            <h3 className="profile-section-title">Tu Perfil</h3>
-
-                            <div className="profile-settings-list">
-                                {/* Editar Perfil (Activa modo edición para nombre y foto) */}
-                                <button type="button" className="profile-setting clickable" onClick={handleStartEditName}>
-                                    <div className="profile-setting-header">
-                                        <div className="profile-setting-icon">
-                                            <FaEdit />
-                                        </div>
-                                        <div className="profile-setting-info">
-                                            <h4>Editar perfil</h4>
-                                            <p className="profile-setting-desc">
-                                                Cambiar nombre y foto
-                                            </p>
-                                        </div>
-                                        <FaEdit className="profile-setting-action" />
-                                    </div>
-                                </button>
+                    <section className="profile-section">
+                        <div className="profile-section-heading"><div><span>SONIDO</span><h2>Reproducción</h2></div><FaHeadphonesAlt /></div>
+                        <div className="profile-panel profile-quality-panel">
+                            <div className="profile-setting-header">
+                                <div className="profile-setting-icon"><FaSlidersH /></div>
+                                <div className="profile-setting-info"><h3>Calidad de audio</h3><p>Se aplica a las siguientes canciones.</p></div>
                             </div>
-
-                            <h3 className="profile-section-title" style={{ marginTop: '32px' }}>Privacidad y datos</h3>
-
-                            <div className="profile-settings-list">
-                                <div className="profile-setting">
-                                    <div className="profile-setting-header">
-                                        <div className="profile-setting-icon"><FaLock /></div>
-                                        <div className="profile-setting-info">
-                                            <h4>Perfil privado por ahora</h4>
-                                            <p className="profile-setting-desc">No existen perfiles públicos ni actividad social visible en esta versión.</p>
-                                        </div>
-                                    </div>
-                                </div>
-
-                                <button type="button" className="profile-setting clickable" onClick={toggleHistoryPaused}>
-                                    <div className="profile-setting-header">
-                                        <div className="profile-setting-icon">{historyPaused ? <FaPlay /> : <FaPause />}</div>
-                                        <div className="profile-setting-info">
-                                            <h4>{historyPaused ? 'Reanudar historial' : 'Pausar historial'}</h4>
-                                            <p className="profile-setting-desc">
-                                                {historyPaused ? 'Las nuevas escuchas no se están guardando.' : `${listeningHistory.length} escuchas útiles guardadas en este dispositivo.`}
-                                            </p>
-                                        </div>
-                                    </div>
-                                </button>
-
-                                <button type="button" className="profile-setting clickable" onClick={handleClearHistory} disabled={!listeningHistory.length}>
-                                    <div className="profile-setting-header">
-                                        <div className="profile-setting-icon"><FaTrash /></div>
-                                        <div className="profile-setting-info">
-                                            <h4>Borrar historial</h4>
-                                            <p className="profile-setting-desc">Elimina las escuchas locales sin tocar favoritos ni playlists.</p>
-                                        </div>
-                                    </div>
-                                </button>
-
-                                <div className="profile-setting">
-                                    <div className="profile-setting-header">
-                                        <div className="profile-setting-icon"><FaCheck /></div>
-                                        <div className="profile-setting-info">
-                                            <h4>Medición privada en este dispositivo</h4>
-                                            <p className="profile-setting-desc">
-                                                {successSummary.meaningfulPlayback} escuchas de 30 s · {successSummary.radioStarted} radios · {successSummary.magicPlaylists} playlists mágicas. No guardamos canciones, búsquedas, URLs ni tu identidad.
-                                            </p>
-                                        </div>
-                                    </div>
-                                    <button type="button" className="profile-inline-action" onClick={handleClearMetrics}>Borrar contadores</button>
-                                </div>
+                            <div className="profile-quality-options" role="radiogroup" aria-label="Calidad de audio">
+                                {[
+                                    { value: 'automatic', label: 'Automática', detail: 'Se adapta a tu conexión' },
+                                    { value: 'high', label: 'Alta', detail: 'Hasta 320 kbps' },
+                                    { value: 'data_saver', label: 'Ahorro', detail: '96 kbps' },
+                                ].map((option) => (
+                                    <button key={option.value} type="button" role="radio" aria-checked={audioQualityPreference === option.value} className={`profile-quality-option ${audioQualityPreference === option.value ? 'active' : ''}`} onClick={() => handleAudioQualityChange(option.value)}>
+                                        <span>{option.label}</span><small>{option.detail}</small>
+                                    </button>
+                                ))}
                             </div>
+                            <p className="profile-quality-status">Modo resuelto: {resolvedAudioQualityLabel}{currentAudioQuality ? ` · ${currentAudioQuality}` : ''}</p>
+                        </div>
 
-                            {/* Zona de Peligro / Sesión */}
-                            <h3 className="profile-section-title" style={{ marginTop: '32px', color: 'var(--profile-danger)' }}>Sesión</h3>
+                        <button type="button" className="profile-setting clickable" onClick={toggleCrossfade} aria-pressed={isCrossfadeEnabled}>
+                            <span className="profile-setting-icon"><FaVolumeUp /></span>
+                            <span className="profile-setting-info"><strong>Transiciones suaves</strong><small>Mezcla el final y el inicio entre canciones cuando la app está visible.</small></span>
+                            <span className={`profile-toggle ${isCrossfadeEnabled ? 'active' : ''}`} aria-hidden="true"><span /></span>
+                        </button>
+                        <button type="button" className="profile-setting clickable" onClick={handleClearPlaybackCache}>
+                            <span className="profile-setting-icon"><FaBolt /></span>
+                            <span className="profile-setting-info"><strong>Liberar caché temporal</strong><small>Fuerza URLs nuevas sin detener la canción actual.</small></span>
+                            <FaChevronRight className="profile-setting-action" />
+                        </button>
+                    </section>
 
-                            <div className="profile-settings-list">
-                                <button type="button" className="profile-setting clickable" onClick={handleSignOut} style={{ border: '1px solid var(--profile-danger)' }}>
-                                    <div className="profile-setting-header">
-                                        <div className="profile-setting-icon" style={{ color: 'var(--profile-danger)', background: 'rgba(231, 76, 60, 0.1)' }}>
-                                            <FaSignOutAlt />
-                                        </div>
-                                        <div className="profile-setting-info">
-                                            <h4 style={{ color: 'var(--profile-danger)' }}>Cerrar sesión</h4>
-                                            <p className="profile-setting-desc">
-                                                Sal de tu cuenta actual
-                                            </p>
-                                        </div>
-                                    </div>
-                                </button>
-                            </div>
-                        </section>
-                    </div>
+                    <section className="profile-section">
+                        <div className="profile-section-heading"><div><span>COMODIDAD</span><h2>Experiencia</h2></div><FaEye /></div>
+                        <button type="button" className="profile-setting clickable" onClick={handleReducedMotionChange} aria-pressed={reducedMotion}>
+                            <span className="profile-setting-icon"><FaEye /></span>
+                            <span className="profile-setting-info"><strong>Reducir animaciones</strong><small>Disminuye movimientos, brillos y transiciones en toda la aplicación.</small></span>
+                            <span className={`profile-toggle ${reducedMotion ? 'active' : ''}`} aria-hidden="true"><span /></span>
+                        </button>
+                    </section>
+
+                    <section className="profile-section">
+                        <div className="profile-section-heading"><div><span>CONTROL</span><h2>Privacidad y datos</h2></div><FaLock /></div>
+                        <div className="profile-privacy-note"><FaUserShield /><div><strong>Tu actividad es privada</strong><p>No hay perfiles públicos ni actividad social visible.</p></div></div>
+                        <button type="button" className="profile-setting clickable" onClick={toggleHistoryPaused} aria-pressed={historyPaused}>
+                            <span className="profile-setting-icon">{historyPaused ? <FaPlay /> : <FaPause />}</span>
+                            <span className="profile-setting-info"><strong>{historyPaused ? 'Reanudar historial' : 'Pausar historial'}</strong><small>{historyPaused ? 'Las nuevas escuchas no se guardan.' : `${listeningHistory.length} escuchas guardadas en este dispositivo.`}</small></span>
+                            <span className={`profile-toggle ${!historyPaused ? 'active' : ''}`} aria-hidden="true"><span /></span>
+                        </button>
+                        <button type="button" className="profile-setting clickable" onClick={handleClearHistory} disabled={!listeningHistory.length}>
+                            <span className="profile-setting-icon profile-setting-icon--danger"><FaTrash /></span>
+                            <span className="profile-setting-info"><strong>Borrar historial</strong><small>No elimina favoritos, álbumes ni playlists.</small></span>
+                            <FaChevronRight className="profile-setting-action" />
+                        </button>
+                        <div className="profile-panel profile-metrics-card">
+                            <div><FaDatabase /><strong>Medición privada local</strong></div>
+                            <p>{successSummary.meaningfulPlayback} escuchas de 30 s · {successSummary.radioStarted} radios · {successSummary.magicPlaylists} playlists mágicas.</p>
+                            <button type="button" onClick={handleClearMetrics}>Borrar contadores locales</button>
+                        </div>
+                    </section>
+
+                    <section className="profile-section profile-session-section">
+                        <div className="profile-section-heading"><div><span>CUENTA</span><h2>Sesión</h2></div></div>
+                        <button type="button" className="profile-setting clickable profile-setting--danger" onClick={handleSignOut}>
+                            <span className="profile-setting-icon"><FaSignOutAlt /></span>
+                            <span className="profile-setting-info"><strong>Cerrar sesión</strong><small>Salir de {user?.email || 'esta cuenta'}.</small></span>
+                            <FaChevronRight className="profile-setting-action" />
+                        </button>
+                    </section>
                 </main>
             </div>
         </div>,

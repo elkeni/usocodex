@@ -9,7 +9,12 @@ import {
 } from "react";
 import { fetchAudioUrl } from "../services/unifiedService";
 import { buildRadioQueue } from "../services/radioService";
-import { PRODUCT_EVENTS, recordProductEvent } from "../services/productMetrics";
+import { PRODUCT_EVENTS, recordPlaybackPerformance, recordProductEvent } from "../services/productMetrics";
+import {
+    AUDIO_QUALITY_CHANGE_EVENT,
+    getResolvedAudioQualityMode,
+} from "../services/audioQuality";
+import { playbackPrefetchService } from "../services/playbackPrefetchService";
 import {
     appendUniqueTracks,
     findQueueIndex,
@@ -57,11 +62,11 @@ const makeTrackKey = (track) => {
     return getTrackIdentity(track);
 };
 
-const makeAudioCacheKey = (track) => {
+const makeAudioCacheKey = (track, qualityMode = getResolvedAudioQualityMode()) => {
     const name = getSafeString(track?.name || track?.title).toLowerCase();
     const artist = getSafeString(track?.artistId || track?.artist).toLowerCase();
     const duration = track?.duration || 0;
-    return `${artist}-${name}-${duration}`.trim();
+    return `${artist}-${name}-${duration}-quality:${qualityMode}`.trim();
 };
 
 const makeFailureKey = (track) => {
@@ -72,6 +77,20 @@ const makeFailureKey = (track) => {
 
 const findTrackIndex = (arr, track) => {
     return findQueueIndex(arr, track);
+};
+
+const mergePlaybackMetadata = (track, playbackTrack) => {
+    if (!playbackTrack) return track;
+    return {
+        ...track,
+        name: playbackTrack.title || track?.name || track?.title,
+        title: playbackTrack.title || track?.title || track?.name,
+        artist: playbackTrack.artist || track?.artist,
+        image: playbackTrack.thumbnail || track?.image,
+        image_xl: playbackTrack.thumbnail || track?.image_xl,
+        playbackSource: playbackTrack.source || track?.playbackSource,
+        playbackVideoId: playbackTrack.videoId || track?.playbackVideoId,
+    };
 };
 
 const readQueueSnapshot = () => safeJsonParse("paradox_queue_snapshot_v2", null);
@@ -100,6 +119,8 @@ export const PlayerProvider = ({ children }) => {
         safeJsonParse("paradox_audio_cache", null)
     );
     const cachedAudioUrlRef = useRef(cachedAudioUrl);
+    const [currentAudioQuality, setCurrentAudioQuality] = useState(() => cachedAudioUrl?.quality || null);
+    const [currentAudioQualityMode, setCurrentAudioQualityMode] = useState(() => cachedAudioUrl?.qualityMode || null);
 
     const [volume, setVolumeState] = useState(() => {
         try {
@@ -180,6 +201,11 @@ export const PlayerProvider = ({ children }) => {
     const playbackStartedKeyRef = useRef(null);
     const historyPausedRef = useRef(historyPaused);
     const playbackContextRef = useRef(playbackContext);
+    const playIntentAtRef = useRef(0);
+    const bufferingStartedAtRef = useRef(0);
+    const accumulatedBufferMsRef = useRef(0);
+    const playbackMetricRecordedRef = useRef(false);
+    const playbackResolutionMetaRef = useRef(null);
 
     const [isQueueOpen, setIsQueueOpen] = useState(false);
 
@@ -207,6 +233,10 @@ export const PlayerProvider = ({ children }) => {
     const prefetchRunRef = useRef(0);
     const pendingSkipTimeoutRef = useRef(null);
     const activePlaybackLoadRef = useRef(false);
+    const activePlaybackWasPrefetchedRef = useRef(false);
+    const activePlaybackRefreshAttemptedRef = useRef(false);
+    const activePlaybackRefreshInProgressRef = useRef(false);
+    const refreshFailedPlaybackRef = useRef(null);
 
     // Helper para obtener un requestId único
     const nextRequestId = useCallback(() => {
@@ -271,6 +301,16 @@ export const PlayerProvider = ({ children }) => {
         prefetchedNextIndex.current = -1;
         prefetchTriggeredForTrack.current = "";
     }, []);
+
+    useEffect(() => {
+        const handleQualityChange = () => {
+            prefetchRunRef.current += 1;
+            isPrefetching.current = false;
+            clearPrefetch();
+        };
+        globalThis.addEventListener?.(AUDIO_QUALITY_CHANGE_EVENT, handleQualityChange);
+        return () => globalThis.removeEventListener?.(AUDIO_QUALITY_CHANGE_EVENT, handleQualityChange);
+    }, [clearPrefetch]);
 
     // Helper para verificar si toda la cola ha fallado
     const checkIfAllQueueFailed = useCallback(() => {
@@ -471,14 +511,35 @@ export const PlayerProvider = ({ children }) => {
 
         // Evento: esperando datos (buffering)
         const onWaiting = () => {
+            if (!bufferingStartedAtRef.current) bufferingStartedAtRef.current = performance.now();
             setIsBuffering(true);
             setIsLoading(true);
         };
 
         // Evento: listo para reproducir
         const onCanPlay = () => {
+            if (bufferingStartedAtRef.current) {
+                accumulatedBufferMsRef.current += performance.now() - bufferingStartedAtRef.current;
+                bufferingStartedAtRef.current = 0;
+            }
             setIsBuffering(false);
             setIsLoading(false);
+        };
+
+        const onPlaying = () => {
+            onCanPlay();
+            if (playbackMetricRecordedRef.current) return;
+            playbackMetricRecordedRef.current = true;
+            const meta = playbackResolutionMetaRef.current || {};
+            recordPlaybackPerformance({
+                clickToPlayingMs: playIntentAtRef.current ? performance.now() - playIntentAtRef.current : 0,
+                bufferMs: accumulatedBufferMsRef.current,
+                backendMs: meta.timings?.totalMs,
+                usedPrefetch: meta.wasPrefetched,
+                cacheStatus: meta.cacheStatus,
+                quality: meta.quality,
+                source: meta.source,
+            });
         };
 
         // Evento: audio terminó
@@ -561,7 +622,10 @@ export const PlayerProvider = ({ children }) => {
         // [CIRUGÍA] Evento error
         const onError = () => {
             if (isCrossfadingRef.current) return; // Ignorar errores durante transición crítica por ahora
-            if (!activePlaybackLoadRef.current && a.paused) return;
+            if (activePlaybackRefreshInProgressRef.current) return;
+            if (!activePlaybackLoadRef.current && a.paused
+                && !activePlaybackWasPrefetchedRef.current
+                && !activePlaybackRefreshAttemptedRef.current) return;
 
             if (isAdvancingRef.current) return;
             isAdvancingRef.current = true;
@@ -570,6 +634,18 @@ export const PlayerProvider = ({ children }) => {
             const artistName = getSafeString(track?.artist);
             const trackName = getSafeString(track?.name || track?.title);
             const failedKey = makeFailureKey(track);
+
+            if (activePlaybackWasPrefetchedRef.current && !activePlaybackRefreshAttemptedRef.current) {
+                activePlaybackRefreshAttemptedRef.current = true;
+                refreshFailedPlaybackRef.current?.(track, a).then((refreshed) => {
+                    isAdvancingRef.current = false;
+                    if (!refreshed) {
+                        activePlaybackWasPrefetchedRef.current = false;
+                        onError();
+                    }
+                });
+                return;
+            }
 
             failedTracksRef.current.add(failedKey);
             console.error(`[PlayerContext] ❌ Error de audio: ${artistName} - ${trackName}`);
@@ -606,6 +682,7 @@ export const PlayerProvider = ({ children }) => {
         a.addEventListener("pause", onPause);
         a.addEventListener("waiting", onWaiting);
         a.addEventListener("canplay", onCanPlay);
+        a.addEventListener("playing", onPlaying);
         a.addEventListener("ended", onEnded);
         a.addEventListener("timeupdate", onTimeUpdate);
         a.addEventListener("durationchange", onDurationChange);
@@ -617,6 +694,7 @@ export const PlayerProvider = ({ children }) => {
             a.removeEventListener("pause", onPause);
             a.removeEventListener("waiting", onWaiting);
             a.removeEventListener("canplay", onCanPlay);
+            a.removeEventListener("playing", onPlaying);
             a.removeEventListener("ended", onEnded);
             a.removeEventListener("timeupdate", onTimeUpdate);
             a.removeEventListener("durationchange", onDurationChange);
@@ -683,6 +761,7 @@ export const PlayerProvider = ({ children }) => {
             repeatMode,
         });
         const nextIndex = prefetchedNextIndex.current;
+        const promotedPlayback = prefetchCacheRef.current.get(makeAudioCacheKey(nextTrack));
 
         // La cola pudo cambiar mientras duraba el fundido. En ese caso no se
         // promueve audio perteneciente a una sesión u orden anterior.
@@ -726,6 +805,16 @@ export const PlayerProvider = ({ children }) => {
         // Usamos una versión manual de 'playTrackInternal'
 
         clearPrefetch();
+
+        activePlaybackWasPrefetchedRef.current = true;
+        activePlaybackRefreshAttemptedRef.current = false;
+        setCurrentAudioQuality(promotedPlayback?.quality || null);
+        setCurrentAudioQualityMode(promotedPlayback?.qualityMode || getResolvedAudioQualityMode());
+        playbackResolutionMetaRef.current = {
+            ...promotedPlayback,
+            wasPrefetched: true,
+            cacheStatus: promotedPlayback?.cacheStatus || 'local',
+        };
 
         // Update State
         setCurrentTrack(nextTrack);
@@ -858,12 +947,39 @@ export const PlayerProvider = ({ children }) => {
                 duration: trackDuration,
             });
 
+            const qualityMode = getResolvedAudioQualityMode();
+            let prefetchedPlayback = playbackPrefetchService.get(track, qualityMode);
+            if (!prefetchedPlayback) {
+                const pendingPlayback = playbackPrefetchService.getInFlight(track, qualityMode);
+                if (pendingPlayback) prefetchedPlayback = await pendingPlayback;
+            }
+            if (prefetchedPlayback?.audioUrl) {
+                failedTracksRef.current.delete(makeFailureKey(track));
+                return {
+                    status: "ok",
+                    url: prefetchedPlayback.audioUrl,
+                    cacheKey,
+                    quality: prefetchedPlayback.quality || null,
+                    qualityMode: prefetchedPlayback.qualityMode || qualityMode,
+                    cacheStatus: prefetchedPlayback.cacheStatus,
+                    source: prefetchedPlayback.track?.source,
+                    timings: prefetchedPlayback.timings,
+                    expiresAt: prefetchedPlayback.expiresAt,
+                    playbackTrack: prefetchedPlayback.track,
+                    wasPrefetched: true,
+                };
+            }
+
             // Las pantallas de artista/álbum ya resuelven el audio dentro del
             // gesto del usuario. Reutilizarlo evita una segunda petición que
             // puede perder la autorización de reproducción en iOS.
             const directUrlAge = Date.now() - Number(track?.urlResolvedAt || 0);
             const directUrlIsFresh = track?.urlSource === 'preview'
-                || (track?.urlSource === 'resolved' && directUrlAge < 20 * 60 * 1000);
+                || (
+                    track?.urlSource === 'resolved' &&
+                    directUrlAge < 20 * 60 * 1000 &&
+                    track?.urlQualityMode === getResolvedAudioQualityMode()
+                );
             if (directUrlIsFresh && typeof track?.url === 'string' && /^https?:\/\//i.test(track.url)) {
                 failedTracksRef.current.delete(makeFailureKey(track));
                 return {
@@ -871,6 +987,8 @@ export const PlayerProvider = ({ children }) => {
                     url: track.url,
                     confidence: track.urlSource === 'resolved' ? 1 : 0.5,
                     cacheKey,
+                    quality: track.audioQuality || null,
+                    qualityMode: track.urlQualityMode || null,
                 };
             }
 
@@ -889,7 +1007,9 @@ export const PlayerProvider = ({ children }) => {
                 return {
                     status: "ok",
                     url: cachedAudioUrlRef.current.url,
-                    cacheKey
+                    cacheKey,
+                    quality: cachedAudioUrlRef.current.quality || null,
+                    qualityMode: cachedAudioUrlRef.current.qualityMode || null,
                 };
             }
 
@@ -906,6 +1026,17 @@ export const PlayerProvider = ({ children }) => {
             // [CONTRATO] Interpretar resultado según status
             if (result.status === "unavailable") {
                 console.warn(`[PlayerContext] ⚠️ Audio no disponible: ${artistName} - ${trackName} (${result.reason})`);
+                if (typeof track?.preview === 'string' && /^https?:\/\//i.test(track.preview)) {
+                    return {
+                        status: "ok",
+                        url: track.preview,
+                        cacheKey,
+                        quality: null,
+                        qualityMode,
+                        source: 'preview',
+                        wasPrefetched: false,
+                    };
+                }
                 return {
                     status: "unavailable",
                     reason: result.reason,
@@ -929,19 +1060,106 @@ export const PlayerProvider = ({ children }) => {
             failedTracksRef.current.delete(failedKey);
 
             // Guardar en cache
-            const cacheEntry = { key: cacheKey, url: audioUrl, timestamp: Date.now() };
+            const cacheEntry = {
+                key: cacheKey,
+                url: audioUrl,
+                timestamp: Date.now(),
+                quality: result.audio?.quality || null,
+                qualityMode: result.audio?.qualityMode || getResolvedAudioQualityMode(),
+            };
             cachedAudioUrlRef.current = cacheEntry;
             setCachedAudioUrl(cacheEntry);
+
+            const storedPlayback = playbackPrefetchService.store(track, {
+                success: true,
+                audioUrl,
+                quality: cacheEntry.quality,
+                qualityMode: cacheEntry.qualityMode,
+                track: {
+                    title: result.track?.title || trackName,
+                    artist: result.track?.artist || artistName,
+                    thumbnail: track?.image_xl || track?.image,
+                    source: result.audio?.source,
+                },
+                cacheStatus: result.audio?.cacheStatus,
+                timings: result.audio?.timings,
+            }, cacheEntry.qualityMode);
 
             return {
                 status: "ok",
                 url: audioUrl,
                 confidence: result.confidence,
-                cacheKey
+                cacheKey,
+                quality: cacheEntry.quality,
+                qualityMode: cacheEntry.qualityMode,
+                source: result.audio?.source,
+                cacheStatus: result.audio?.cacheStatus,
+                timings: result.audio?.timings,
+                wasPrefetched: false,
+                expiresAt: storedPlayback?.expiresAt,
             };
         },
         []
     );
+
+    refreshFailedPlaybackRef.current = async (track, audioElement) => {
+        const qualityMode = getResolvedAudioQualityMode();
+        playbackPrefetchService.invalidate(track, qualityMode);
+        activePlaybackRefreshInProgressRef.current = true;
+        try {
+            const result = await fetchAudioUrl({
+                id: track?.id,
+                artist: getSafeString(track?.artist),
+                artistId: track?.artistId || null,
+                albumId: track?.albumId || null,
+                title: getSafeString(track?.name || track?.title),
+                duration: track?.duration || 0,
+            });
+            if (result.status !== 'ok' || !result.audio?.url) return false;
+
+            playbackPrefetchService.store(track, {
+                success: true,
+                audioUrl: result.audio.url,
+                quality: result.audio.quality,
+                qualityMode: result.audio.qualityMode || qualityMode,
+                track: {
+                    title: result.track?.title || getSafeString(track?.name || track?.title),
+                    artist: result.track?.artist || getSafeString(track?.artist),
+                    thumbnail: track?.image_xl || track?.image,
+                    source: result.audio.source,
+                },
+                cacheStatus: result.audio.cacheStatus,
+                timings: result.audio.timings,
+            }, qualityMode);
+
+            setCurrentAudioQuality(result.audio.quality || null);
+            setCurrentAudioQualityMode(result.audio.qualityMode || qualityMode);
+            audioElement.src = result.audio.url;
+            audioElement.preload = 'auto';
+            audioElement.load();
+            const ready = await new Promise((resolveReady) => {
+                const finish = (value) => {
+                    window.clearTimeout(timeout);
+                    audioElement.removeEventListener('canplay', onCanPlay);
+                    audioElement.removeEventListener('error', onRefreshError);
+                    resolveReady(value);
+                };
+                const onCanPlay = () => finish(true);
+                const onRefreshError = () => finish(false);
+                const timeout = window.setTimeout(() => finish(true), AUDIO_LOAD_TIMEOUT_MS);
+                audioElement.addEventListener('canplay', onCanPlay, { once: true });
+                audioElement.addEventListener('error', onRefreshError, { once: true });
+            });
+            if (!ready) return false;
+            await audioElement.play();
+            activePlaybackWasPrefetchedRef.current = false;
+            return true;
+        } catch {
+            return false;
+        } finally {
+            activePlaybackRefreshInProgressRef.current = false;
+        }
+    };
 
     // =========================
     // ESTRATEGIA: Prefetch Agresivo & Smart Buffer
@@ -953,7 +1171,9 @@ export const PlayerProvider = ({ children }) => {
         const now = Date.now();
         prefetchCacheRef.current.forEach((val, key) => {
             const ttl = val.status === 'error' ? 10 * 1000 : 30 * 60 * 1000;
-            if (now - val.timestamp > ttl) prefetchCacheRef.current.delete(key);
+            if ((val.expiresAt && now >= val.expiresAt) || now - val.timestamp > ttl) {
+                prefetchCacheRef.current.delete(key);
+            }
         });
     }, []);
 
@@ -977,12 +1197,13 @@ export const PlayerProvider = ({ children }) => {
         }
 
         const candidate = queueSource[candidateIndex];
-        const cached = prefetchCacheRef.current.get(makeTrackKey(candidate));
-        if (cached?.status === 'ok' && cached.url) {
+        const candidateCacheKey = makeAudioCacheKey(candidate);
+        const cached = prefetchCacheRef.current.get(candidateCacheKey);
+        if (cached?.status === 'ok' && cached.url && (!cached.expiresAt || Date.now() < cached.expiresAt)) {
             prefetchedNextUrl.current = cached.url;
             prefetchedNextTrack.current = candidate;
             prefetchedNextIndex.current = candidateIndex;
-            prefetchTriggeredForTrack.current = makeTrackKey(candidate);
+            prefetchTriggeredForTrack.current = candidateCacheKey;
 
             const buffer = nextAudioRef.current;
             if (buffer && buffer.src !== cached.url) {
@@ -1026,7 +1247,7 @@ export const PlayerProvider = ({ children }) => {
             const track = queueSource[pIndex];
             if (!track) continue;
 
-            const key = makeTrackKey(track);
+            const key = makeAudioCacheKey(track);
             if (processedKeys.has(key)) continue; // Evitar duplicados en el mismo ciclo (si la cola repite tracks)
             processedKeys.add(key);
 
@@ -1037,6 +1258,8 @@ export const PlayerProvider = ({ children }) => {
             if (cache.has(key)) {
                 const cachedEntry = cache.get(key);
                 if (cachedEntry.status === 'error' && Date.now() - cachedEntry.timestamp > 10 * 1000) {
+                    cache.delete(key);
+                } else if (cachedEntry.status === 'ok' && cachedEntry.expiresAt && Date.now() >= cachedEntry.expiresAt) {
                     cache.delete(key);
                 } else {
                     if (cachedEntry.status === 'ok') {
@@ -1069,7 +1292,17 @@ export const PlayerProvider = ({ children }) => {
                 if (sessionId !== queueSessionRef.current || runId !== prefetchRunRef.current) return;
 
                 if (result.status === 'ok' && result.url) {
-                    cache.set(key, { url: result.url, status: 'ok', timestamp: Date.now() });
+                    cache.set(key, {
+                        url: result.url,
+                        status: 'ok',
+                        timestamp: Date.now(),
+                        quality: result.quality || null,
+                        qualityMode: result.qualityMode || getResolvedAudioQualityMode(),
+                        cacheStatus: result.cacheStatus,
+                        source: result.source,
+                        timings: result.timings,
+                        expiresAt: result.expiresAt,
+                    });
                     lookaheadCount++;
 
                     // Si es la inmediata siguiente, cargar bytes
@@ -1181,16 +1414,28 @@ export const PlayerProvider = ({ children }) => {
 
             // [OPTIMIZACIÓN REPRODUCCIÓN INMEDIATA]
             // Verificar si esta canción ya está en el caché de prefetch
-            const trackKey = makeTrackKey(track);
+            const trackKey = makeAudioCacheKey(track);
             const cachedEntry = prefetchCacheRef.current.get(trackKey);
 
             // Caso 1: Cache OK -> Reproducción instantánea
-            if (cachedEntry && cachedEntry.status === 'ok' && cachedEntry.url) {
+            if (cachedEntry && cachedEntry.status === 'ok' && cachedEntry.url
+                && (!cachedEntry.expiresAt || Date.now() < cachedEntry.expiresAt)) {
                 console.log('[PlayerContext] ⚡ Usando URL prefetcheada - reproducción instantánea');
                 failedTracksRef.current.delete(makeFailureKey(track));
 
                 const a = audioRef.current;
                 if (a) {
+                    activePlaybackWasPrefetchedRef.current = true;
+                    activePlaybackRefreshAttemptedRef.current = false;
+                    playbackResolutionMetaRef.current = {
+                        wasPrefetched: true,
+                        cacheStatus: cachedEntry.cacheStatus || 'local',
+                        quality: cachedEntry.quality,
+                        source: cachedEntry.source,
+                        timings: cachedEntry.timings,
+                    };
+                    setCurrentAudioQuality(cachedEntry.quality || null);
+                    setCurrentAudioQualityMode(cachedEntry.qualityMode || getResolvedAudioQualityMode());
                     a.src = cachedEntry.url;
                     a.preload = "auto";
                     a.load();
@@ -1256,6 +1501,16 @@ export const PlayerProvider = ({ children }) => {
 
                 // [CONTRATO] status === "ok" - reproducir
                 const audioUrl = result.url;
+                const resolvedTrack = mergePlaybackMetadata(track, result.playbackTrack);
+                if (resolvedTrack !== track) {
+                    setCurrentTrack(resolvedTrack);
+                    currentTrackRef.current = resolvedTrack;
+                }
+                activePlaybackWasPrefetchedRef.current = Boolean(result.wasPrefetched);
+                activePlaybackRefreshAttemptedRef.current = false;
+                playbackResolutionMetaRef.current = result;
+                setCurrentAudioQuality(result.quality || null);
+                setCurrentAudioQualityMode(result.qualityMode || getResolvedAudioQualityMode());
 
                 const a = audioRef.current;
                 if (!a) return;
@@ -1340,6 +1595,12 @@ export const PlayerProvider = ({ children }) => {
         (track, contextQueue = null, contextData = null, forceShuffle = false) => {
             if (!track) return queueSessionRef.current;
 
+            playIntentAtRef.current = performance.now();
+            bufferingStartedAtRef.current = 0;
+            accumulatedBufferMsRef.current = 0;
+            playbackMetricRecordedRef.current = false;
+            playbackResolutionMetaRef.current = null;
+
             const startsNewSession = Array.isArray(contextQueue) && contextQueue.length > 0;
             let sessionId = queueSessionRef.current;
             let newQueue = queueRef.current;
@@ -1414,6 +1675,18 @@ export const PlayerProvider = ({ children }) => {
         },
         [isShuffle, generateShuffledQueue, playTrackInternal, clearPrefetch]
     );
+
+    const primeResolvedTrack = useCallback((track) => {
+        const playback = playbackPrefetchService.get(track, getResolvedAudioQualityMode());
+        const buffer = nextAudioRef.current;
+        if (!playback?.audioUrl || !buffer) return false;
+        if ((buffer.currentSrc || buffer.src) !== playback.audioUrl) {
+            buffer.src = playback.audioUrl;
+            buffer.preload = "auto";
+            buffer.load();
+        }
+        return true;
+    }, []);
 
     const addToQueue = useCallback(
         (track, silent = false, sessionId = null) => {
@@ -1803,6 +2076,8 @@ export const PlayerProvider = ({ children }) => {
         if (!a.src && currentTrack) {
             const expectedKey = makeAudioCacheKey(currentTrack);
             if (cachedAudioUrlRef.current?.key === expectedKey && cachedAudioUrlRef.current.url) {
+                setCurrentAudioQuality(cachedAudioUrlRef.current.quality || null);
+                setCurrentAudioQualityMode(cachedAudioUrlRef.current.qualityMode || getResolvedAudioQualityMode());
                 a.src = cachedAudioUrlRef.current.url;
                 a.load();
             } else {
@@ -1810,6 +2085,8 @@ export const PlayerProvider = ({ children }) => {
                 try {
                     const result = await resolveAudioUrl(currentTrack);
                     if (result.status === "ok" && result.url) {
+                        setCurrentAudioQuality(result.quality || null);
+                        setCurrentAudioQualityMode(result.qualityMode || getResolvedAudioQualityMode());
                         a.src = result.url;
                         a.load();
                     } else {
@@ -1861,9 +2138,18 @@ export const PlayerProvider = ({ children }) => {
             const nextTrackObj = prefetchedNextTrack.current;
             const nextUrl = prefetchedNextUrl.current;
             const prefetchedIndex = prefetchedNextIndex.current;
+            const prefetchedQuality = prefetchCacheRef.current.get(makeAudioCacheKey(nextTrackObj));
 
             // Limpiar refs de prefetch
             clearPrefetch();
+
+            // Un cambio de preferencia invalida cualquier URL preparada bajo
+            // otro modo aunque el track sea exactamente el mismo.
+            if (prefetchedQuality?.status !== 'ok' || prefetchedQuality.url !== nextUrl) {
+                isAdvancingRef.current = false;
+                next(true);
+                return;
+            }
 
             const q = isShuffle ? shuffledQueueRef.current : queueRef.current;
             const i = isShuffle ? shuffledIndexRef.current : indexRef.current;
@@ -1878,6 +2164,16 @@ export const PlayerProvider = ({ children }) => {
                 next(true);
                 return;
             }
+
+            setCurrentAudioQuality(prefetchedQuality.quality || null);
+            setCurrentAudioQualityMode(prefetchedQuality.qualityMode || getResolvedAudioQualityMode());
+            activePlaybackWasPrefetchedRef.current = true;
+            activePlaybackRefreshAttemptedRef.current = false;
+            playbackResolutionMetaRef.current = {
+                ...prefetchedQuality,
+                wasPrefetched: true,
+                cacheStatus: prefetchedQuality.cacheStatus || 'local',
+            };
 
             setCurrentTrack(nextTrackObj);
             currentTrackRef.current = nextTrackObj;
@@ -2182,6 +2478,8 @@ export const PlayerProvider = ({ children }) => {
             duration,
             volume,
             errorMsg,
+            currentAudioQuality,
+            currentAudioQualityMode,
             isShuffle,
             repeatMode,
             isQueueOpen,
@@ -2204,6 +2502,7 @@ export const PlayerProvider = ({ children }) => {
             toggleShuffle,
             toggleRepeat,
             toggleQueue,
+            primeResolvedTrack,
             toggleHistoryPaused,
             clearListeningHistory,
 
@@ -2232,6 +2531,8 @@ export const PlayerProvider = ({ children }) => {
             duration,
             volume,
             errorMsg,
+            currentAudioQuality,
+            currentAudioQualityMode,
             isShuffle,
             repeatMode,
             isQueueOpen,
@@ -2252,6 +2553,7 @@ export const PlayerProvider = ({ children }) => {
             toggleShuffle,
             toggleRepeat,
             toggleQueue,
+            primeResolvedTrack,
             toggleHistoryPaused,
             clearListeningHistory,
             addToQueue,
@@ -2280,6 +2582,7 @@ export const PlayerProvider = ({ children }) => {
             toggleShuffle,
             toggleRepeat,
             toggleQueue,
+            primeResolvedTrack,
             addToQueue,
             appendToQueue,
             playNextInQueue,
@@ -2298,6 +2601,7 @@ export const PlayerProvider = ({ children }) => {
             toggleShuffle,
             toggleRepeat,
             toggleQueue,
+            primeResolvedTrack,
             addToQueue,
             appendToQueue,
             playNextInQueue,

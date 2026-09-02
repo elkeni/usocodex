@@ -4,6 +4,9 @@ import App from './App';
 import { UserProvider } from './context/userContext';
 import { FeedbackProvider } from './context/feedbackContext';
 import AppErrorBoundary from './components/shared/AppErrorBoundary';
+import { initializeExperiencePreferences } from './services/experiencePreferences';
+
+initializeExperiencePreferences();
 
 const root = ReactDOM.createRoot(document.getElementById('root'));
 root.render(

@@ -14,6 +14,8 @@ import { buildRadioQueue } from "../../services/radioService";
 import { PRODUCT_EVENTS, recordProductEvent } from "../../services/productMetrics";
 import { getAlbumPath } from "../../services/albumNavigation";
 import { getArtistPath } from "../../services/artistIdentity";
+import { getPrefetchLimitForQuality, playbackPrefetchService, getPlaybackPrefetchKey } from "../../services/playbackPrefetchService";
+import { getResolvedAudioQualityMode } from "../../services/audioQuality";
 import {
   buildDiscoveryTasteProfile,
   getDiscoveryArtistName,
@@ -114,6 +116,7 @@ const normalizeItem = (item, type = "track") => {
 
   return {
     id,
+    deezerId: type === 'album' ? (item.deezerId || (/^\d+$/.test(String(item.id || '')) ? item.id : null)) : undefined,
     type,
     name,
     artist,
@@ -152,7 +155,7 @@ const applySectionsRotation = ({ sections }) => {
 // =============================================================================
 
 // Generic Row Component
-const Row = memo(({ title, subtitle, items, onItemClick, variant = 'default', sectionKey = '', isLoading }) => {
+const Row = memo(({ title, subtitle, items, onItemClick, variant = 'default', sectionKey = '', isLoading, playbackPrefetch }) => {
   const displayItems = useMemo(() => {
     if (!items) return [];
     if (variant === 'recent') return items; // Allow history duplicates
@@ -229,6 +232,7 @@ const Row = memo(({ title, subtitle, items, onItemClick, variant = 'default', se
             onClick={onItemClick}
             variant={cardVariant}
             className={`${cardClassName} ${variant === 'recommended' ? 'recommended-card-override' : ''}`.trim()}
+            {...playbackPrefetch}
           />
         ))}
       </div>
@@ -237,7 +241,7 @@ const Row = memo(({ title, subtitle, items, onItemClick, variant = 'default', se
 }, (prev, next) => prev.title === next.title && prev.isLoading === next.isLoading && (prev.items || []).length === (next.items || []).length && (prev.items || []).every((it, i) => it?.id === next.items?.[i]?.id));
 
 // HeroCard - Single large card
-const HeroCard = memo(({ item, onPlay }) => {
+const HeroCard = memo(({ item, onPlay, playbackPrefetch }) => {
   const [imageLoaded, setImageLoaded] = useState(false);
   const [imageFailed, setImageFailed] = useState(false);
   const navigate = useNavigate();
@@ -263,6 +267,8 @@ const HeroCard = memo(({ item, onPlay }) => {
       type="button"
       className="feed-hero-card"
       onClick={handleClick}
+      onPointerEnter={() => playbackPrefetch?.onPrefetchIntent?.(item, { reason: 'pointer' })}
+      onPointerDown={() => playbackPrefetch?.onPlaybackPointerDown?.(item)}
       title={`${item.type === 'track' ? 'Reproducir' : 'Ver'} ${item.name} - ${item.artist}`}
     >
       <div className="feed-hero-img-wrapper">
@@ -287,7 +293,7 @@ const HeroCard = memo(({ item, onPlay }) => {
 }, (prev, next) => prev.item?.id === next.item?.id && prev.item?.image === next.item?.image);
 
 // HeroRow - Horizontal scrollable row of hero cards
-const HeroRow = memo(({ items, onItemClick, isLoading, onActiveItemChange }) => {
+const HeroRow = memo(({ items, onItemClick, isLoading, onActiveItemChange, playbackPrefetch }) => {
   const rowRef = useRef(null);
 
   // Handle scroll to detect active item
@@ -358,7 +364,7 @@ const HeroRow = memo(({ items, onItemClick, isLoading, onActiveItemChange }) => 
       onScroll={handleScroll}
     >
       {items.map((item, index) => (
-        <HeroCard key={item.id || `hero-${index}-${item.name}`} item={item} onPlay={onItemClick} />
+        <HeroCard key={item.id || `hero-${index}-${item.name}`} item={item} onPlay={onItemClick} playbackPrefetch={playbackPrefetch} />
       ))}
     </div>
   );
@@ -381,10 +387,34 @@ const buildRecentlyPlayed = (history) => {
 // Main Feed Component
 export default function Feed() {
   const navigate = useNavigate();
-  const { playTrack, appendToQueue } = usePlayerActions();
+  const { playTrack, appendToQueue, primeResolvedTrack } = usePlayerActions();
   const playerState = usePlayer();
   const { user, favorites, playlists, savedArtists, savedAlbums, loading: userLoading } = useUser();
   const artistRadioRequestRef = useRef(0);
+  const discoveryPrefetchKeysRef = useRef(new Set());
+
+  const handleDiscoveryPrefetch = useCallback((item, { signal, reason = 'visible' } = {}) => {
+    if (!item || ['album', 'playlist', 'artist'].includes(item.type)) return Promise.resolve(null);
+    const qualityMode = getResolvedAudioQualityMode();
+    const visibilityLimit = getPrefetchLimitForQuality(qualityMode, 'discovery');
+    if (reason === 'visible' && visibilityLimit === 0) return Promise.resolve(null);
+    const key = getPlaybackPrefetchKey(item, qualityMode);
+    if (reason === 'visible' && !discoveryPrefetchKeysRef.current.has(key)) {
+      if (discoveryPrefetchKeysRef.current.size >= visibilityLimit) return Promise.resolve(null);
+      discoveryPrefetchKeysRef.current.add(key);
+    }
+    return playbackPrefetchService.prefetch(item, {
+      qualityMode,
+      priority: 'low',
+      signal,
+    });
+  }, []);
+
+  const playbackPrefetch = useMemo(() => ({
+    onPrefetchIntent: handleDiscoveryPrefetch,
+    onPlaybackPointerDown: primeResolvedTrack,
+    prefetchOnVisible: true,
+  }), [handleDiscoveryPrefetch, primeResolvedTrack]);
 
   const discoveryInputsRef = useRef(screenStateCache.get('feed', 'discoveryInputs') || null);
   if (!userLoading && !discoveryInputsRef.current) {
@@ -1164,7 +1194,7 @@ export default function Feed() {
         .filter(album => { if (!album.image) return false; const key = `${(album.artist || '').toLowerCase()}::${(album.name || '').toLowerCase()}`; if (savedAlbumKeys.has(key) || seenAlbumKeys.has(key)) return false; seenAlbumKeys.add(key); return true; })
         .sort((a, b) => { const typeOrder = { album: 0, ep: 1, single: 2 }; const tA = typeOrder[a.recordType] ?? 1, tB = typeOrder[b.recordType] ?? 1; if (tA !== tB) return tA - tB; return (b.releaseDate ? new Date(b.releaseDate).getTime() : 0) - (a.releaseDate ? new Date(a.releaseDate).getTime() : 0); });
       const selectedAlbums = pickRandomSample(finalAlbums, 12, `${sessionSeed}:albums`)
-        .map(album => ({ id: album.id || `album-${album.name}-${album.artist}`, name: album.name, artist: album.artist || album.artistQuery, image: album.image, type: album.type || 'Álbum', recordType: album.recordType || 'album', releaseYear: album.releaseDate ? new Date(album.releaseDate).getFullYear() : null, trackCount: album.trackCount }));
+        .map(album => ({ id: album.id || `album-${album.name}-${album.artist}`, deezerId: album.deezerId || (/^\d+$/.test(String(album.id || '')) ? album.id : null), name: album.name, artist: album.artist || album.artistQuery, image: album.image, type: album.type || 'Álbum', recordType: album.recordType || 'album', releaseYear: album.releaseDate ? new Date(album.releaseDate).getFullYear() : null, trackCount: album.trackCount }));
 
       setSections((prev) => ({ ...prev, recommendedAlbums: selectedAlbums })); setLoading((p) => ({ ...p, albums: false }));
     } catch { if (!controller.signal.aborted) setLoading((p) => ({ ...p, albums: false })); }
@@ -1341,6 +1371,7 @@ export default function Feed() {
           items={heroMix}
           onItemClick={handlePlay}
           onActiveItemChange={handleHeroScrollChange}
+          playbackPrefetch={playbackPrefetch}
           isLoading={(loading.critical || loading.recommendations || loading.albums) && heroMix.length === 0}
         />
         {error && <div className="feed-error">{error}</div>}
@@ -1403,19 +1434,19 @@ export default function Feed() {
       {rotatedSections.map(({ key, title }) => {
         const subtitle = getSectionSubtitle(key);
         switch (key) {
-          case 'newReleases': return <Row key={key} sectionKey="newReleases" title={title} subtitle={subtitle} items={sections.newReleases} onItemClick={handleNewReleasesClick} />;
+          case 'newReleases': return <Row key={key} sectionKey="newReleases" title={title} subtitle={subtitle} items={sections.newReleases} onItemClick={handleNewReleasesClick} playbackPrefetch={playbackPrefetch} />;
           case 'smartRecommendations':
             // Excluimos las top 5 que ya se muestran en el Hero para evitar duplicados
-            return <Row key={key} sectionKey="smartRecommendations" title={title} subtitle={subtitle} items={sections.smartRecommendations?.slice(5)} onItemClick={handleRecommendationsClick} variant="recommended" isLoading={loading.recommendations} />;
-          case 'recentlyPlayed': return recentlyPlayed.length > 0 ? <Row key={key} sectionKey="recentlyPlayed" title={title} subtitle={subtitle} items={recentlyPlayed} onItemClick={handleRecentlyPlayedClick} variant="recent" /> : null;
+            return <Row key={key} sectionKey="smartRecommendations" title={title} subtitle={subtitle} items={sections.smartRecommendations?.slice(5)} onItemClick={handleRecommendationsClick} variant="recommended" isLoading={loading.recommendations} playbackPrefetch={playbackPrefetch} />;
+          case 'recentlyPlayed': return recentlyPlayed.length > 0 ? <Row key={key} sectionKey="recentlyPlayed" title={title} subtitle={subtitle} items={recentlyPlayed} onItemClick={handleRecentlyPlayedClick} variant="recent" playbackPrefetch={playbackPrefetch} /> : null;
           case 'topPlaylists': return <Row key={key} sectionKey="topPlaylists" title={title} subtitle={subtitle} items={sections.topPlaylists} onItemClick={handlePlaylistClick} isLoading={loading.playlists} />;
 
           case 'partyPlaylists': return <Row key={key} sectionKey="partyPlaylists" title={title} subtitle={subtitle} items={sections.partyPlaylists} onItemClick={handlePlaylistClick} isLoading={loading.party} />;
           case 'recommendedAlbums': return <Row key={key} sectionKey="recommendedAlbums" title={title} subtitle={subtitle} items={sections.recommendedAlbums} variant="album" onItemClick={handleAlbumClick} isLoading={loading.albums} />;
-          case 'trending': return <Row key={key} sectionKey="trending" title={title} subtitle={subtitle} items={sections.trending} onItemClick={handleTrendingClick} />;
+          case 'trending': return <Row key={key} sectionKey="trending" title={title} subtitle={subtitle} items={sections.trending} onItemClick={handleTrendingClick} playbackPrefetch={playbackPrefetch} />;
           case 'moodMixes': return <Row key={key} sectionKey="moodMixes" title={title} subtitle={subtitle} items={sections.moodMixes} onItemClick={handlePlaylistClick} variant="wide" isLoading={loading.mood} />;
           case 'flashback': return <Row key={key} sectionKey="flashback" title={title} subtitle={subtitle} items={sections.flashback} onItemClick={handlePlaylistClick} isLoading={loading.flashback} />;
-          case 'artistSpotlight': return <Row key={key} sectionKey="artistSpotlight" title={title} subtitle={subtitle} items={sections.artistSpotlight} onItemClick={handleRecommendationsClick} variant="poster" isLoading={loading.spotlight} />;
+          case 'artistSpotlight': return <Row key={key} sectionKey="artistSpotlight" title={title} subtitle={subtitle} items={sections.artistSpotlight} onItemClick={handleRecommendationsClick} variant="poster" isLoading={loading.spotlight} playbackPrefetch={playbackPrefetch} />;
           case 'global': return <Row key={key} sectionKey="global" title={title} subtitle={subtitle} items={sections.global} onItemClick={handlePlaylistClick} variant="list" isLoading={loading.global} />;
           default: return null;
         }

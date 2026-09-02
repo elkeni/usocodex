@@ -40,6 +40,15 @@
   .app-loading__spinner { animation: none; }
 }
 
+html[data-reduced-motion="true"] *,
+html[data-reduced-motion="true"] *::before,
+html[data-reduced-motion="true"] *::after {
+  scroll-behavior: auto !important;
+  animation-duration: 0.01ms !important;
+  animation-iteration-count: 1 !important;
+  transition-duration: 0.01ms !important;
+}
+
 /* ===== GLOBAL RESET FOR EDGE-TO-EDGE ===== */
 *,
 *::before,

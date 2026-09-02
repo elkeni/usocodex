@@ -300,6 +300,7 @@ export const UserProvider = ({ children }) => {
                 const albumData = {
                     name: albumName,
                     artist: albumArtist,
+                    deezerId: album.deezerId || (/^\d+$/.test(String(album.id || '')) ? album.id : null),
                     image: album.image || album.cover_xl || '',
                     trackCount: album.nb_tracks || album.tracks?.length || 0,
                     addedAt: Date.now()
@@ -932,6 +933,7 @@ export const UserProvider = ({ children }) => {
                     albumsToAdd.push({
                         name: albumName,
                         artist: albumArtist,
+                        deezerId: album.deezerId || (/^\d+$/.test(String(album.id || '')) ? album.id : null),
                         image: album.image || album.cover_xl || '',
                         trackCount: album.nb_tracks || album.trackCount || album.totalTracks || 0,
                         addedAt: Date.now()
