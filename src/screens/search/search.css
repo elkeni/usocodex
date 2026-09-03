@@ -91,7 +91,7 @@
     -webkit-backdrop-filter: blur(10px);
     border: 1px solid rgba(255, 255, 255, 0.1);
     border-radius: 12px;
-    padding: 12px 42px 12px 16px;
+    padding: 13px 42px 13px 44px;
     color: white;
     /* Safari iOS amplía automáticamente inputs con texto menor de 16px. */
     font-size: 16px;
@@ -115,7 +115,13 @@
 }
 
 .search-icon {
-    display: none;
+    display: block;
+    position: absolute;
+    left: 16px;
+    z-index: 1;
+    color: rgba(255, 255, 255, 0.55);
+    font-size: 16px;
+    pointer-events: none;
 }
 
 .search-clear-btn {
@@ -284,6 +290,7 @@
 
 /* ===== WRAPPER FOR CARD COMPONENTS ===== */
 .search-card-wrapper {
+    position: relative;
     width: 100%;
 }
 
@@ -1025,5 +1032,226 @@
     width: 100%;
     border-bottom: none;
     cursor: pointer;
+}
+
+/* =============================================================================
+   SEARCH PERSONALIZATION — MOBILE FIRST
+   ============================================================================= */
+.taste-search-suggestions {
+    position: relative;
+    overflow: hidden;
+    margin: 8px 0 24px;
+    padding: 16px;
+    border: 1px solid rgba(255, 255, 255, 0.09);
+    border-radius: 18px;
+    background:
+        radial-gradient(circle at 92% 0%, rgba(233, 30, 99, 0.2), transparent 42%),
+        linear-gradient(145deg, rgba(255, 255, 255, 0.08), rgba(255, 255, 255, 0.035));
+    box-shadow: 0 16px 36px rgba(0, 0, 0, 0.18);
+}
+
+.taste-search-heading {
+    display: flex;
+    align-items: flex-start;
+    justify-content: space-between;
+    gap: 12px;
+    margin-bottom: 14px;
+}
+
+.taste-search-heading h2 {
+    margin: 0 0 4px;
+    color: white;
+    font-size: 17px;
+    line-height: 1.2;
+    letter-spacing: -0.02em;
+}
+
+.taste-search-heading p {
+    margin: 0;
+    max-width: 270px;
+    color: rgba(255, 255, 255, 0.58);
+    font-size: 12px;
+    line-height: 1.4;
+}
+
+.taste-search-heading > svg {
+    flex: 0 0 auto;
+    color: #ff3c7d;
+    filter: drop-shadow(0 0 10px rgba(255, 45, 120, 0.38));
+}
+
+.taste-search-chips {
+    display: flex;
+    gap: 8px;
+    margin: 0 -16px -2px;
+    padding: 0 16px 4px;
+    overflow-x: auto;
+    overscroll-behavior-inline: contain;
+    scroll-snap-type: inline proximity;
+    scrollbar-width: none;
+    -webkit-overflow-scrolling: touch;
+}
+
+.taste-search-chips::-webkit-scrollbar {
+    display: none;
+}
+
+.taste-search-chips button {
+    display: inline-flex;
+    align-items: center;
+    gap: 8px;
+    flex: 0 0 auto;
+    min-height: 42px;
+    max-width: 210px;
+    padding: 0 14px;
+    border: 1px solid rgba(255, 255, 255, 0.1);
+    border-radius: 999px;
+    background: rgba(7, 7, 9, 0.58);
+    color: rgba(255, 255, 255, 0.92);
+    font: inherit;
+    font-size: 13px;
+    font-weight: 650;
+    cursor: pointer;
+    scroll-snap-align: start;
+    transition: transform 0.15s ease, background 0.15s ease;
+}
+
+.taste-search-chips button span {
+    overflow: hidden;
+    text-overflow: ellipsis;
+    white-space: nowrap;
+}
+
+.taste-search-chips button svg {
+    flex: 0 0 auto;
+    color: #ff4b87;
+    font-size: 12px;
+}
+
+.taste-search-chips button:active {
+    transform: scale(0.97);
+    background: rgba(255, 255, 255, 0.12);
+}
+
+.taste-search-chips button:focus-visible,
+.search-card-wrapper:focus-within {
+    outline: 2px solid #ff2d78;
+    outline-offset: 2px;
+}
+
+.search-card-personalization {
+    position: absolute;
+    right: 2px;
+    top: 50%;
+    transform: translateY(-50%);
+    padding: 4px 7px;
+    border: 1px solid rgba(255, 65, 132, 0.25);
+    border-radius: 999px;
+    background: rgba(233, 30, 99, 0.1);
+    color: #ff78a7;
+    font-size: 9px;
+    font-weight: 750;
+    letter-spacing: 0.03em;
+    text-transform: uppercase;
+    pointer-events: none;
+}
+
+.search-card-wrapper.is-personalized .app-card-meta {
+    padding-right: 54px;
+}
+
+.search-page .track-title-line {
+    display: flex;
+    align-items: center;
+    gap: 7px;
+    width: 100%;
+    min-width: 0;
+}
+
+.search-page .track-title-line .track-name {
+    flex: 0 1 auto;
+    min-width: 0;
+}
+
+.search-personalized-badge {
+    flex: 0 0 auto;
+    padding: 3px 6px;
+    border-radius: 999px;
+    background: rgba(233, 30, 99, 0.14);
+    color: #ff6f9f;
+    font-size: 9px;
+    font-weight: 750;
+    line-height: 1;
+    letter-spacing: 0.02em;
+    text-transform: uppercase;
+}
+
+@media (max-width: 599px) {
+    .search-page-header.app-page-header {
+        padding-top: max(var(--safe-top, 20px), env(safe-area-inset-top)) !important;
+    }
+
+    .search-input-container {
+        padding-top: 10px;
+    }
+
+    .search-capsule-input {
+        min-height: 48px;
+        border-radius: 16px;
+        background: rgba(255, 255, 255, 0.095);
+    }
+
+    .filter-glass-pill {
+        min-height: 40px;
+        padding-inline: 15px;
+    }
+
+    .search-content {
+        padding-bottom: calc(154px + env(safe-area-inset-bottom));
+    }
+
+    .result-section {
+        margin-bottom: 27px;
+    }
+
+    .search-page .track-row {
+        min-height: 70px;
+        gap: 12px;
+    }
+
+    .search-page .track-artwork {
+        width: 52px;
+        height: 52px;
+        border-radius: 8px;
+    }
+
+    .search-page .track-duration {
+        display: none;
+    }
+
+    .recent-main,
+    .recent-item {
+        min-height: 50px;
+    }
+}
+
+@media (max-width: 350px) {
+    :root {
+        --search-padding: 12px;
+    }
+
+    .taste-search-suggestions {
+        padding: 14px;
+        border-radius: 16px;
+    }
+
+    .search-personalized-badge,
+    .search-card-personalization {
+        display: none;
+    }
+
+    .search-card-wrapper.is-personalized .app-card-meta {
+        padding-right: 0;
+    }
 }
 

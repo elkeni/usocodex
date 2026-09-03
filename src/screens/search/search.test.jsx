@@ -7,18 +7,20 @@ import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest';
 
 const playTrackMock = vi.fn();
 const searchGlobalMock = vi.fn();
+const userContextMock = vi.hoisted(() => ({
+  toggleFavorite: vi.fn(),
+  isFavorite: () => false,
+  playlists: [],
+  addTrackToPlaylist: vi.fn(),
+  getVibeMatchingData: vi.fn(() => ({})),
+}));
 
 vi.mock('../../context/playerContext', () => ({
   usePlayerActions: () => ({ playTrack: playTrackMock }),
 }));
 
 vi.mock('../../context/userContext', () => ({
-  useUser: () => ({
-    toggleFavorite: vi.fn(),
-    isFavorite: () => false,
-    playlists: [],
-    addTrackToPlaylist: vi.fn(),
-  }),
+  useUser: () => userContextMock,
 }));
 
 vi.mock('../../services/screenStateCache', () => ({
@@ -64,6 +66,7 @@ describe('Búsqueda y reproducción esenciales', () => {
   beforeEach(() => {
     localStorage.clear();
     playTrackMock.mockReset();
+    userContextMock.getVibeMatchingData.mockReturnValue({});
     searchGlobalMock.mockImplementation(async (_query, type) => type === 'track' ? [trackResult] : []);
   });
   afterEach(() => cleanup());
@@ -75,6 +78,20 @@ describe('Búsqueda y reproducción esenciales', () => {
     expect(screen.queryByText(/Explorar Géneros/i)).not.toBeInTheDocument();
     expect(screen.queryByText('Top Global')).not.toBeInTheDocument();
     expect(screen.queryByText('Top Latinoamérica')).not.toBeInTheDocument();
+  });
+
+  it('ofrece accesos de búsqueda basados en los gustos sin llenar la pantalla de tarjetas', async () => {
+    userContextMock.getVibeMatchingData.mockReturnValue({
+      savedArtists: [{ name: 'Twenty One Pilots' }],
+      favorites: [{ name: 'SOMA', artist: 'Skrillex' }],
+    });
+    const user = userEvent.setup();
+    render(<MemoryRouter><Search /></MemoryRouter>);
+
+    expect(screen.getByText('Según tus gustos')).toBeInTheDocument();
+    await user.click(screen.getByRole('button', { name: 'Buscar música de Twenty One Pilots' }));
+    await waitFor(() => expect(searchGlobalMock).toHaveBeenCalledWith('Twenty One Pilots', 'track', 12));
+    expect(JSON.parse(localStorage.getItem('musicalol_recent_searches_v3'))).toEqual(['Twenty One Pilots']);
   });
 
   it('no oculta el historial cuando la barra pierde el foco', async () => {

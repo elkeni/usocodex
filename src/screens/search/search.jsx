@@ -29,6 +29,11 @@ import { buildRadioQueue } from '../../services/radioService';
 import { PRODUCT_EVENTS, recordProductEvent } from '../../services/productMetrics';
 import { getAlbumPath } from '../../services/albumNavigation';
 import { getArtistPath, isSameArtist } from '../../services/artistIdentity';
+import {
+    buildSearchTasteProfile,
+    getPersonalizedSearchSuggestions,
+    rankPersonalizedSearchResults,
+} from '../../services/searchPersonalization';
 
 
 
@@ -98,41 +103,9 @@ const normalizeSearchText = (value) => String(value || '')
     .replace(/[^a-z0-9]+/g, ' ')
     .trim();
 
-const getSearchCacheKey = (query, filter) => `${normalizeSearchText(query)}::${filter}`;
-
-const rankAndDedupeResults = (items, query, getPrimary, getSecondary = () => '') => {
-    const normalizedQuery = normalizeSearchText(query);
-    const unique = new Map();
-
-    for (const item of items || []) {
-        if (!item) continue;
-        const primary = normalizeSearchText(getPrimary(item));
-        const secondary = normalizeSearchText(getSecondary(item));
-        if (!primary) continue;
-        const identity = String(item.id || `${primary}::${secondary}`);
-        if (!unique.has(identity)) unique.set(identity, item);
-    }
-
-    const score = (item) => {
-        const primary = normalizeSearchText(getPrimary(item));
-        const secondary = normalizeSearchText(getSecondary(item));
-        const popularity = Number(item.rank || item.fans || item.popularity || 0);
-        let relevance = 0;
-
-        if (primary === normalizedQuery) relevance += 4_000_000_000;
-        else if (primary.startsWith(normalizedQuery)) relevance += 3_000_000_000;
-        else if (primary.split(' ').includes(normalizedQuery)) relevance += 2_000_000_000;
-        else if (primary.includes(normalizedQuery)) relevance += 1_000_000_000;
-
-        if (secondary === normalizedQuery) relevance += 800_000_000;
-        else if (secondary.startsWith(normalizedQuery)) relevance += 500_000_000;
-        else if (secondary.includes(normalizedQuery)) relevance += 250_000_000;
-
-        return relevance + popularity;
-    };
-
-    return [...unique.values()].sort((a, b) => score(b) - score(a));
-};
+const getSearchCacheKey = (query, filter, profileSignature = 'neutral') => (
+    `${normalizeSearchText(query)}::${filter}::${profileSignature}`
+);
 
 /**
  * Limpia el nombre del artista para búsqueda
@@ -554,7 +527,10 @@ const TrackRow = ({ track, isLoading, onPlay, showRank = false, index = 0, onLon
             </div>
 
             <div className="track-info">
-                <div className="track-name">{track.name}</div>
+                <div className="track-title-line">
+                    <div className="track-name">{track.name}</div>
+                    {track._searchMeta?.personalized && <span className="search-personalized-badge">Para ti</span>}
+                </div>
                 <div className="track-artist">
                     {track.artist}
                     {track.album && <span className="track-album-hint"> · {track.album}</span>}
@@ -578,12 +554,27 @@ const TrackRow = ({ track, isLoading, onPlay, showRank = false, index = 0, onLon
 export default function Search() {
     const navigate = useNavigate();
     const { playTrack, appendToQueue, primeResolvedTrack } = usePlayerActions();
+    const { getVibeMatchingData } = useUser();
+    const tasteData = useMemo(() => {
+        try {
+            return getVibeMatchingData?.() || {};
+        } catch (error) {
+            console.warn('[Search] No se pudo leer el perfil local de gustos:', error);
+            return {};
+        }
+    }, [getVibeMatchingData]);
+    const searchTasteProfile = useMemo(() => buildSearchTasteProfile(tasteData), [tasteData]);
+    const personalizedSuggestions = useMemo(
+        () => getPersonalizedSearchSuggestions(searchTasteProfile, 6),
+        [searchTasteProfile]
+    );
 
     // Referencias
     const inputRef = useRef(null);
     const searchContainerRef = useRef(null);
     const searchCacheRef = useRef({});
     const searchRequestRef = useRef(0);
+    const initialSearchProfileSignatureRef = useRef(searchTasteProfile.signature);
 
     // Use persistence scroll
     useScrollPersistence('search', searchContainerRef);
@@ -637,15 +628,21 @@ export default function Search() {
     useEffect(() => {
         const cachedState = screenStateCache.get('search_state');
         if (cachedState) {
+            const profileMatches = !cachedState.profileSignature
+                || cachedState.profileSignature === initialSearchProfileSignatureRef.current;
             if (cachedState.query) setQuery(cachedState.query);
-            if (cachedState.results) setResults(cachedState.results);
-            if (cachedState.query && cachedState.results) setResultsQuery(cachedState.query);
+            if (cachedState.results && profileMatches) setResults(cachedState.results);
+            if (cachedState.query && cachedState.results && profileMatches) setResultsQuery(cachedState.query);
             if (cachedState.filter) setResultsFilter(cachedState.filter);
-            if (cachedState.hasSearched) setHasSearched(cachedState.hasSearched);
+            if (cachedState.hasSearched && profileMatches) setHasSearched(cachedState.hasSearched);
             if (cachedState.filter) setFilter(cachedState.filter);
-            if (cachedState.query && cachedState.results) {
+            if (cachedState.query && cachedState.results && profileMatches) {
                 const restoredFilter = cachedState.filter || 'all';
-                searchCacheRef.current[getSearchCacheKey(cachedState.query, restoredFilter)] = cachedState.results;
+                searchCacheRef.current[getSearchCacheKey(
+                    cachedState.query,
+                    restoredFilter,
+                    cachedState.profileSignature || initialSearchProfileSignatureRef.current
+                )] = cachedState.results;
             }
         }
     }, []);
@@ -656,9 +653,10 @@ export default function Search() {
             query,
             results,
             hasSearched,
-            filter
+            filter,
+            profileSignature: searchTasteProfile.signature
         });
-    }, [query, results, hasSearched, filter]);
+    }, [query, results, hasSearched, filter, searchTasteProfile.signature]);
 
     // ========================================
     // LÓGICA DE BÚSQUEDA CENTRALIZADA
@@ -675,7 +673,7 @@ export default function Search() {
         }
 
         const cleanQuery = searchQuery.trim().replace(/\s+/g, ' ');
-        const cacheKey = getSearchCacheKey(cleanQuery, filter);
+        const cacheKey = getSearchCacheKey(cleanQuery, filter, searchTasteProfile.signature);
         const requestId = ++searchRequestRef.current;
 
         if (searchCacheRef.current[cacheKey]) {
@@ -774,12 +772,13 @@ export default function Search() {
             const mappedAlbums = cleanAndMap(rawByType.album, mapAlbum);
             const mappedPlaylists = cleanAndMap(rawByType.playlist, mapPlaylist);
 
-            // La coincidencia textual manda; la popularidad resuelve empates razonables.
+            // La coincidencia textual manda; los gustos solo ordenan candidatos
+            // de relevancia comparable y la popularidad funciona como desempate.
             const resultsData = {
-                tracks: rankAndDedupeResults(mappedTracks, cleanQuery, (item) => item.name, (item) => `${item.artist} ${item.album}`),
-                artists: rankAndDedupeResults(mappedArtists, cleanQuery, (item) => item.name),
-                albums: rankAndDedupeResults(mappedAlbums, cleanQuery, (item) => item.name, (item) => item.artist),
-                playlists: rankAndDedupeResults(mappedPlaylists, cleanQuery, (item) => item.name, (item) => item.creator)
+                tracks: rankPersonalizedSearchResults(mappedTracks, cleanQuery, 'track', searchTasteProfile),
+                artists: rankPersonalizedSearchResults(mappedArtists, cleanQuery, 'artist', searchTasteProfile),
+                albums: rankPersonalizedSearchResults(mappedAlbums, cleanQuery, 'album', searchTasteProfile),
+                playlists: rankPersonalizedSearchResults(mappedPlaylists, cleanQuery, 'playlist', searchTasteProfile)
             };
 
             setResults(resultsData);
@@ -805,7 +804,7 @@ export default function Search() {
         } finally {
             if (requestId === searchRequestRef.current) setIsLoading(false);
         }
-    }, [filter]);
+    }, [filter, searchTasteProfile]);
 
     // ========================================
     // GUARDAR BÚSQUEDA EN HISTORIAL
@@ -871,6 +870,13 @@ export default function Search() {
         performSearch(term);
         inputRef.current?.blur();
     }, [performSearch]);
+
+    const executeTasteSuggestion = useCallback((artist) => {
+        setQuery(artist);
+        saveToRecentSearches(artist);
+        performSearch(artist);
+        inputRef.current?.blur();
+    }, [performSearch, saveToRecentSearches]);
 
     const submitSearch = useCallback((event) => {
         event.preventDefault();
@@ -1047,7 +1053,7 @@ export default function Search() {
                                 <div className="section-header">
                                     <h3 className="section-title">
                                         <FaMusic className="section-title-icon" />
-                                        Canciones
+                                        {tracksToShow.some((track) => track._searchMeta?.personalized) ? 'Canciones para ti' : 'Canciones'}
                                     </h3>
                                     {results.tracks.length > 5 && (
                                         <button
@@ -1096,12 +1102,13 @@ export default function Search() {
                                 </div>
                                 <div className="artists-horizontal-list">
                                     {artistsToShow.map((artist, i) => (
-                                        <div className="search-card-wrapper" key={`artist-${i}`}>
+                                        <div className={`search-card-wrapper ${artist._searchMeta?.personalized ? 'is-personalized' : ''}`} key={`artist-${artist.id || i}`}>
                                             <Card
                                                 item={artist}
                                                 variant="vertical" // Force vertical for bubbles style
                                                 onClick={() => navigate(getArtistPath(artist))}
                                             />
+                                            {artist._searchMeta?.personalized && <span className="search-card-personalization">Afinidad</span>}
                                         </div>
                                     ))}
                                 </div>
@@ -1122,13 +1129,14 @@ export default function Search() {
                                 </div>
                                 <div className="cards-scroll">
                                     {albumsToShow.map((album, i) => (
-                                        <div className="search-card-wrapper" key={`album-${i}`}>
+                                        <div className={`search-card-wrapper ${album._searchMeta?.personalized ? 'is-personalized' : ''}`} key={`album-${album.id || i}`}>
                                             <Card
                                                 item={album}
                                                 variant="vertical"
                                                 onClick={() => navigate(getAlbumPath(album))}
                                                 subtitle={album.artist}
                                             />
+                                            {album._searchMeta?.personalized && <span className="search-card-personalization">Para ti</span>}
                                         </div>
                                     ))}
                                 </div>
@@ -1275,13 +1283,38 @@ export default function Search() {
                     </div>
                 )}
 
+                {!isLoading && !hasSearched && !query.trim() && personalizedSuggestions.length > 0 && (
+                    <section className="taste-search-suggestions" aria-labelledby="taste-search-title">
+                        <div className="taste-search-heading">
+                            <div>
+                                <h2 id="taste-search-title">Según tus gustos</h2>
+                                <p>Accesos rápidos basados en tu biblioteca y tus escuchas.</p>
+                            </div>
+                            <FaHeart aria-hidden="true" />
+                        </div>
+                        <div className="taste-search-chips">
+                            {personalizedSuggestions.map((artist) => (
+                                <button
+                                    type="button"
+                                    key={artist}
+                                    onClick={() => executeTasteSuggestion(artist)}
+                                    aria-label={`Buscar música de ${artist}`}
+                                >
+                                    <FaSearch aria-hidden="true" />
+                                    <span>{artist}</span>
+                                </button>
+                            ))}
+                        </div>
+                    </section>
+                )}
+
                 {/* =====================================================
                     BÚSQUEDAS RECIENTES - Permanecen visibles mientras no haya búsqueda
                 ===================================================== */}
                 {!isLoading && !hasSearched && !query.trim() && recentSearches.length > 0 && (
                     <div className="recent-searches">
                         <div className="recent-header">
-                            <h2 className="recent-title">Búsquedas Recientes</h2>
+                            <h2 className="recent-title">Búsquedas recientes</h2>
                             <button className="recent-clear-all" onClick={clearAllRecent}>
                                 Borrar todo
                             </button>
@@ -1339,12 +1372,13 @@ export default function Search() {
                         {filter === 'artist' && (
                             <div className="cards-grid">
                                 {results.artists.map((artist, i) => (
-                                    <div className="search-card-wrapper" key={`artist-${i}`}>
+                                    <div className={`search-card-wrapper ${artist._searchMeta?.personalized ? 'is-personalized' : ''}`} key={`artist-${artist.id || i}`}>
                                         <Card
                                             item={artist}
                                             variant="circle"
                                             onClick={() => navigate(getArtistPath(artist))}
                                         />
+                                        {artist._searchMeta?.personalized && <span className="search-card-personalization">Afinidad</span>}
                                     </div>
                                 ))}
                             </div>
@@ -1356,12 +1390,13 @@ export default function Search() {
                         {filter === 'album' && (
                             <div className="cards-grid">
                                 {results.albums.map((album, i) => (
-                                    <div className="search-card-wrapper" key={`album-${i}`}>
+                                    <div className={`search-card-wrapper ${album._searchMeta?.personalized ? 'is-personalized' : ''}`} key={`album-${album.id || i}`}>
                                         <Card
                                             item={album}
                                             variant="vertical"
                                             onClick={() => navigate(getAlbumPath(album))}
                                         />
+                                        {album._searchMeta?.personalized && <span className="search-card-personalization">Para ti</span>}
                                     </div>
                                 ))}
                             </div>
