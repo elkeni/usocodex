@@ -27,6 +27,7 @@ import { getArtistPath } from '../../services/artistIdentity';
 import { getAlbumPath } from '../../services/albumNavigation';
 import { getSpotifyListeningUrl } from '../../services/externalListening';
 import useBodyScrollLock from '../../hooks/useBodyScrollLock';
+import { getArtworkImageProps, getBestArtworkUrl, resizeArtworkUrl } from '../../services/imageQuality';
 
 import './Player.css';
 
@@ -176,15 +177,12 @@ const formatTime = (seconds) => {
  */
 const getTrackImage = (track) => {
     if (!track) return null;
-    if (typeof track.image === 'string') return track.image;
-    if (Array.isArray(track.image)) {
-        const large = track.image.find(img => img.size === 'extralarge' || img.size === 'large');
-        return large?.['#text'] || track.image[track.image.length - 1]?.['#text'];
-    }
-    if (track.image?.url) return track.image.url;
-    if (track.cover) return typeof track.cover === 'string' ? track.cover : track.cover.url;
-    if (track.albumArt) return track.albumArt;
-    return null;
+    const source = getBestArtworkUrl({
+        ...track,
+        image_xl: track.image_xl || track.thumbnail,
+        image: track.image?.url || track.image || track.cover?.url || track.cover || track.albumArt,
+    });
+    return source ? resizeArtworkUrl(source, 1000) : null;
 };
 
 /**
@@ -281,7 +279,7 @@ const QueueItem = memo(({ track, isCurrent, onClick, onRemove }) => {
         >
             <div className="ytm-queue-item__artwork">
                 {image ? (
-                    <img src={image} alt="" loading="lazy" />
+                    <img {...getArtworkImageProps({ image_xl: image }, { size: 160, maxSize: 500, sizes: '48px' })} alt="" loading="lazy" />
                 ) : (
                     <Icons.MusicNote />
                 )}
@@ -780,7 +778,7 @@ export default function Player() {
                 <button type="button" className="ytm-dock__open" onClick={openFullscreen} aria-label={`Abrir reproductor: ${trackTitle} de ${trackArtist}`}>
                 <div className="ytm-dock__artwork">
                     {trackImage ? (
-                        <img src={trackImage} alt="" />
+                        <img {...getArtworkImageProps({ image_xl: trackImage }, { size: 160, maxSize: 500, sizes: '48px' })} alt="" />
                     ) : (
                         <Icons.MusicNote />
                     )}
@@ -878,7 +876,7 @@ export default function Player() {
                         />
                         <div className="ytm-artwork">
                             {trackImage ? (
-                                <img src={trackImage} alt={`Portada de ${trackTitle}`} />
+                                <img {...getArtworkImageProps({ image_xl: trackImage }, { size: 1000, sizes: '(max-width: 600px) 86vw, 560px' })} alt={`Portada de ${trackTitle}`} fetchPriority="high" />
                             ) : (
                                 <Icons.MusicNote />
                             )}
@@ -1092,7 +1090,7 @@ export default function Player() {
                         >
                             <div className="ytm-about__img">
                                 {artistInfo.image ? (
-                                    <img src={artistInfo.image} alt="" />
+                                    <img {...getArtworkImageProps(artistInfo, { size: 500, sizes: '96px' })} alt="" loading="lazy" />
                                 ) : (
                                     <Icons.MusicNote />
                                 )}
@@ -1122,7 +1120,7 @@ export default function Player() {
                                         onClick={() => handlePlayMoreAbout(track)}
                                     >
                                         <div className="ytm-moreaboutartist__img">
-                                            <img src={getTrackImage(track) || ''} alt="" loading="lazy" />
+                                            <img {...getArtworkImageProps({ image_xl: getTrackImage(track) || '' }, { size: 160, maxSize: 500, sizes: '48px' })} alt="" loading="lazy" />
                                         </div>
                                         <div className="ytm-moreaboutartist__info">
                                             <div className="ytm-moreaboutartist__track">{track.name}</div>
@@ -1270,7 +1268,7 @@ export default function Player() {
                                     <button type="button" key={p.id} className="ytm-menu-item" onClick={() => handleSelectPlaylist(p)}>
                                         <div className="ytm-menu-item__icon">
                                             {p.image ? (
-                                                <img src={p.image} alt="" style={{ width: '24px', height: '24px', borderRadius: '4px', objectFit: 'cover' }} />
+                                                <img {...getArtworkImageProps(p, { size: 96, maxSize: 250, sizes: '24px' })} alt="" loading="lazy" style={{ width: '24px', height: '24px', borderRadius: '4px', objectFit: 'cover' }} />
                                             ) : (
                                                 <Icons.Queue />
                                             )}
@@ -1328,7 +1326,7 @@ export default function Player() {
                     <>
                         <div className="ytm-artist-sheet__header">
                             <div className="ytm-artist-sheet__cover">
-                                <img src={artistInfo.image} alt={artistInfo.name} />
+                                <img {...getArtworkImageProps(artistInfo, { size: 500, sizes: '140px' })} alt={artistInfo.name} loading="lazy" />
                                 <div className="ytm-artist-sheet__gradient" />
                                 <button
                                     className="ytm-artist-sheet__close"
@@ -1406,7 +1404,7 @@ export default function Player() {
                                                 >
                                                     <span className="ytm-sheet-song__rank">{i + 1}</span>
                                                     <div className="ytm-sheet-song__img">
-                                                        <img src={getTrackImage(track)} alt="" />
+                                                        <img {...getArtworkImageProps({ image_xl: getTrackImage(track) }, { size: 250, maxSize: 500, sizes: '56px' })} alt="" loading="lazy" />
                                                     </div>
                                                     <div className="ytm-sheet-song__info">
                                                         <div className="ytm-sheet-song__title">{track.name}</div>

@@ -34,6 +34,7 @@ import {
     getPersonalizedSearchSuggestions,
     rankPersonalizedSearchResults,
 } from '../../services/searchPersonalization';
+import { getArtworkImageProps, getBestArtworkUrl, resizeArtworkUrl } from '../../services/imageQuality';
 
 
 
@@ -56,30 +57,8 @@ const MAX_RECENT_SEARCHES = 10;
 // =============================================================================
 
 const getImageUrl = (item, highResolution = false) => {
-    let finalImage = null;
-
-    if (!item) finalImage = null;
-    else if (item.image && typeof item.image === 'string') finalImage = item.image;
-    else if (item.cover_xl) finalImage = item.cover_xl;
-    else if (item.picture_xl) finalImage = item.picture_xl;
-    else if (Array.isArray(item.image)) {
-        const best = item.image.find(i => i.size === 'extralarge') ||
-            item.image.find(i => i.size === 'large') ||
-            item.image[item.image.length - 1];
-        if (best?.['#text'] && !best['#text'].includes('2a96cbd8')) {
-            finalImage = best['#text'];
-        }
-    }
-
-    // Tarjetas ligeras durante el scroll; portada nítida cuando pasa al reproductor.
-    if (typeof finalImage === 'string' && finalImage.includes('dzcdn.net')) {
-        const size = highResolution ? '1000x1000' : '250x250';
-        return finalImage
-            .replace(/\/(?:1000x1000|500x500|250x250)/, `/${size}`)
-            .replace(/\/[\dx]+(-000000-80-0-0\.jpg)/, `/${size}$1`);
-    }
-
-    return finalImage;
+    const source = getBestArtworkUrl(item);
+    return resizeArtworkUrl(source, highResolution ? 1000 : 500);
 };
 
 /**
@@ -395,7 +374,7 @@ const LongPressMenu = ({ track, onClose }) => {
                                             width: '32px', height: '32px', borderRadius: '4px',
                                             background: '#333', overflow: 'hidden', marginRight: '12px'
                                         }}>
-                                            {p.image ? <img src={p.image} style={{ width: '100%', height: '100%' }} alt="" /> : <FaListAlt style={{ margin: '8px', color: '#666' }} />}
+                                            {p.image ? <img {...getArtworkImageProps(p, { size: 160, maxSize: 250, sizes: '32px' })} style={{ width: '100%', height: '100%' }} alt="" loading="lazy" /> : <FaListAlt style={{ margin: '8px', color: '#666' }} />}
                                         </div>
                                         <div style={{ flex: 1, textAlign: 'left', overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap' }}>
                                             {p.name}
@@ -409,9 +388,9 @@ const LongPressMenu = ({ track, onClose }) => {
                     // VISTA PRINCIPAL
                     <>
                         <div className="context-menu-header">
-                            <img
-                                src={track.image || track.image_xl || 'https://via.placeholder.com/50'}
-                                className="context-menu-img"
+                        <img
+                            {...getArtworkImageProps(track, { fallback: DEFAULT_IMAGE, size: 250, maxSize: 500, sizes: '48px' })}
+                            className="context-menu-img"
                                 alt={track.name}
                             />
                             <div className="context-menu-info">
@@ -511,7 +490,12 @@ const TrackRow = ({ track, isLoading, onPlay, showRank = false, index = 0, onLon
 
             <div className="track-artwork">
                 {img ? (
-                    <img src={img} alt={track.name} onError={(e) => { e.target.src = DEFAULT_IMAGE; }} />
+                    <img
+                        {...getArtworkImageProps(track, { fallback: DEFAULT_IMAGE, size: 250, maxSize: 500, sizes: '52px' })}
+                        alt={track.name}
+                        loading="lazy"
+                        onError={(e) => { e.currentTarget.srcset = ''; e.currentTarget.src = DEFAULT_IMAGE; }}
+                    />
                 ) : (
                     <div className="track-artwork-fallback">
                         <FaMusic size={18} />
@@ -713,7 +697,7 @@ export default function Search() {
             });
 
             // Mappers locales para estandarizar resultados (Unified UI Contract)
-            // ⭐ MODIFIED: NOW STORES LOW-RES 'image' AND HIGH-RES 'image_xl'
+            // Mantener una portada Retina para UI y una fuente XL para el reproductor.
             const mapTrack = t => ({
                 id: t.id,
                 name: t.title,
@@ -721,7 +705,7 @@ export default function Search() {
                 artistId: t.artist?.id || null,
                 album: t.album?.title,
                 albumId: t.album?.id || null,
-                image: getImageUrl({ image: t.album?.cover_xl || t.artist?.picture_xl }, false), // 250x250
+                image: getImageUrl({ image: t.album?.cover_xl || t.artist?.picture_xl }, false),
                 image_xl: getImageUrl({ image: t.album?.cover_xl || t.artist?.picture_xl }, true), // 1000x1000
                 duration: t.duration,
                 preview: t.preview,

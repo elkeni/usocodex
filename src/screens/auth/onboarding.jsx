@@ -4,6 +4,7 @@ import { motion, AnimatePresence, LayoutGroup } from 'framer-motion';
 import { FaCheck, FaSearch, FaArrowRight } from 'react-icons/fa';
 import { useUser } from '../../context/userContext';
 import { getArtistInfo, searchGlobal } from '../../services/unifiedService';
+import { getArtworkImageProps } from '../../services/imageQuality';
 import './onboarding.css';
 
 // Artistas populares por defecto
@@ -112,7 +113,7 @@ const ArtistCard = memo(({
                 transition={{ duration: 0.2 }}
             >
                 <img
-                    src={artist.image || ''}
+                    {...getArtworkImageProps(artist, { size: 500, sizes: '(max-width: 600px) 30vw, 150px' })}
                     alt=""
                     className="artist-img"
                     loading="lazy"

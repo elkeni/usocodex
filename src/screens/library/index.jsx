@@ -23,6 +23,7 @@ import { libraryGenerator } from '../../services/libraryGenerator';
 import { PRODUCT_EVENTS, recordProductEvent } from '../../services/productMetrics';
 import { getArtistPath } from '../../services/artistIdentity';
 import { getAlbumPath } from '../../services/albumNavigation';
+import { getArtworkImageProps } from '../../services/imageQuality';
 
 const DEFAULT_IMAGE = 'https://images.unsplash.com/photo-1470225620780-dba8ba36b745?auto=format&fit=crop&w=500&q=60';
 
@@ -272,34 +273,6 @@ export default function Library() {
                 true // forceShuffle
             );
         }
-    };
-
-    // Helper para obtener imagen
-    const getImageUrl = (item) => {
-        let finalImage = DEFAULT_IMAGE;
-
-        if (!item) finalImage = DEFAULT_IMAGE;
-        else if (typeof item.image === 'string' && item.image) finalImage = item.image;
-        else if (item.picture_medium) finalImage = item.picture_medium;
-        else if (item.cover_medium) finalImage = item.cover_medium;
-        else if (item.album?.cover_medium) finalImage = item.album.cover_medium;
-        else if (item.picture_xl) finalImage = item.picture_xl;
-        else if (item.cover_xl) finalImage = item.cover_xl;
-        else if (item.album?.cover_xl) finalImage = item.album.cover_xl;
-        else if (Array.isArray(item.image)) {
-            const best = item.image.find(i => i.size === 'medium') ||
-                item.image.find(i => i.size === 'large') ||
-                item.image.find(i => i.size === 'extralarge') ||
-                item.image[item.image.length - 1];
-            if (best?.['#text']) finalImage = best['#text'];
-        }
-
-        // ⚡ TURBO FIX: Resize on the fly
-        if (typeof finalImage === 'string' && finalImage.includes('dzcdn.net')) {
-            return finalImage.replace(/\/\d+x\d+(-000000-80-0-0\.jpg)/, '/250x250$1')
-                .replace(/\/\d+x\d+(\.jpg)/, '/250x250$1');
-        }
-        return finalImage;
     };
 
     const getArtistName = (item) => (
@@ -582,7 +555,7 @@ export default function Library() {
                                     <FaMusic />
                                 </div>
                                 <img
-                                    src={getImageUrl(track)}
+                                    {...getArtworkImageProps(track, { fallback: DEFAULT_IMAGE, size: 250, maxSize: 500, sizes: '56px' })}
                                     alt=""
                                     loading="lazy"
                                     onError={handleArtworkError}
@@ -670,7 +643,7 @@ export default function Library() {
                                 <div className="library-card-fallback" aria-hidden="true">
                                     <FaMusic />
                                 </div>
-                                <img src={getImageUrl(pl)} alt="" loading="lazy" onError={handleArtworkError} />
+                                <img {...getArtworkImageProps(pl, { fallback: DEFAULT_IMAGE, size: 500, sizes: '(max-width: 600px) 42vw, 220px' })} alt="" loading="lazy" onError={handleArtworkError} />
                                 {!pl.isUserCreated && (
                                     <span className="card-badge">Guardada</span>
                                 )}

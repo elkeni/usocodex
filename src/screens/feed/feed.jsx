@@ -17,6 +17,7 @@ import { getArtistPath } from "../../services/artistIdentity";
 import { getPrefetchLimitForQuality, playbackPrefetchService, getPlaybackPrefetchKey } from "../../services/playbackPrefetchService";
 import { getResolvedAudioQualityMode } from "../../services/audioQuality";
 import { getSmartPrefetchPreference } from "../../services/experiencePreferences";
+import { getArtworkImageProps, getBestArtworkUrl, resizeArtworkUrl } from "../../services/imageQuality";
 import {
   buildDiscoveryTasteProfile,
   getDiscoveryArtistName,
@@ -91,29 +92,11 @@ const normalizeItem = (item, type = "track") => {
     id = `${type}_${base}`.replace(/[^\w:]/g, '_');
   }
 
-  // Find best possible image URL
-  let rawImage = DEFAULT_IMAGE;
-  if (typeof item.image === "string" && item.image.startsWith("http")) rawImage = item.image;
-  if (Array.isArray(item.image)) { const big = item.image.find((i) => i.size === "extralarge" || i.size === "large") || item.image[item.image.length - 1]; if (big?.["#text"]) rawImage = big["#text"]; }
-  rawImage = item.picture_xl || item.cover_xl || item.picture_big || item.cover_big || item.album?.cover_xl || item.artist?.picture_xl || rawImage;
-
-  // Create Optimized 250x250 Image for UI
-  let imageOptimized = rawImage;
-  if (typeof rawImage === 'string' && rawImage.includes('dzcdn.net')) {
-    imageOptimized = rawImage
-      .replace(/\/1000x1000/, '/250x250')
-      .replace(/\/500x500/, '/250x250')
-      .replace(/\/[\dx]+(-000000-80-0-0\.jpg)/, '/250x250$1');
-  }
-
-  // Create High-Res 1000x1000 Image for Player
-  let imageXl = rawImage;
-  if (typeof rawImage === 'string' && rawImage.includes('dzcdn.net')) {
-    imageXl = rawImage
-      .replace(/\/250x250/, '/1000x1000')
-      .replace(/\/500x500/, '/1000x1000')
-      .replace(/\/[\dx]+(-000000-80-0-0\.jpg)/, '/1000x1000$1');
-  }
+  const rawImage = getBestArtworkUrl(item, DEFAULT_IMAGE);
+  // 500 px mantiene nitidez en tarjetas Retina; srcset permite bajar a 250
+  // cuando la tarjeta realmente es pequeña.
+  const imageOptimized = resizeArtworkUrl(rawImage, 500);
+  const imageXl = resizeArtworkUrl(rawImage, 1000);
 
   return {
     id,
@@ -121,7 +104,7 @@ const normalizeItem = (item, type = "track") => {
     type,
     name,
     artist,
-    image: imageOptimized || DEFAULT_IMAGE, // For UI Lists (250x250)
+    image: imageOptimized || DEFAULT_IMAGE, // Tarjetas Retina con selección adaptativa.
     image_xl: imageXl || DEFAULT_IMAGE,     // For Player (1000x1000)
     duration: item.duration || 0,
     album: item.album?.title || item.album || (type === "track" ? "Single" : ""),
@@ -263,6 +246,12 @@ const HeroCard = memo(({ item, onPlay, playbackPrefetch }) => {
 
   const typeLabel = item.type === 'album' ? 'Álbum' : item.type === 'playlist' ? 'Playlist' : item.type === 'artist' ? 'Artista' : null;
 
+  const heroImageProps = getArtworkImageProps(item, {
+    fallback: DEFAULT_IMAGE,
+    size: 1000,
+    sizes: '(max-width: 600px) 88vw, 640px',
+  });
+
   return (
     <button
       type="button"
@@ -277,11 +266,12 @@ const HeroCard = memo(({ item, onPlay, playbackPrefetch }) => {
         {imageFailed && <div className="feed-hero-img-fallback"><svg width="48" height="48" viewBox="0 0 24 24" fill="currentColor"><path d="M12 3v10.55c-.59-.34-1.27-.55-2-.55-2.21 0-4 1.79-4 4s1.79 4 4 4 4-1.79 4-4V7h4V3h-6z" /></svg></div>}
         <img
           className={['feed-hero-img', imageLoaded && 'is-loaded'].filter(Boolean).join(' ')}
-          src={item.image || DEFAULT_IMAGE}
+          {...heroImageProps}
           alt={item.name}
           onLoad={() => { setImageLoaded(true); setImageFailed(false); }}
           onError={() => { setImageLoaded(true); setImageFailed(true); }}
-          loading="lazy"
+          loading="eager"
+          fetchPriority="high"
         />
       </div>
       <div className="feed-hero-info">

@@ -6,6 +6,7 @@ import { usePlayer } from '../../context/playerContext';
 import { useUser } from '../../context/userContext';
 import PageState from '../../components/shared/PageState';
 import { getAlbumPath } from '../../services/albumNavigation';
+import { getArtworkImageProps, getBestArtworkUrl } from '../../services/imageQuality';
 import {
     getArtistInfo,
     getArtistAlbums,
@@ -19,16 +20,7 @@ import './artistDetail.css';
 // --- HELPERS ---
 
 const getBestImage = (imageSource) => {
-    if (!imageSource) return null;
-    if (typeof imageSource === 'string') return imageSource;
-    if (Array.isArray(imageSource)) {
-        const imgObj = imageSource.find(img => img.size === 'extralarge') ||
-            imageSource.find(img => img.size === 'large') ||
-            imageSource.find(img => img.size === 'mega') ||
-            imageSource[imageSource.length - 1];
-        return imgObj ? imgObj['#text'] : null;
-    }
-    return null;
+    return getBestArtworkUrl(imageSource) || null;
 };
 
 // formatTime is defined but used only in JSX comments currently
@@ -203,7 +195,6 @@ export default function ArtistDetail() {
 
     if (!artistInfo) return <PageState variant="error" title="Artista no encontrado" message={loadError} actionLabel="Reintentar" onAction={() => setRetryKey(key => key + 1)} secondaryLabel="Volver" onSecondary={() => navigate(-1)} />;
 
-    const heroImage = getBestImage(artistInfo.image) || DEFAULT_IMAGE;
     const latestAlbum = topAlbums[0];
 
     return (
@@ -246,10 +237,11 @@ export default function ArtistDetail() {
             {/* 1. HERO SECTION - Imagen Inmersiva */}
             <section className="artist-hero-immersive">
                 <img
-                    src={heroImage}
+                    {...getArtworkImageProps(artistInfo, { fallback: DEFAULT_IMAGE, size: 1000, sizes: '100vw' })}
                     alt={artistInfo.name}
                     className="artist-hero-image"
-                    onError={(e) => { e.target.src = DEFAULT_IMAGE; }}
+                    fetchPriority="high"
+                    onError={(e) => { e.currentTarget.srcset = ''; e.currentTarget.src = DEFAULT_IMAGE; }}
                 />
                 <div className="artist-hero-content">
                     <h1 className="artist-hero-name">{artistInfo.name}</h1>
@@ -304,9 +296,10 @@ export default function ArtistDetail() {
                         >
                             <div className="latest-release-cover">
                                 <img
-                                    src={latestAlbum.image || DEFAULT_IMAGE}
+                                    {...getArtworkImageProps(latestAlbum, { fallback: DEFAULT_IMAGE, size: 500, sizes: '128px' })}
                                     alt={latestAlbum.name}
-                                    onError={(e) => { e.target.src = DEFAULT_IMAGE; }}
+                                    loading="lazy"
+                                    onError={(e) => { e.currentTarget.srcset = ''; e.currentTarget.src = DEFAULT_IMAGE; }}
                                 />
                             </div>
                             <div className="latest-release-info">
@@ -342,7 +335,7 @@ export default function ArtistDetail() {
                                     >
                                         <span className="track-number">{idx + 1}</span>
                                         <div className="track-cover-small">
-                                            <img src={img} alt="" onError={(e) => e.target.src = DEFAULT_IMAGE} />
+                                            <img {...getArtworkImageProps({ image_xl: img }, { fallback: DEFAULT_IMAGE, size: 250, maxSize: 500, sizes: '48px' })} alt="" loading="lazy" onError={(e) => { e.currentTarget.srcset = ''; e.currentTarget.src = DEFAULT_IMAGE; }} />
                                             {isPlaying && <div className="track-spinner-overlay"><div className="spinner-small" /></div>}
                                         </div>
                                         <div className="track-details">
@@ -374,7 +367,7 @@ export default function ArtistDetail() {
 
                         <div className="albums-scroll-row">
                             {topAlbums.slice(1).map((album, i) => {
-                                const albSrc = album.image;
+                                const albSrc = getBestArtworkUrl(album);
                                 if (!albSrc) return null;
                                 return (
                                     <div
@@ -383,7 +376,7 @@ export default function ArtistDetail() {
                                         onClick={() => navigate(getAlbumPath(album, artistInfo.name))}
                                     >
                                         <div className="album-cover-apple">
-                                            <img src={albSrc} alt={album.name} loading="lazy" />
+                                            <img {...getArtworkImageProps(album, { size: 500, sizes: '(max-width: 600px) 42vw, 180px' })} alt={album.name} loading="lazy" />
                                         </div>
                                         <span className="album-title-apple">{album.name}</span>
                                         <span className="album-type-apple">

@@ -2,6 +2,7 @@ import { useState, useCallback, useEffect, useMemo, useRef } from 'react';
 import { useNavigate } from 'react-router-dom';
 import { getArtistPath } from '../../services/artistIdentity';
 import { getAlbumPath } from '../../services/albumNavigation';
+import { getArtworkImageProps } from '../../services/imageQuality';
 import { FaPlay, FaMusic, FaUser, FaCompactDisc, FaListAlt } from 'react-icons/fa';
 import './card.css';
 
@@ -59,35 +60,22 @@ export default function Card({
         return item?.type || '';
     }, [item, subtitle]);
 
-    const displayImage = useMemo(() => {
-        let finalImage = DEFAULT_IMAGE;
+    const imageProps = useMemo(() => {
+        const effectiveVariant = item?.type === 'artist' ? 'circle' : variant;
+        const compact = effectiveVariant === 'horizontal';
+        return getArtworkImageProps(image ? { image_xl: image } : item, {
+            fallback: DEFAULT_IMAGE,
+            size: compact ? 160 : 500,
+            maxSize: compact ? 500 : 1000,
+            sizes: compact
+                ? '64px'
+                : effectiveVariant === 'wide'
+                    ? '(max-width: 600px) 78vw, 280px'
+                    : '(max-width: 600px) 42vw, 220px',
+        });
+    }, [item, image, variant]);
 
-        // Complex extraction logic ported from various screens
-        if (image) finalImage = image;
-        else if (!item) finalImage = DEFAULT_IMAGE;
-        else if (typeof item.image === 'string' && item.image) finalImage = item.image;
-        else if (item.picture_medium) finalImage = item.picture_medium;
-        else if (item.cover_medium) finalImage = item.cover_medium;
-        else if (item.album?.cover_medium) finalImage = item.album.cover_medium;
-        else if (item.picture_xl) finalImage = item.picture_xl;
-        else if (item.cover_xl) finalImage = item.cover_xl;
-        else if (item.album?.cover_xl) finalImage = item.album.cover_xl;
-        else if (Array.isArray(item.image)) {
-            const best = item.image.find(i => i.size === 'medium') ||
-                item.image.find(i => i.size === 'large') ||
-                item.image.find(i => i.size === 'extralarge') ||
-                item.image[item.image.length - 1];
-            if (best?.['#text']) finalImage = best['#text'];
-        }
-
-        // ⚡ TURBO FIX: Force resize Deezer images to 250x250 if they are huge
-        if (typeof finalImage === 'string' && finalImage.includes('dzcdn.net')) {
-            return finalImage.replace(/\/\d+x\d+(-000000-80-0-0\.jpg)/, '/250x250$1')
-                .replace(/\/\d+x\d+(\.jpg)/, '/250x250$1');
-        }
-
-        return finalImage;
-    }, [item, image]);
+    const displayImage = imageProps.src;
 
     useEffect(() => {
         setImgLoaded(false);
@@ -207,7 +195,7 @@ export default function Card({
                 {/* Actual Image */}
                 {!imgError && (
                     <img
-                        src={displayImage}
+                        {...imageProps}
                         alt={displayTitle}
                         className={`app-card-img ${imgLoaded ? 'is-loaded' : ''}`}
                         onLoad={() => setImgLoaded(true)}

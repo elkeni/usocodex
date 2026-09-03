@@ -10,6 +10,7 @@ import { useUser } from '../../context/userContext';
 import ImportService, { MATCH_STATUS } from '../../services/importService';
 import { finalizeTracksArray } from '../../utils/trackNormalizer';
 import { PRODUCT_EVENTS, recordProductEvent } from '../../services/productMetrics';
+import { getArtworkImageProps } from '../../services/imageQuality';
 import './import.css';
 
 // =============================================================================
@@ -672,7 +673,7 @@ export default function Import() {
                     >
                         <div className="playlist-card-image">
                             {playlist.image ? (
-                                <img src={playlist.image} alt={playlist.name} />
+                                <img {...getArtworkImageProps(playlist, { size: 500, sizes: '(max-width: 600px) 42vw, 220px' })} alt={playlist.name} loading="lazy" />
                             ) : (
                                 <div className="playlist-card-placeholder"><FaList /></div>
                             )}

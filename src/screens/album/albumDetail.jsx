@@ -18,6 +18,7 @@ import {
     shuffleAlbumTracks,
 } from '../../services/albumNavigation';
 import { getArtistPath } from '../../services/artistIdentity';
+import { getArtworkImageProps, getBestArtworkUrl, resizeArtworkUrl } from '../../services/imageQuality';
 
 // getBestImage removed - images now come as strings from API
 
@@ -118,7 +119,7 @@ export default function AlbumDetail() {
     const [isScrolled, setIsScrolled] = useState(false);
 
     // La imagen ahora viene directamente como string desde getAlbumDetails
-    const heroImg = albumInfo?.image || DEFAULT_IMAGE;
+    const heroImg = resizeArtworkUrl(getBestArtworkUrl(albumInfo, DEFAULT_IMAGE), 1000);
     const albumColor = useColorExtractor(heroImg);
 
     // Scroll detection
@@ -340,7 +341,12 @@ export default function AlbumDetail() {
 
                 <div className="album-cover-container">
                     {heroImg ? (
-                        <img src={heroImg} alt={albumInfo.name} className="album-cover-image" />
+                        <img
+                            {...getArtworkImageProps(albumInfo, { fallback: DEFAULT_IMAGE, size: 1000, sizes: '(max-width: 600px) 72vw, 360px' })}
+                            alt={albumInfo.name}
+                            className="album-cover-image"
+                            fetchPriority="high"
+                        />
                     ) : (
                         <div className="album-cover-fallback">
                             <FaCompactDisc size={60} />
@@ -463,7 +469,12 @@ export default function AlbumDetail() {
                                     }}
                                 >
                                     <div className="album-more-img">
-                                        <img src={album.image || DEFAULT_IMAGE} alt={album.name} loading="lazy" onError={(event) => { event.currentTarget.src = DEFAULT_IMAGE; }} />
+                                        <img
+                                            {...getArtworkImageProps(album, { fallback: DEFAULT_IMAGE, size: 500, sizes: '(max-width: 600px) 42vw, 200px' })}
+                                            alt={album.name}
+                                            loading="lazy"
+                                            onError={(event) => { event.currentTarget.srcset = ''; event.currentTarget.src = DEFAULT_IMAGE; }}
+                                        />
                                     </div>
                                     <div className="album-more-info">
                                         <div className="album-more-name">{album.name}</div>

@@ -3,6 +3,9 @@ import { doc, onSnapshot, setDoc, getDoc } from 'firebase/firestore';
 import { auth, db } from '../firebase/config';
 import { onAuthStateChanged } from 'firebase/auth';
 import { useFeedback } from './feedbackContext';
+import { getBestArtworkUrl, resizeArtworkUrl } from '../services/imageQuality';
+
+const getArtworkForSave = (item) => resizeArtworkUrl(getBestArtworkUrl(item), 1000);
 
 // =============================================================================
 // VALIDACIÓN DE TRACKS (obligatoria antes de guardar)
@@ -38,7 +41,8 @@ const normalizeTrackForSave = (track) => {
         title: name.trim(),
         artist,
         album,
-        image: track.image || track.thumbnail || '',
+        image: getArtworkForSave(track),
+        image_xl: getArtworkForSave(track),
         duration: track.duration || 0,
         addedAt: track.addedAt || Date.now(),
         // Preservar metadata útil
@@ -200,7 +204,8 @@ export const UserProvider = ({ children }) => {
                 const trackData = {
                     name: targetName,
                     artist: targetArtist,
-                    image: track.image || '',
+                    image: getArtworkForSave(track),
+                    image_xl: getArtworkForSave(track),
                     album: track.album || '',
                     duration: track.duration || 0,
                     addedAt: Date.now()
@@ -249,7 +254,7 @@ export const UserProvider = ({ children }) => {
                 // Agregar nuevo artista
                 const artistData = {
                     name: artistName,
-                    image: typeof artist === 'object' ? (artist.image || artist.picture_xl || '') : '',
+                    image: typeof artist === 'object' ? getArtworkForSave(artist) : '',
                     followers: typeof artist === 'object' ? (artist.nb_fan || artist.listeners || 0) : 0,
                     addedAt: Date.now()
                 };
@@ -301,7 +306,7 @@ export const UserProvider = ({ children }) => {
                     name: albumName,
                     artist: albumArtist,
                     deezerId: album.deezerId || (/^\d+$/.test(String(album.id || '')) ? album.id : null),
-                    image: album.image || album.cover_xl || '',
+                    image: getArtworkForSave(album),
                     trackCount: album.nb_tracks || album.tracks?.length || 0,
                     addedAt: Date.now()
                 };
@@ -352,7 +357,7 @@ export const UserProvider = ({ children }) => {
                 const playlistData = {
                     id: playlistId,
                     name: playlist.title || playlist.name,
-                    image: playlist.picture_xl || playlist.picture_big || playlist.image || '',
+                    image: getArtworkForSave(playlist),
                     creator: playlist.creator?.name || playlist.creator || 'Deezer',
                     trackCount: playlist.nb_tracks || playlist.tracks?.length || 0,
                     isExternal: true, // Marca que es una playlist externa (no creada por el usuario)
@@ -917,7 +922,7 @@ export const UserProvider = ({ children }) => {
                         name: albumName,
                         artist: albumArtist,
                         deezerId: album.deezerId || (/^\d+$/.test(String(album.id || '')) ? album.id : null),
-                        image: album.image || album.cover_xl || '',
+                        image: getArtworkForSave(album),
                         trackCount: album.nb_tracks || album.trackCount || album.totalTracks || 0,
                         addedAt: Date.now()
                     });
@@ -970,7 +975,7 @@ export const UserProvider = ({ children }) => {
                 } else {
                     artistsToAdd.push({
                         name: artistName,
-                        image: typeof artist === 'object' ? (artist.image || artist.picture_xl || '') : '',
+                        image: typeof artist === 'object' ? getArtworkForSave(artist) : '',
                         followers: typeof artist === 'object' ? (artist.nb_fan || artist.followers || 0) : 0,
                         addedAt: Date.now()
                     });

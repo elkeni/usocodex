@@ -31,6 +31,7 @@ import { getGenrePlaylist, isGenrePlaylistId } from '../../services/genrePlaylis
 import PageState from '../../components/shared/PageState';
 import useBodyScrollLock from '../../hooks/useBodyScrollLock';
 import { getArtistPath } from '../../services/artistIdentity';
+import { getArtworkImageProps, getBestArtworkUrl } from '../../services/imageQuality';
 
 const DEFAULT_IMAGE = 'https://images.unsplash.com/photo-1470225620780-dba8ba36b745?auto=format&fit=crop&w=500&q=60';
 
@@ -907,9 +908,10 @@ export default function Playlist() {
                             <div className="playlist-cover">
                                 {getPlaylistImage && getPlaylistImage !== DEFAULT_IMAGE ? (
                                     <img
-                                        src={getPlaylistImage}
+                                        {...getArtworkImageProps({ image_xl: getPlaylistImage }, { fallback: DEFAULT_IMAGE, size: 1000, sizes: '(max-width: 600px) 58vw, 280px' })}
                                         alt={playlist.name || playlist.title}
-                                        onError={(e) => { e.target.src = DEFAULT_IMAGE; }}
+                                        fetchPriority="high"
+                                        onError={(e) => { e.currentTarget.srcset = ''; e.currentTarget.src = DEFAULT_IMAGE; }}
                                     />
                                 ) : (
                                     <div className="playlist-cover-fallback" style={{
@@ -1115,11 +1117,12 @@ export default function Playlist() {
                                         {/* Track Info */}
                                         <div className="track-info-cell">
                                             <div className="track-artwork">
-                                                {track.image ? (
+                                                {getBestArtworkUrl(track) ? (
                                                     <img
-                                                        src={track.image}
+                                                        {...getArtworkImageProps(track, { size: 250, maxSize: 500, sizes: '52px' })}
                                                         alt={track.name || track.title}
-                                                        onError={(e) => { e.target.src = DEFAULT_IMAGE; }}
+                                                        loading="lazy"
+                                                        onError={(e) => { e.currentTarget.srcset = ''; e.currentTarget.src = DEFAULT_IMAGE; }}
                                                     />
                                                 ) : (
                                                     <div className="track-artwork-fallback">
@@ -1275,8 +1278,8 @@ export default function Playlist() {
                                             aria-label={alreadyAdded ? `${track.name || track.title} ya está añadida` : `Añadir ${track.name || track.title}`}
                                         >
                                             <div className="add-track-artwork">
-                                                {track.image ? (
-                                                    <img src={track.image} alt={track.name} />
+                                                {getBestArtworkUrl(track) ? (
+                                                    <img {...getArtworkImageProps(track, { size: 250, maxSize: 500, sizes: '52px' })} alt={track.name} loading="lazy" />
                                                 ) : (
                                                     <div className="add-track-artwork-fallback">
                                                         <FaMusic />
@@ -1342,8 +1345,8 @@ export default function Playlist() {
                                                     aria-label={alreadyAdded ? `${track.name || track.title} ya está añadida` : `Añadir ${track.name || track.title}`}
                                                 >
                                                     <div className="add-track-artwork">
-                                                        {track.image ? (
-                                                            <img src={track.image} alt={track.name} />
+                                                        {getBestArtworkUrl(track) ? (
+                                                            <img {...getArtworkImageProps(track, { size: 250, maxSize: 500, sizes: '52px' })} alt={track.name} loading="lazy" />
                                                         ) : (
                                                             <div className="add-track-artwork-fallback">
                                                                 <FaMusic />
@@ -1427,8 +1430,8 @@ export default function Playlist() {
                         </div>
                         <div className="add-to-playlist-track">
                             <div className="add-track-artwork">
-                                {showAddToPlaylistModal.image ? (
-                                    <img src={showAddToPlaylistModal.image} alt="" />
+                                {getBestArtworkUrl(showAddToPlaylistModal) ? (
+                                    <img {...getArtworkImageProps(showAddToPlaylistModal, { size: 250, maxSize: 500, sizes: '52px' })} alt="" loading="lazy" />
                                 ) : (
                                     <div className="add-track-artwork-fallback">
                                         <FaMusic />
