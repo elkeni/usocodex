@@ -20,7 +20,6 @@ import {
     FaSave,
     FaLock,
     FaShare,
-    FaFlag,
     FaUser,
     FaListAlt,
     FaExclamationTriangle
@@ -34,6 +33,13 @@ import useBodyScrollLock from '../../hooks/useBodyScrollLock';
 import { getArtistPath } from '../../services/artistIdentity';
 
 const DEFAULT_IMAGE = 'https://images.unsplash.com/photo-1470225620780-dba8ba36b745?auto=format&fit=crop&w=500&q=60';
+
+const getPlaylistTrackArtist = (track) => {
+    if (typeof track?.artist === 'object') {
+        return track.artist.name || track.artist['#text'] || 'Artista desconocido';
+    }
+    return track?.artist || 'Artista desconocido';
+};
 
 export default function Playlist() {
     const { playlistId } = useParams();
@@ -67,13 +73,16 @@ export default function Playlist() {
     const [isEditMode, setIsEditMode] = useState(false);
     const [editTitle, setEditTitle] = useState('');
     const [editDescription, setEditDescription] = useState('');
+    const [isSavingEdit, setIsSavingEdit] = useState(false);
 
     // Estados para agregar canciones
     const [showAddTrack, setShowAddTrack] = useState(false);
     const [searchQuery, setSearchQuery] = useState('');
     const [searchResults, setSearchResults] = useState([]);
     const [isSearching, setIsSearching] = useState(false);
+    const [addingTrackKey, setAddingTrackKey] = useState(null);
     const searchTimeoutRef = useRef(null);
+    const searchRequestRef = useRef(0);
 
     // Estados para menús y modales
     // Removed showPlaylistMenu as requested (bottom sticky menu button removed)
@@ -81,6 +90,8 @@ export default function Playlist() {
     const [showDeleteConfirm, setShowDeleteConfirm] = useState(false);
     const [showDeleteTrackConfirm, setShowDeleteTrackConfirm] = useState(null);
     const [showAddToPlaylistModal, setShowAddToPlaylistModal] = useState(null); // track a añadir
+    const [isDeletingPlaylist, setIsDeletingPlaylist] = useState(false);
+    const [isRemovingTrack, setIsRemovingTrack] = useState(false);
     useBodyScrollLock(Boolean(
         showAddTrack || showDeleteConfirm || showDeleteTrackConfirm || showAddToPlaylistModal
     ));
@@ -91,6 +102,15 @@ export default function Playlist() {
     const trackMenuRef = useRef(null);
     const topMenuRef = useRef(null);
     const [showTopMenu, setShowTopMenu] = useState(false);
+
+    const closeAddTrackModal = useCallback(() => {
+        searchRequestRef.current += 1;
+        setShowAddTrack(false);
+        setSearchQuery('');
+        setSearchResults([]);
+        setIsSearching(false);
+        setAddingTrackKey(null);
+    }, []);
 
     // Cerrar menús al hacer clic fuera
     useEffect(() => {
@@ -112,14 +132,14 @@ export default function Playlist() {
         if (!hasModal) return undefined;
         const closeOnEscape = (event) => {
             if (event.key !== 'Escape') return;
-            setShowAddTrack(false);
+            closeAddTrackModal();
             setShowDeleteConfirm(false);
             setShowDeleteTrackConfirm(null);
             setShowAddToPlaylistModal(null);
         };
         document.addEventListener('keydown', closeOnEscape);
         return () => document.removeEventListener('keydown', closeOnEscape);
-    }, [showAddTrack, showDeleteConfirm, showDeleteTrackConfirm, showAddToPlaylistModal]);
+    }, [showAddTrack, showDeleteConfirm, showDeleteTrackConfirm, showAddToPlaylistModal, closeAddTrackModal]);
 
     // Mostrar notificación
     const showNotification = useCallback((message, type = 'success') => {
@@ -418,26 +438,39 @@ export default function Playlist() {
     }, [isNative, playlist]);
 
     const handleSaveEdit = useCallback(async () => {
-        if (!isNative || !playlistId) return;
+        const cleanTitle = editTitle.trim();
+        const cleanDescription = editDescription.trim();
+        if (!isNative || !playlistId || isSavingEdit) return;
+        if (!cleanTitle) {
+            showNotification('Escribe un nombre para la playlist', 'error');
+            return;
+        }
 
-        await updatePlaylist(playlistId, {
-            name: editTitle.trim(),
-            title: editTitle.trim(),
-            description: editDescription.trim(),
-            isPublic: false
-        });
+        setIsSavingEdit(true);
+        try {
+            await updatePlaylist(playlistId, {
+                name: cleanTitle,
+                title: cleanTitle,
+                description: cleanDescription,
+                isPublic: false
+            });
 
-        setPlaylist(prev => ({
-            ...prev,
-            name: editTitle.trim(),
-            title: editTitle.trim(),
-            description: editDescription.trim(),
-            isPublic: false
-        }));
-
-        setIsEditMode(false);
-        showNotification('Playlist actualizada');
-    }, [isNative, playlistId, editTitle, editDescription, updatePlaylist, showNotification]);
+            setPlaylist(prev => ({
+                ...prev,
+                name: cleanTitle,
+                title: cleanTitle,
+                description: cleanDescription,
+                isPublic: false
+            }));
+            setIsEditMode(false);
+            showNotification('Playlist actualizada');
+        } catch (error) {
+            console.error('[Playlist] Error actualizando:', error);
+            showNotification('No se pudieron guardar los cambios', 'error');
+        } finally {
+            setIsSavingEdit(false);
+        }
+    }, [isNative, playlistId, editTitle, editDescription, isSavingEdit, updatePlaylist, showNotification]);
 
     const handleCancelEdit = useCallback(() => {
         setIsEditMode(false);
@@ -447,8 +480,9 @@ export default function Playlist() {
 
     // Eliminar playlist
     const handleDeletePlaylist = useCallback(async () => {
-        if (!isNative || !playlistId) return;
+        if (!isNative || !playlistId || isDeletingPlaylist) return;
 
+        setIsDeletingPlaylist(true);
         try {
             await deletePlaylist(playlistId);
             showNotification('Playlist eliminada');
@@ -456,34 +490,52 @@ export default function Playlist() {
         } catch (error) {
             console.error('Error eliminando playlist:', error);
             showNotification('Error al eliminar playlist', 'error');
+        } finally {
+            setIsDeletingPlaylist(false);
         }
-    }, [isNative, playlistId, deletePlaylist, navigate, showNotification]);
+    }, [isNative, playlistId, isDeletingPlaylist, deletePlaylist, navigate, showNotification]);
 
     // Compartir playlist
-    const handleShare = useCallback(() => {
+    const handleShare = useCallback(async () => {
         const url = window.location.href;
-        if (navigator.share) {
-            navigator.share({
-                title: playlist?.name || 'Playlist',
-                text: `Escucha ${playlist?.name} en ParadisQuo`,
-                url: url
-            });
-        } else {
-            navigator.clipboard.writeText(url);
-            showNotification('Enlace copiado al portapapeles');
+        try {
+            if (navigator.share) {
+                await navigator.share({
+                    title: playlist?.name || 'Playlist',
+                    text: `Escucha ${playlist?.name} en ParadisQuo`,
+                    url
+                });
+            } else if (navigator.clipboard?.writeText) {
+                await navigator.clipboard.writeText(url);
+                showNotification('Enlace copiado al portapapeles');
+            } else {
+                showNotification('No se puede compartir desde este navegador', 'error');
+            }
+        } catch (error) {
+            if (error?.name !== 'AbortError') {
+                showNotification('No se pudo compartir la playlist', 'error');
+            }
         }
     }, [playlist, showNotification]);
 
     // Quitar canción de playlist con confirmación
     const handleRemoveTrack = useCallback(async (trackId) => {
-        if (!isNative || !playlistId) return;
+        if (!isNative || !playlistId || isRemovingTrack) return;
 
-        await removeTrackFromPlaylist(playlistId, trackId);
-        setTracks(prev => prev.filter(t => t.id !== trackId));
-        setShowDeleteTrackConfirm(null);
-        setShowTrackMenu(null);
-        showNotification('Canción eliminada de la playlist');
-    }, [isNative, playlistId, removeTrackFromPlaylist, showNotification]);
+        setIsRemovingTrack(true);
+        try {
+            await removeTrackFromPlaylist(playlistId, trackId);
+            setTracks(prev => prev.filter(t => t.id !== trackId));
+            setShowDeleteTrackConfirm(null);
+            setShowTrackMenu(null);
+            showNotification('Canción eliminada de la playlist');
+        } catch (error) {
+            console.error('[Playlist] Error eliminando canción:', error);
+            showNotification('No se pudo quitar la canción', 'error');
+        } finally {
+            setIsRemovingTrack(false);
+        }
+    }, [isNative, playlistId, isRemovingTrack, removeTrackFromPlaylist, showNotification]);
 
     // Navegar a artista
     const handleViewArtist = useCallback((track) => {
@@ -497,8 +549,11 @@ export default function Playlist() {
     // Añadir a otra playlist
     const handleAddToOtherPlaylist = useCallback(async (targetPlaylistId, track) => {
         try {
-            await addTrackToPlaylist(targetPlaylistId, track);
-            showNotification('Canción añadida a la playlist');
+            const added = await addTrackToPlaylist(targetPlaylistId, track);
+            showNotification(
+                added ? 'Canción añadida a la playlist' : 'Esta canción ya estaba en la playlist',
+                added ? 'success' : 'info'
+            );
         } catch (error) {
             console.error('Error añadiendo a playlist:', error);
             showNotification('Error al añadir canción', 'error');
@@ -510,19 +565,28 @@ export default function Playlist() {
     // Buscar canciones para agregar
     const handleSearch = useCallback(async (query) => {
         if (!query.trim()) {
+            searchRequestRef.current += 1;
             setSearchResults([]);
+            setIsSearching(false);
             return;
         }
 
+        const requestId = ++searchRequestRef.current;
         setIsSearching(true);
         try {
             const results = await searchGlobal(query, 'track', 15);
-            setSearchResults(results || []);
+            if (requestId === searchRequestRef.current) {
+                setSearchResults(results || []);
+            }
         } catch (error) {
             console.error('[Playlist] Error buscando:', error);
-            setSearchResults([]);
+            if (requestId === searchRequestRef.current) {
+                setSearchResults([]);
+            }
         } finally {
-            setIsSearching(false);
+            if (requestId === searchRequestRef.current) {
+                setIsSearching(false);
+            }
         }
     }, []);
 
@@ -537,7 +601,9 @@ export default function Playlist() {
                 handleSearch(searchQuery);
             }, 400);
         } else {
+            searchRequestRef.current += 1;
             setSearchResults([]);
+            setIsSearching(false);
         }
 
         return () => {
@@ -549,26 +615,43 @@ export default function Playlist() {
 
     // Agregar canción a playlist
     const handleAddTrack = useCallback(async (track) => {
-        if (!isNative || !playlistId) return;
+        if (!isNative || !playlistId || addingTrackKey) return;
+        const key = `${track.id || ''}:${track.name || track.title}:${getPlaylistTrackArtist(track)}`;
+        setAddingTrackKey(key);
 
-        await addTrackToPlaylist(playlistId, track);
+        try {
+            const added = await addTrackToPlaylist(playlistId, track);
+            if (!added) return;
 
-        const newTrack = {
-            id: track.id || `track-${Date.now()}`,
-            name: track.name || track.title,
-            title: track.name || track.title,
-            artist: typeof track.artist === 'object' ? track.artist.name : track.artist,
-            album: track.album || '',
-            duration: track.duration || 0,
-            image: track.image || ''
-        };
+            const newTrack = {
+                ...track,
+                id: track.id || `track-${Date.now()}`,
+                name: track.name || track.title,
+                title: track.name || track.title,
+                artist: getPlaylistTrackArtist(track),
+                album: track.album || '',
+                duration: track.duration || 0,
+                image: track.image || '',
+                addedAt: Date.now()
+            };
 
-        setTracks(prev => [...prev, newTrack]);
-        setSearchQuery('');
-        setSearchResults([]);
-        setShowAddTrack(false);
-        showNotification('Canción añadida');
-    }, [isNative, playlistId, addTrackToPlaylist, showNotification]);
+            setTracks(prev => {
+                const candidateName = (newTrack.name || '').toLowerCase();
+                const candidateArtist = (newTrack.artist || '').toLowerCase();
+                const alreadyPresent = prev.some(item => (
+                    (item.name || item.title || '').toLowerCase() === candidateName
+                    && getPlaylistTrackArtist(item).toLowerCase() === candidateArtist
+                ));
+                return alreadyPresent ? prev : [...prev, newTrack];
+            });
+            showNotification('Canción añadida');
+        } catch (error) {
+            console.error('[Playlist] Error añadiendo canción:', error);
+            showNotification('No se pudo añadir la canción', 'error');
+        } finally {
+            setAddingTrackKey(null);
+        }
+    }, [isNative, playlistId, addingTrackKey, addTrackToPlaylist, showNotification]);
 
     // Generar recomendaciones basadas en la playlist
     const fetchRecommendations = useCallback(async () => {
@@ -651,11 +734,11 @@ export default function Playlist() {
     // Verificar si un track ya está en la playlist
     const isTrackInPlaylist = useCallback((track) => {
         const trackName = (track.name || track.title || '').toLowerCase();
-        const trackArtist = (typeof track.artist === 'object' ? track.artist.name : track.artist || '').toLowerCase();
+        const trackArtist = getPlaylistTrackArtist(track).toLowerCase();
 
         return tracks.some(t => {
             const existingName = (t.name || t.title || '').toLowerCase();
-            const existingArtist = (typeof t.artist === 'object' ? t.artist.name : t.artist || '').toLowerCase();
+            const existingArtist = getPlaylistTrackArtist(t).toLowerCase();
             return existingName === trackName && existingArtist === trackArtist;
         });
     }, [tracks]);
@@ -674,11 +757,6 @@ export default function Playlist() {
         const mins = Math.floor((total % 3600) / 60);
         if (hours > 0) return `${hours} hr ${mins} min`;
         return `${mins} min`;
-    };
-
-    const getArtistName = (track) => {
-        if (typeof track.artist === 'object') return track.artist.name || track.artist['#text'];
-        return track.artist || 'Artista desconocido';
     };
 
     // Obtener imagen de playlist
@@ -722,11 +800,6 @@ export default function Playlist() {
                     <button className="dropdown-item" onClick={() => { handleShare(); closeMenuFn(); }}>
                         <FaShare />
                         <span>Compartir</span>
-                    </button>
-                    <div className="dropdown-divider"></div>
-                    <button className="dropdown-item">
-                        <FaFlag />
-                        <span>Reportar</span>
                     </button>
                 </>
             )}
@@ -819,7 +892,8 @@ export default function Playlist() {
                             <button
                                 className={`playlist-btn-icon ${showTopMenu ? 'active' : ''}`}
                                 onClick={() => setShowTopMenu(!showTopMenu)}
-                                style={{ background: 'rgba(255,255,255,0.1)', border: 'none' }}
+                                aria-label="Opciones de playlist"
+                                aria-expanded={showTopMenu}
                             >
                                 <FaEllipsisH size={18} />
                             </button>
@@ -859,6 +933,7 @@ export default function Playlist() {
                                         value={editTitle}
                                         onChange={(e) => setEditTitle(e.target.value)}
                                         placeholder="Nombre de la playlist"
+                                        maxLength={60}
                                         autoFocus
                                     />
                                     <textarea
@@ -866,6 +941,7 @@ export default function Playlist() {
                                         value={editDescription}
                                         onChange={(e) => setEditDescription(e.target.value)}
                                         placeholder="Descripción (opcional)"
+                                        maxLength={240}
                                         rows={2}
                                     />
 
@@ -883,11 +959,11 @@ export default function Playlist() {
                                     </div>
 
                                     <div className="playlist-edit-actions">
-                                        <button className="edit-btn save" onClick={handleSaveEdit}>
+                                        <button className="edit-btn save" onClick={handleSaveEdit} disabled={isSavingEdit || !editTitle.trim()}>
                                             <FaSave size={12} />
-                                            <span>Guardar</span>
+                                            <span>{isSavingEdit ? 'Guardando…' : 'Guardar'}</span>
                                         </button>
-                                        <button className="edit-btn cancel" onClick={handleCancelEdit}>
+                                        <button className="edit-btn cancel" onClick={handleCancelEdit} disabled={isSavingEdit}>
                                             <FaTimes size={12} />
                                             <span>Cancelar</span>
                                         </button>
@@ -934,6 +1010,7 @@ export default function Playlist() {
                                     borderColor: `rgb(${playlistColor})`
                                 }}
                                 title="Reproducir"
+                                aria-label="Reproducir playlist"
                             >
                                 <FaPlay size={14} />
                                 <span>Reproducir</span>
@@ -944,10 +1021,23 @@ export default function Playlist() {
                                 onClick={handleShuffle}
                                 disabled={tracks.length === 0}
                                 title="Reproducción aleatoria"
+                                aria-label="Reproducción aleatoria"
                             >
                                 <FaRandom size={14} />
                                 <span>Aleatorio</span>
                             </button>
+
+                            {isNative && (
+                                <button
+                                    className="playlist-btn-secondary add-track"
+                                    onClick={handleOpenAddModal}
+                                    aria-label="Añadir canciones"
+                                    title="Añadir canciones"
+                                >
+                                    <FaPlus size={14} />
+                                    <span>Añadir</span>
+                                </button>
+                            )}
 
                             {/* Guardar solo para playlists externas */}
                             {!isNative && (
@@ -996,11 +1086,22 @@ export default function Playlist() {
 
                             {/* Track List */}
                             <div className="tracks-list">
-                                {tracks.map((track, index) => (
+                                {tracks.map((track, index) => {
+                                    const trackMenuKey = `${track.id || track.name || track.title || 'track'}-${index}`;
+                                    return (
                                     <div
                                         key={`${track.id || 'unknown'}-${index}`}
                                         className={`track-row ${isNative ? 'editable' : ''}`}
                                         onClick={() => handlePlayTrack(track)}
+                                        onKeyDown={(event) => {
+                                            if (event.key === 'Enter' || event.key === ' ') {
+                                                event.preventDefault();
+                                                handlePlayTrack(track);
+                                            }
+                                        }}
+                                        role="button"
+                                        tabIndex={0}
+                                        aria-label={`Reproducir ${track.name || track.title} de ${getPlaylistTrackArtist(track)}`}
                                         style={{ animationDelay: `${Math.min(index * 0.03, 0.5)}s` }}
                                     >
                                         {/* Number */}
@@ -1035,7 +1136,7 @@ export default function Playlist() {
                                                     {track.name || track.title}
                                                 </div>
                                                 <div className="track-artist">
-                                                    {getArtistName(track)}
+                                                    {getPlaylistTrackArtist(track)}
                                                 </div>
                                             </div>
                                         </div>
@@ -1052,18 +1153,20 @@ export default function Playlist() {
 
                                         {/* Menú de opciones del track */}
                                         <div className="track-actions-cell">
-                                            <div className="track-menu-container" ref={showTrackMenu === track.id ? trackMenuRef : null}>
+                                            <div className="track-menu-container" ref={showTrackMenu === trackMenuKey ? trackMenuRef : null}>
                                                 <button
                                                     className="track-menu-btn"
                                                     onClick={(e) => {
                                                         e.stopPropagation();
-                                                        setShowTrackMenu(showTrackMenu === track.id ? null : track.id);
+                                                        setShowTrackMenu(showTrackMenu === trackMenuKey ? null : trackMenuKey);
                                                     }}
+                                                    aria-label={`Opciones para ${track.name || track.title}`}
+                                                    aria-expanded={showTrackMenu === trackMenuKey}
                                                 >
                                                     <FaEllipsisH size={14} />
                                                 </button>
 
-                                                {showTrackMenu === track.id && (
+                                                {showTrackMenu === trackMenuKey && (
                                                     <div className="track-dropdown-menu">
                                                         <button
                                                             className="dropdown-item"
@@ -1105,7 +1208,8 @@ export default function Playlist() {
                                             </div>
                                         </div>
                                     </div>
-                                ))}
+                                    );
+                                })}
                             </div>
                         </>
                     )}
@@ -1114,11 +1218,14 @@ export default function Playlist() {
 
             {/* Modal para añadir canciones */}
             {showAddTrack && (
-                <div className="add-track-modal-overlay" onClick={() => setShowAddTrack(false)}>
+                <div className="add-track-modal-overlay" onClick={closeAddTrackModal}>
                     <div className="add-track-modal" role="dialog" aria-modal="true" aria-labelledby="add-tracks-title" onClick={(e) => e.stopPropagation()}>
                         <div className="add-track-header">
-                            <h3 id="add-tracks-title">Añadir canciones</h3>
-                            <button className="add-track-close" onClick={() => setShowAddTrack(false)} aria-label="Cerrar búsqueda de canciones">
+                            <div>
+                                <h3 id="add-tracks-title">Añadir canciones</h3>
+                                <p>Busca y agrega varias sin cerrar esta ventana.</p>
+                            </div>
+                            <button className="add-track-close" onClick={closeAddTrackModal} aria-label="Cerrar búsqueda de canciones">
                                 <FaTimes />
                             </button>
                         </div>
@@ -1156,11 +1263,16 @@ export default function Playlist() {
                             ) : searchResults.length > 0 ? (
                                 searchResults.map((track, index) => {
                                     const alreadyAdded = isTrackInPlaylist(track);
+                                    const actionKey = `${track.id || ''}:${track.name || track.title}:${getPlaylistTrackArtist(track)}`;
+                                    const isAdding = addingTrackKey === actionKey;
                                     return (
-                                        <div
+                                        <button
+                                            type="button"
                                             key={`search-${track.id || 'unknown'}-${index}`}
                                             className={`add-track-item ${alreadyAdded ? 'added' : ''}`}
                                             onClick={() => !alreadyAdded && handleAddTrack(track)}
+                                            disabled={alreadyAdded || Boolean(addingTrackKey)}
+                                            aria-label={alreadyAdded ? `${track.name || track.title} ya está añadida` : `Añadir ${track.name || track.title}`}
                                         >
                                             <div className="add-track-artwork">
                                                 {track.image ? (
@@ -1173,16 +1285,18 @@ export default function Playlist() {
                                             </div>
                                             <div className="add-track-info">
                                                 <span className="add-track-name">{track.name || track.title}</span>
-                                                <span className="add-track-artist">{getArtistName(track)}</span>
+                                                <span className="add-track-artist">{getPlaylistTrackArtist(track)}</span>
                                             </div>
                                             <div className="add-track-action">
                                                 {alreadyAdded ? (
                                                     <FaCheck className="added-icon" />
+                                                ) : isAdding ? (
+                                                    <span className="loading-spinner-small compact" />
                                                 ) : (
                                                     <FaPlus className="add-icon" />
                                                 )}
                                             </div>
-                                        </div>
+                                        </button>
                                     );
                                 })
                             ) : searchQuery.trim() ? (
@@ -1202,7 +1316,7 @@ export default function Playlist() {
                                 <div className="add-track-recommendations">
                                     <div className="recommendations-header">
                                         <h4>Recomendadas para ti</h4>
-                                        <button className="refresh-btn" onClick={fetchRecommendations} disabled={isLoadingRecommendations}>
+                                        <button className="refresh-btn" onClick={fetchRecommendations} disabled={isLoadingRecommendations} aria-label="Actualizar recomendaciones">
                                             <FaRandom className={isLoadingRecommendations ? 'spinning' : ''} />
                                         </button>
                                     </div>
@@ -1214,11 +1328,18 @@ export default function Playlist() {
                                         </div>
                                     ) : recommendedTracks.length > 0 ? (
                                         <div className="recommendations-list">
-                                            {recommendedTracks.map((track, index) => (
-                                                <div
+                                            {recommendedTracks.map((track, index) => {
+                                                const alreadyAdded = isTrackInPlaylist(track);
+                                                const actionKey = `${track.id || ''}:${track.name || track.title}:${getPlaylistTrackArtist(track)}`;
+                                                const isAdding = addingTrackKey === actionKey;
+                                                return (
+                                                <button
+                                                    type="button"
                                                     key={`rec-${track.id || 'unknown'}-${index}`}
-                                                    className="add-track-item"
-                                                    onClick={() => handleAddTrack(track)}
+                                                    className={`add-track-item ${alreadyAdded ? 'added' : ''}`}
+                                                    onClick={() => !alreadyAdded && handleAddTrack(track)}
+                                                    disabled={alreadyAdded || Boolean(addingTrackKey)}
+                                                    aria-label={alreadyAdded ? `${track.name || track.title} ya está añadida` : `Añadir ${track.name || track.title}`}
                                                 >
                                                     <div className="add-track-artwork">
                                                         {track.image ? (
@@ -1231,13 +1352,14 @@ export default function Playlist() {
                                                     </div>
                                                     <div className="add-track-info">
                                                         <span className="add-track-name">{track.name || track.title}</span>
-                                                        <span className="add-track-artist">{getArtistName(track)}</span>
+                                                        <span className="add-track-artist">{getPlaylistTrackArtist(track)}</span>
                                                     </div>
                                                     <div className="add-track-action">
-                                                        <FaPlus className="add-icon" />
+                                                        {alreadyAdded ? <FaCheck className="added-icon" /> : isAdding ? <span className="loading-spinner-small compact" /> : <FaPlus className="add-icon" />}
                                                     </div>
-                                                </div>
-                                            ))}
+                                                </button>
+                                                );
+                                            })}
                                         </div>
                                     ) : (
                                         <div className="recommendations-empty">
@@ -1264,8 +1386,8 @@ export default function Playlist() {
                             <button className="confirm-btn cancel" onClick={() => setShowDeleteConfirm(false)}>
                                 Cancelar
                             </button>
-                            <button className="confirm-btn danger" onClick={handleDeletePlaylist}>
-                                Eliminar
+                            <button className="confirm-btn danger" onClick={handleDeletePlaylist} disabled={isDeletingPlaylist}>
+                                {isDeletingPlaylist ? 'Eliminando…' : 'Eliminar'}
                             </button>
                         </div>
                     </div>
@@ -1285,8 +1407,8 @@ export default function Playlist() {
                             <button className="confirm-btn cancel" onClick={() => setShowDeleteTrackConfirm(null)}>
                                 Cancelar
                             </button>
-                            <button className="confirm-btn danger" onClick={() => handleRemoveTrack(showDeleteTrackConfirm.id)}>
-                                Quitar
+                            <button className="confirm-btn danger" onClick={() => handleRemoveTrack(showDeleteTrackConfirm.id)} disabled={isRemovingTrack}>
+                                {isRemovingTrack ? 'Quitando…' : 'Quitar'}
                             </button>
                         </div>
                     </div>
@@ -1315,7 +1437,7 @@ export default function Playlist() {
                             </div>
                             <div className="add-track-info">
                                 <span className="add-track-name">{showAddToPlaylistModal.name || showAddToPlaylistModal.title}</span>
-                                <span className="add-track-artist">{getArtistName(showAddToPlaylistModal)}</span>
+                                <span className="add-track-artist">{getPlaylistTrackArtist(showAddToPlaylistModal)}</span>
                             </div>
                         </div>
                         <div className="add-to-playlist-list">

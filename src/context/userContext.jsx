@@ -465,15 +465,13 @@ export const UserProvider = ({ children }) => {
     }, [user]);
 
     const deletePlaylist = useCallback(async (playlistId) => {
-        if (!user) return;
+        if (!user) return false;
         const userRef = doc(db, "users", user.uid);
-
-        setPlaylists(currentPlaylists => {
-            const updatedPlaylists = currentPlaylists.filter(p => p.id !== playlistId);
-            safeUpdateDoc(userRef, { playlists: updatedPlaylists }).catch(console.error);
-            return updatedPlaylists;
-        });
-    }, [user, safeUpdateDoc]);
+        const updatedPlaylists = playlists.filter(p => p.id !== playlistId);
+        await safeUpdateDoc(userRef, { playlists: updatedPlaylists });
+        setPlaylists(updatedPlaylists);
+        return true;
+    }, [user, playlists, safeUpdateDoc]);
 
     // --- AÑADIR CANCIÓN A PLAYLIST ---
     const addTrackToPlaylist = useCallback(async (playlistId, track) => {
@@ -514,62 +512,47 @@ export const UserProvider = ({ children }) => {
             updatedAt: Date.now()
         } : p);
 
-        setPlaylists(updatedPlaylists);
         await safeUpdateDoc(userRef, { playlists: updatedPlaylists });
+        setPlaylists(updatedPlaylists);
         return true;
     }, [user, playlists, safeUpdateDoc, notify]);
 
     // --- QUITAR CANCIÓN DE PLAYLIST ---
     const removeTrackFromPlaylist = useCallback(async (playlistId, trackId) => {
-        if (!user) return;
+        if (!user) return false;
 
         const userRef = doc(db, "users", user.uid);
+        const updatedPlaylists = playlists.map(p => p.id === playlistId ? {
+            ...p,
+            tracks: (p.tracks || []).filter(t => t.id !== trackId),
+            updatedAt: Date.now()
+        } : p);
 
-        setPlaylists(currentPlaylists => {
-            const updatedPlaylists = currentPlaylists.map(p => {
-                if (p.id === playlistId) {
-                    return {
-                        ...p,
-                        tracks: (p.tracks || []).filter(t => t.id !== trackId),
-                        updatedAt: Date.now()
-                    };
-                }
-                return p;
-            });
-
-            safeUpdateDoc(userRef, { playlists: updatedPlaylists }).catch(console.error);
-            console.log(`[Library] ❌ Track eliminado de playlist`);
-            return updatedPlaylists;
-        });
-    }, [user, safeUpdateDoc]);
+        await safeUpdateDoc(userRef, { playlists: updatedPlaylists });
+        setPlaylists(updatedPlaylists);
+        return true;
+    }, [user, playlists, safeUpdateDoc]);
 
     // --- ACTUALIZAR PLAYLIST COMPLETA ---
     const updatePlaylist = useCallback(async (playlistId, updates) => {
-        if (!user) return;
+        if (!user) return false;
 
         const userRef = doc(db, "users", user.uid);
+        const updatedPlaylists = playlists.map(p => p.id === playlistId ? {
+            ...p,
+            ...updates,
+            // Mantener campos críticos
+            id: p.id,
+            userId: p.userId || user.uid,
+            isNative: true,
+            createdAt: p.createdAt,
+            updatedAt: Date.now()
+        } : p);
 
-        setPlaylists(currentPlaylists => {
-            const updatedPlaylists = currentPlaylists.map(p => {
-                if (p.id === playlistId) {
-                    return {
-                        ...p,
-                        ...updates,
-                        // Mantener campos críticos
-                        id: p.id,
-                        userId: p.userId || user.uid,
-                        isNative: true,
-                        createdAt: p.createdAt,
-                        updatedAt: Date.now()
-                    };
-                }
-                return p;
-            });
-
-            safeUpdateDoc(userRef, { playlists: updatedPlaylists }).catch(console.error);
-            return updatedPlaylists;
-        });
-    }, [user, safeUpdateDoc]);
+        await safeUpdateDoc(userRef, { playlists: updatedPlaylists });
+        setPlaylists(updatedPlaylists);
+        return true;
+    }, [user, playlists, safeUpdateDoc]);
 
     // --- REORDENAR TRACKS EN PLAYLIST ---
     const reorderPlaylistTracks = useCallback(async (playlistId, fromIndex, toIndex) => {
