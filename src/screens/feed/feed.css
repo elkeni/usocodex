@@ -412,6 +412,34 @@
   opacity: 0.9;
 }
 
+/* Acción principal visible: en móvil la carátula debe invitar a reproducir sin
+   depender de hover ni de texto adicional. */
+.feed-hero-img-wrapper .feed-hero-play-hint {
+  position: absolute;
+  right: 12px;
+  bottom: 12px;
+  z-index: 3;
+  display: grid;
+  width: 44px;
+  height: 44px;
+  margin: 0;
+  place-items: center;
+  border: 1px solid rgba(255, 255, 255, 0.72);
+  border-radius: 50%;
+  color: #050505;
+  background: rgba(255, 255, 255, 0.94);
+  box-shadow: 0 8px 24px rgba(0, 0, 0, 0.34);
+  opacity: 1;
+  pointer-events: none;
+}
+
+.feed-hero-img-wrapper .feed-hero-play-hint svg {
+  width: 20px;
+  height: 20px;
+  margin-left: 2px;
+  fill: currentColor;
+}
+
 .feed-hero-card:hover .feed-hero-play-hint,
 .feed-hero-card:focus .feed-hero-play-hint {
   opacity: 1;
@@ -597,6 +625,45 @@
   -webkit-overflow-scrolling: touch;
   touch-action: pan-x pan-y;
   overscroll-behavior-x: contain;
+}
+
+/* Reservas visuales estables mientras llegan recomendaciones de red. Evitan
+   saltos de layout y dejan claro que la pantalla ya respondió al usuario. */
+.feed-row-skeleton {
+  pointer-events: none;
+}
+
+.feed-content-skeleton {
+  width: var(--feed-card-size);
+  min-width: var(--feed-card-size);
+  flex: 0 0 var(--feed-card-size);
+}
+
+.feed-content-skeleton-image,
+.feed-content-skeleton-line {
+  background: var(--skeleton-gradient);
+  background-size: 400% 100%;
+  animation: skel 1.4s ease infinite;
+}
+
+.feed-content-skeleton-image {
+  width: 100%;
+  aspect-ratio: 1;
+  border-radius: var(--feed-radius-md);
+}
+
+.feed-content-skeleton-line {
+  width: 82%;
+  height: 12px;
+  margin-top: 10px;
+  border-radius: 999px;
+}
+
+.feed-content-skeleton-line.short {
+  width: 58%;
+  height: 10px;
+  margin-top: 7px;
+  opacity: 0.7;
 }
 
 /* ============================================================================
@@ -1664,6 +1731,39 @@
    ============================================================================ */
 
 /* Móviles grandes (iPhone 12 Pro Max, Pixel 7 Pro, etc.) */
+@media (max-width: 599px) {
+  :root {
+    --feed-section-gap: 20px;
+    --feed-section-title-size: 1.25rem;
+  }
+
+  .feed-hero {
+    padding-top: 14px;
+    padding-bottom: 12px;
+  }
+
+  .feed-hero-row {
+    margin-top: 14px;
+    margin-bottom: 6px;
+  }
+
+  .feed-section-header {
+    gap: 4px;
+    padding-bottom: 12px;
+  }
+
+  .feed-section-subtitle {
+    max-width: 96%;
+    font-size: 0.8125rem;
+    line-height: 1.35;
+  }
+
+  .feed-row,
+  .feed-album-row {
+    gap: 12px;
+  }
+}
+
 @media (min-width: 390px) {
   :root {
     --feed-hero-card-size: 170px;
