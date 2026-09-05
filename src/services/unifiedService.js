@@ -71,14 +71,26 @@ const parseDurationToSeconds = (duration) => {
 // DEEZER CLIENT - Para metadatos UI (charts, búsquedas, artistas, álbumes)
 // =============================================================================
 
+// Share only in-flight reads: a subsequent refresh always reaches the catalog.
+const pendingCatalogRequests = new Map();
 const DeezerClient = {
     async _fetch(endpoint) {
-        const proxyUrl = `${CONFIG.CORS_PROXIES[0]}${encodeURIComponent(endpoint)}`;
+        if (pendingCatalogRequests.has(endpoint)) return pendingCatalogRequests.get(endpoint);
+        const request = this._fetchUnshared(endpoint);
+        pendingCatalogRequests.set(endpoint, request);
         try {
-            const controller = new AbortController();
-            const timeoutId = setTimeout(() => controller.abort(), 10000);
+            return await request;
+        } finally {
+            pendingCatalogRequests.delete(endpoint);
+        }
+    },
+
+    async _fetchUnshared(endpoint) {
+        const proxyUrl = `${CONFIG.CORS_PROXIES[0]}${encodeURIComponent(endpoint)}`;
+        const controller = new AbortController();
+        const timeoutId = setTimeout(() => controller.abort(), 10000);
+        try {
             const res = await fetch(proxyUrl, { signal: controller.signal });
-            clearTimeout(timeoutId);
             if (!res.ok) return { data: [] };
             const data = await res.json();
             if (data.error) return { data: [] };
@@ -86,6 +98,8 @@ const DeezerClient = {
         } catch (e) {
             console.warn('[DeezerClient] Proxy error:', e.message);
             return { data: [] };
+        } finally {
+            clearTimeout(timeoutId);
         }
     },
 
@@ -101,6 +115,9 @@ const DeezerClient = {
             image: dt.album?.cover_medium || dt.album?.cover_big || dt.artist?.picture_medium,
             duration: dt.duration,
             preview: dt.preview,
+            rank: dt.rank || 0,
+            releaseDate: dt.release_date || dt.album?.release_date || null,
+            genreId: dt.genre_id || dt.album?.genre_id || null,
             link: dt.link
         };
     },
@@ -216,7 +233,7 @@ const DeezerClient = {
             resolvedArtistName = artistInfo.name;
         }
 
-        const data = await this._fetch(`/artist/${artistId}/albums?limit=${limit}`);
+        const data = await this._fetch(`/artist/${artistId}/albums?limit=${limit}&order=release_desc`);
         if (!data?.data) return [];
 
         return data.data.map(album => ({

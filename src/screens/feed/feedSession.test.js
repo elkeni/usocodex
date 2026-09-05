@@ -13,18 +13,20 @@ describe('Sesión de Descubrir', () => {
     it('no restaura Descubrir después de cerrar y abrir la app', async () => {
         localStorage.setItem('app_screen_state_v1', JSON.stringify({
             feed: { hero: { id: 'old-hero' }, sections: { trending: [{ id: 'old-track' }] } },
+            'feed:user-a': { hero: { id: 'private-old-hero' } },
             search_state: { query: 'conservar' },
         }));
 
         const { default: cache } = await import('../../services/screenStateCache');
 
         expect(cache.get('feed', 'hero')).toBeUndefined();
+        expect(cache.get('feed:user-a', 'hero')).toBeUndefined();
         expect(cache.get('search_state', 'query')).toBe('conservar');
     });
 
-    it('no inicia una segunda generación al regresar durante la misma sesión', () => {
-        expect(feedSource).toContain("Boolean(screenStateCache.get('feed', 'generationStarted'))");
-        expect(feedSource).toContain('if (userLoading || generationStartedRef.current) return;');
+    it('revalida al cambiar entradas o regresar a la pantalla', () => {
+        expect(feedSource).toContain('[userLoading, revalidateAll]');
+        expect(feedSource).not.toContain('generationStartedRef.current) return');
         expect(feedSource).not.toContain('applyCacheIfValid');
     });
 

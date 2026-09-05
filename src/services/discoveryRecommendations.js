@@ -1,21 +1,14 @@
 const BAD_VARIANT = /\b(cover|karaoke|tribute|nightcore|slowed|reverb|8d|sped\s*up)\b/i;
+const DAY = 86400000;
 
 export const getDiscoveryArtistName = (value) => {
-    const raw = typeof value === 'string'
-        ? value
-        : value?.name || value?.['#text'] || '';
-
-    return String(raw)
-        .split(/\s+(?:feat\.?|ft\.?|with)\s+|\s+x\s+/i)[0]
-        .trim();
+    const raw = typeof value === 'string' ? value : value?.name || value?.['#text'] || '';
+    return String(raw).split(/\s+(?:feat\.?|ft\.?|with)\s+|\s+x\s+/i)[0].trim();
 };
 
 export const normalizeDiscoveryText = (value) => String(value || '')
-    .normalize('NFKD')
-    .replace(/[\u0300-\u036f]/g, '')
-    .toLocaleLowerCase('es')
-    .replace(/[^a-z0-9]+/g, ' ')
-    .trim();
+    .normalize('NFKD').replace(/[\u0300-\u036f]/g, '')
+    .normalize('NFC').toLocaleLowerCase('es').replace(/[^\p{L}\p{N}]+/gu, ' ').trim();
 
 export const getDiscoveryTrackKey = (track) => {
     const artist = normalizeDiscoveryText(getDiscoveryArtistName(track?.artist));
@@ -32,135 +25,131 @@ const deterministicNumber = (value) => {
     return hash >>> 0;
 };
 
-const addArtistScore = (scores, displayNames, artistValue, score) => {
-    const artist = getDiscoveryArtistName(artistValue);
-    const key = normalizeDiscoveryText(artist);
-    if (!key || !Number.isFinite(score) || score <= 0) return;
-    scores.set(key, (scores.get(key) || 0) + score);
-    if (!displayNames.has(key)) displayNames.set(key, artist);
+const timestampOf = (track) => {
+    const raw = track?.timestamp ?? track?.playedAt ?? track?.addedAt;
+    if (raw == null) return null;
+    const parsed = typeof raw === 'number' ? raw : Date.parse(raw);
+    return Number.isFinite(parsed) && parsed > 0 ? parsed : null;
 };
 
-const addRankedTracks = (scores, displayNames, tracks, baseWeight, limit = 80) => {
-    (tracks || []).slice(0, limit).forEach((track, index) => {
-        const recency = Math.max(0.35, 1 - (index / Math.max(limit, 1)) * 0.65);
-        addArtistScore(scores, displayNames, track?.artist, baseWeight * recency);
-    });
-};
-
-/**
- * Construye un retrato estable de gustos para una única apertura de la app.
- * Las señales explícitas pesan más que una escucha aislada.
- */
+/** Recent listening leads; saved collections provide a bounded, long-term baseline. */
 export const buildDiscoveryTasteProfile = ({
-    favorites = [],
-    playlists = [],
-    savedArtists = [],
-    savedAlbums = [],
-    listeningHistory = [],
-    engagement = {},
-    userId = 'guest',
-    sessionSeed = 'session',
+    favorites = [], playlists = [], savedArtists = [], savedAlbums = [],
+    listeningHistory = [], engagement = {}, userId = 'guest', sessionSeed = 'session',
+    now = Date.now(),
 } = {}) => {
     const scores = new Map();
+    const recentScores = new Map();
     const displayNames = new Map();
-
-    (savedArtists || []).slice().reverse().forEach((artist, index) => {
-        addArtistScore(scores, displayNames, artist, Math.max(5, 12 - index * 0.25));
+    const add = (map, value, weight) => {
+        const name = getDiscoveryArtistName(value);
+        const key = normalizeDiscoveryText(name);
+        if (!key || !Number.isFinite(weight) || weight <= 0) return;
+        displayNames.set(key, name);
+        map.set(key, (map.get(key) || 0) + weight);
+    };
+    const addCollection = (items, weight, cap) => {
+        const counts = new Map();
+        const seen = new Set();
+        items.forEach((item) => {
+            const key = getDiscoveryTrackKey(item) || normalizeDiscoveryText(getDiscoveryArtistName(item?.artist));
+            if (!key || seen.has(key)) return;
+            seen.add(key);
+            add(counts, item?.artist, 1);
+        });
+        counts.forEach((count, key) => add(scores, displayNames.get(key), Math.min(cap, weight * Math.sqrt(count))));
+    };
+    const explicitlySaved = new Set();
+    savedArtists.forEach((artist) => {
+        const key = normalizeDiscoveryText(getDiscoveryArtistName(artist));
+        if (!key || explicitlySaved.has(key)) return;
+        explicitlySaved.add(key);
+        add(scores, artist, 12);
     });
-    addRankedTracks(scores, displayNames, [...(favorites || [])].reverse(), 8, 120);
-    addRankedTracks(scores, displayNames, listeningHistory, 3.5, 100);
-    addRankedTracks(
-        scores,
-        displayNames,
-        (playlists || []).flatMap((playlist) => playlist?.tracks || []),
-        2.25,
-        120,
-    );
-    (savedAlbums || []).slice().reverse().forEach((album, index) => {
-        addArtistScore(scores, displayNames, album?.artist, Math.max(2, 5 - index * 0.12));
+    addCollection(favorites, 8, 18);
+    addCollection(playlists.flatMap((playlist) => playlist?.tracks || []), 2, 6);
+    addCollection(savedAlbums, 4, 8);
+
+    // History is newest-first in the player, but stored timestamps remain authoritative.
+    const history = listeningHistory.slice().sort((a, b) => (timestampOf(b) || 0) - (timestampOf(a) || 0)).slice(0, 200);
+    const repeatCounts = new Map();
+    history.forEach((item, index) => {
+        const timestamp = timestampOf(item);
+        const ageDays = timestamp === null ? index / 3 : Math.max(0, (now - timestamp) / DAY);
+        const key = getDiscoveryTrackKey(item);
+        const repeats = (repeatCounts.get(key) || 0) + 1;
+        repeatCounts.set(key, repeats);
+        add(recentScores, item?.artist, 24 * Math.pow(0.5, ageDays / 10) / Math.sqrt(repeats));
+    });
+    recentScores.forEach((score, key) => {
+        const bounded = Math.min(80, score);
+        recentScores.set(key, bounded);
+        add(scores, displayNames.get(key), bounded);
     });
     Object.entries(engagement?.likedArtists || {}).forEach(([artist, count]) => {
-        addArtistScore(scores, displayNames, artist, Math.min(16, Number(count || 0) * 3));
+        add(scores, artist, Math.min(12, Math.max(0, Number(count)) * 3));
     });
-
-    const explicitlySaved = new Set((savedArtists || [])
-        .map((artist) => normalizeDiscoveryText(getDiscoveryArtistName(artist)))
-        .filter(Boolean));
     const avoidedArtists = new Set(Object.entries(engagement?.skippedArtists || {})
         .filter(([artist, count]) => Number(count) >= 3 && !explicitlySaved.has(normalizeDiscoveryText(artist)))
         .map(([artist]) => normalizeDiscoveryText(artist)));
-
-    const seeds = [...scores.entries()]
-        .filter(([key]) => !avoidedArtists.has(key))
-        .sort((a, b) => b[1] - a[1] || a[0].localeCompare(b[0]))
-        .slice(0, 12)
-        .map(([key, score]) => ({ key, name: displayNames.get(key), score }));
-
-    const knownTrackKeys = new Set([
-        ...(favorites || []),
-        ...(listeningHistory || []).slice(0, 120),
-    ].map(getDiscoveryTrackKey).filter(Boolean));
+    const seeds = [...scores.entries()].filter(([key]) => !avoidedArtists.has(key))
+        .sort((a, b) => b[1] - a[1] || a[0].localeCompare(b[0])).slice(0, 16)
+        .map(([key, score]) => ({ key, name: displayNames.get(key), score, recentScore: recentScores.get(key) || 0 }));
+    const knownTrackKeys = new Set([...favorites, ...history].map(getDiscoveryTrackKey).filter(Boolean));
     const knownArtists = new Set(scores.keys());
-    const signature = `${userId}:${sessionSeed}:${seeds.map((seed) => `${seed.key}:${seed.score.toFixed(2)}`).join('|')}`;
-
+    const fingerprint = [...knownTrackKeys].sort().join('|');
+    const signature = `${userId}:${sessionSeed}:${seeds.map((seed) => `${seed.key}:${seed.score.toFixed(1)}`).join('|')}:${deterministicNumber(fingerprint)}`;
     return { seeds, knownTrackKeys, knownArtists, avoidedArtists, signature };
-};
-
-const isValidCandidate = (candidate, profile) => {
-    const track = candidate?.track || candidate;
-    const title = String(track?.name || track?.title || '').trim();
-    const artist = getDiscoveryArtistName(track?.artist);
-    const artistKey = normalizeDiscoveryText(artist);
-    const trackKey = getDiscoveryTrackKey(track);
-    if (!title || !artist || !trackKey || BAD_VARIANT.test(title)) return false;
-    if (profile?.avoidedArtists?.has(artistKey)) return false;
-    if (profile?.knownTrackKeys?.has(trackKey)) return false;
-    return Boolean(track?.image);
 };
 
 const candidateScore = (candidate, profile, sessionSeed) => {
     const track = candidate.track || candidate;
     const artistKey = normalizeDiscoveryText(getDiscoveryArtistName(track.artist));
-    const sourceWeight = candidate.source === 'related' ? 44 : candidate.source === 'familiar' ? 25 : 12;
-    const novelty = profile.knownArtists.has(artistKey) ? 0 : 16;
-    const affinity = Math.min(30, Number(candidate.affinity || 0) * 1.35);
-    const rank = Math.max(0, 10 - Number(candidate.rank || 0));
-    const tieBreaker = deterministicNumber(`${sessionSeed}:${getDiscoveryTrackKey(track)}`) / 0xffffffff;
-    return sourceWeight + novelty + affinity + rank + tieBreaker;
+    const sourceWeight = candidate.source === 'related' ? 36 : candidate.source === 'familiar' ? 24 : 18;
+    const novelty = profile.knownArtists?.has(artistKey) ? 0 : 12;
+    const affinity = Math.min(32, Math.max(0, Number(candidate.affinity) || 0) * 0.8);
+    const rank = Math.max(0, 10 - (Number(candidate.rank) || 0));
+    return sourceWeight + novelty + affinity + rank + deterministicNumber(`${sessionSeed}:${getDiscoveryTrackKey(track)}`) / 0xffffffff;
 };
 
-const takeDiverse = (ordered, result, seenTracks, artistCounts, limit, maxPerArtist) => {
-    for (const candidate of ordered) {
-        if (result.length >= limit) break;
-        const track = candidate.track || candidate;
-        const trackKey = getDiscoveryTrackKey(track);
-        const artistKey = normalizeDiscoveryText(getDiscoveryArtistName(track.artist));
-        if (seenTracks.has(trackKey) || (artistCounts.get(artistKey) || 0) >= maxPerArtist) continue;
-        seenTracks.add(trackKey);
-        artistCounts.set(artistKey, (artistCounts.get(artistKey) || 0) + 1);
-        result.push(track);
-    }
-};
-
-/** Selecciona una mezcla 70/20/10: descubrimiento, afinidad conocida y contexto popular. */
-export const selectDiscoveryTracks = ({ candidates = [], profile, sessionSeed, limit = 27 } = {}) => {
-    const valid = candidates
-        .filter((candidate) => isValidCandidate(candidate, profile))
-        .map((candidate) => ({ ...candidate, score: candidateScore(candidate, profile, sessionSeed) }))
-        .sort((a, b) => b.score - a.score);
-
-    const related = valid.filter((candidate) => candidate.source === 'related');
-    const familiar = valid.filter((candidate) => candidate.source === 'familiar');
-    const context = valid.filter((candidate) => candidate.source === 'chart');
-    const result = [];
-    const seenTracks = new Set();
+/** Greedy reranking spreads artists and taste origins throughout the visible list. */
+export const selectDiscoveryTracks = ({ candidates = [], profile = {}, sessionSeed = 'session', limit = 27 } = {}) => {
+    const byTrack = new Map();
+    candidates.forEach((candidate) => {
+        const track = candidate?.track || candidate;
+        const title = String(track?.name || track?.title || '').trim();
+        const key = getDiscoveryTrackKey(track);
+        const artist = normalizeDiscoveryText(getDiscoveryArtistName(track?.artist));
+        if (!key || !track?.image || BAD_VARIANT.test(title) || profile.avoidedArtists?.has(artist) || profile.knownTrackKeys?.has(key)) return;
+        const score = candidateScore(candidate, profile, sessionSeed);
+        const seed = normalizeDiscoveryText(getDiscoveryArtistName(candidate.seedArtist || candidate.seed));
+        const genre = normalizeDiscoveryText(candidate.genre || track.genre || '');
+        if (!byTrack.has(key) || byTrack.get(key).score < score) byTrack.set(key, { track, artist, seed, genre, source: candidate.source, score });
+    });
+    const remaining = [...byTrack.values()];
     const artistCounts = new Map();
-
-    takeDiverse(related, result, seenTracks, artistCounts, Math.ceil(limit * 0.7), 2);
-    takeDiverse(familiar, result, seenTracks, artistCounts, Math.ceil(limit * 0.9), 2);
-    takeDiverse(context, result, seenTracks, artistCounts, limit, 1);
-    takeDiverse(valid, result, seenTracks, artistCounts, limit, 2);
-
-    return result.slice(0, limit);
+    const seedCounts = new Map();
+    const genreCounts = new Map();
+    const sourceCounts = new Map();
+    const result = [];
+    while (result.length < Math.max(0, limit) && remaining.length) {
+        let best = -1;
+        let bestScore = -Infinity;
+        remaining.forEach((item, index) => {
+            const count = artistCounts.get(item.artist) || 0;
+            if (count >= 2) return;
+            const score = item.score - count * 42
+                - (item.seed ? (seedCounts.get(item.seed) || 0) * 9 : 0)
+                - (item.genre ? (genreCounts.get(item.genre) || 0) * 5 : 0)
+                - (sourceCounts.get(item.source) || 0) * 2;
+            if (score > bestScore) { best = index; bestScore = score; }
+        });
+        if (best === -1) break;
+        const [item] = remaining.splice(best, 1);
+        result.push(item.track);
+        [[artistCounts, item.artist], [seedCounts, item.seed], [genreCounts, item.genre], [sourceCounts, item.source]]
+            .forEach(([map, key]) => map.set(key, (map.get(key) || 0) + 1));
+    }
+    return result;
 };
 

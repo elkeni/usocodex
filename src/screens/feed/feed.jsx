@@ -16,7 +16,6 @@ import { getAlbumPath } from "../../services/albumNavigation";
 import { getArtistPath } from "../../services/artistIdentity";
 import { getPrefetchLimitForQuality, playbackPrefetchService, getPlaybackPrefetchKey } from "../../services/playbackPrefetchService";
 import { getResolvedAudioQualityMode } from "../../services/audioQuality";
-import { getSmartPrefetchPreference } from "../../services/experiencePreferences";
 import { getArtworkImageProps, getBestArtworkUrl, resizeArtworkUrl } from "../../services/imageQuality";
 import {
   buildDiscoveryTasteProfile,
@@ -35,7 +34,7 @@ const FALLBACK_ARTISTS = ["Bad Bunny", "Taylor Swift", "The Weeknd", "Drake", "D
 const FALLBACK_SESSION_SEED = `discover-${Date.now()}-${Math.random().toString(36).slice(2)}`;
 const EMPTY_DISCOVERY_LIST = Object.freeze([]);
 const FEED_STARTUP_CACHE_KEY = 'paradox_feed_startup_tracks_v1';
-const FEED_STARTUP_CACHE_TTL = 14 * 24 * 60 * 60 * 1000;
+const FEED_STARTUP_CACHE_TTL = 60 * 60 * 1000;
 const createEmptyFeedSections = () => ({
   trending: [],
   newReleases: [],
@@ -149,6 +148,10 @@ const normalizeItem = (item, type = "track") => {
     artist,
     image: imageOptimized || DEFAULT_IMAGE, // Tarjetas Retina con selección adaptativa.
     image_xl: imageXl || DEFAULT_IMAGE,     // For Player (1000x1000)
+    releaseDate: item.releaseDate || item.release_date || null,
+    genre: item.genre || item.genre_id || null,
+    rank: item.rank || 0,
+    recordType: item.recordType,
     duration: item.duration || 0,
     album: item.album?.title || item.album || (type === "track" ? "Single" : ""),
     trackCount: item.trackCount || item.nb_tracks || item.tracks?.length || 0
@@ -161,7 +164,7 @@ const normalizeItem = (item, type = "track") => {
 
 // Apply sections rotation based on priority
 const applySectionsRotation = ({ sections }) => {
-  const reservedWhileLoading = new Set(['forYouTracks', 'smartRecommendations', 'newReleases']);
+  const reservedWhileLoading = new Set(['forYouTracks', 'smartRecommendations', 'newReleases', 'trending', 'recommendedAlbums']);
   const allSections = [
     { key: 'forYouTracks', title: 'Empieza por aquí', priority: 12 },
     { key: 'smartRecommendations', title: 'Descubrimientos para ti', priority: 11 },
@@ -183,96 +186,36 @@ const applySectionsRotation = ({ sections }) => {
 // =============================================================================
 
 // Generic Row Component
-const Row = memo(({ title, subtitle, items, onItemClick, variant = 'default', sectionKey = '', isLoading, playbackPrefetch }) => {
-  const displayItems = useMemo(() => {
-    if (!items) return [];
-    if (variant === 'recent') return items; // Allow history duplicates
-    return uniqByKey(items, (it) => it.id);
-  }, [items, variant]);
-
-  if (isLoading) {
-    const loadingClass = variant === 'album' ? 'feed-section feed-section-albums' : variant === 'recommended' ? 'feed-section feed-section-recommended' : 'feed-section';
-    return (
-      <section className={loadingClass}>
-        <div className="feed-section-header"><h2 className="feed-section-title">{title}</h2>{subtitle && <p className="feed-section-subtitle">{subtitle}</p>}</div>
-        <div className="feed-row feed-row-skeleton" role="status" aria-label={`Preparando ${title}`}>
-          {[0, 1, 2].map((index) => (
-            <div className="feed-content-skeleton" key={index} aria-hidden="true">
-              <div className="feed-content-skeleton-image" />
-              <div className="feed-content-skeleton-line" />
-              <div className="feed-content-skeleton-line short" />
-            </div>
-          ))}
-        </div>
-      </section>
-    );
-  }
-  if (!displayItems?.length) return null;
-
-  let sectionClass = 'feed-section';
-  if (variant === 'album') sectionClass += ' feed-section-albums';
-  else if (variant === 'recommended') sectionClass += ' feed-section-recommended';
-  else if (variant === 'recent') sectionClass += ' feed-section-recent';
-
-  let rowClass = 'feed-row';
-  if (variant === 'recommended') rowClass = 'feed-recommended-grid';
-  else if (variant === 'album') rowClass = 'feed-row feed-album-row';
-  else if (variant === 'mini') rowClass = 'feed-minimal-list-container';
-  else if (variant === 'list') rowClass = 'feed-simple-list';
-
-  const mapVariant = (v) => {
-    switch (v) {
-      case 'list': return 'horizontal';
-      case 'wide': return 'wide';
-      case 'poster': return 'poster';
-      case 'circle': return 'circle';
-      case 'recommended': return 'vertical';
-      default: return 'vertical';
-    }
-  };
-
-  // Map sectionKey to className
-  const getSectionClassName = (key) => {
-    const classNameMap = {
-      'newReleases': 'feed-card-new-releases',
-      'smartRecommendations': 'feed-card-recommendations',
-      'trending': 'feed-card-trending',
-      'forYouTracks': 'feed-card-foryou-tracks',
-      'topPlaylists': 'feed-card-playlists',
-      'partyPlaylists': 'feed-card-playlists',
-      'recommendedAlbums': 'feed-card-albums',
-      'recentlyPlayed': 'feed-card-recent',
-      'flashback': 'feed-card-flashback',
-      'moodMixes': 'feed-card-mood',
-      'artistSpotlight': 'feed-card-spotlight',
-      'global': 'feed-card-global',
-    };
-    return classNameMap[key] || '';
-  };
-
-  const cardVariant = mapVariant(variant);
-  const cardClassName = getSectionClassName(sectionKey);
-
-
-
+const Row = memo(({ title, subtitle, items, onItemClick, variant = 'default', sectionKey = '', isLoading, playbackPrefetch, emptyMessage }) => {
+  const rowRef = useRef(null);
+  const displayItems = useMemo(() => uniqByKey(items || [], (item) => item.id), [items]);
+  const move = (direction) => rowRef.current?.scrollBy({ left: direction * rowRef.current.clientWidth * 0.8, behavior: 'smooth' });
+  if (!isLoading && !displayItems.length && !emptyMessage) return null;
+  const cardVariant = variant === 'circle' ? 'circle' : variant === 'list' || variant === 'recommended' ? 'horizontal' : 'vertical';
   return (
-    <section className={sectionClass}>
-      <div className="feed-section-header"><h2 className="feed-section-title">{title}</h2>{subtitle && <p className="feed-section-subtitle">{subtitle}</p>}</div>
-      <div className={rowClass}>
-        {displayItems.map((it, index) => (
-          <Card
-            key={variant === 'recent' ? `${it.id}-${it.playedAt}` : `${it.id}`}
-            item={it}
-            onClick={onItemClick}
-            variant={cardVariant}
-            className={`${cardClassName} ${variant === 'recommended' ? 'recommended-card-override' : ''}`.trim()}
-            {...playbackPrefetch}
-          />
-        ))}
+    <section className={`feed-section feed-section-${sectionKey}`} id={`feed-${sectionKey}`} aria-label={title} aria-busy={!!isLoading}>
+      <div className="feed-section-heading">
+        <div className="feed-section-header">
+          <h2 className="feed-section-title">{title}</h2>
+          {subtitle && <p className="feed-section-subtitle">{subtitle}</p>}
+        </div>
+        {displayItems.length > 3 && <div className="feed-row-controls">
+          <button type="button" onClick={() => move(-1)} aria-label={`Anterior en ${title}`}><span aria-hidden="true">‹</span></button>
+          <button type="button" onClick={() => move(1)} aria-label={`Siguiente en ${title}`}><span aria-hidden="true">›</span></button>
+        </div>}
       </div>
+      {isLoading && !displayItems.length ? <div className="feed-row feed-row-skeleton" role="status" aria-label={`Preparando ${title}`}>
+        {[0, 1, 2, 3, 4].map(index => <div className="feed-content-skeleton" key={index} aria-hidden="true"><div className="feed-content-skeleton-image" /><div className="feed-content-skeleton-line" /><div className="feed-content-skeleton-line short" /></div>)}
+      </div> : !displayItems.length ? <p className="feed-empty" role="status">{emptyMessage}</p> :
+        <div className={variant === 'recommended' ? 'feed-recommended-grid' : 'feed-row'} ref={rowRef}>
+          {displayItems.map(item => <div className={`feed-item ${variant === 'recommended' ? 'feed-item-discovery' : ''}`} key={item.id}>
+            <Card item={item} onClick={onItemClick} variant={cardVariant} className={`feed-card-${sectionKey}`} {...playbackPrefetch} />
+            {sectionKey === 'newReleases' && item.releaseDate && <span className="feed-release-date">{new Date(`${String(item.releaseDate).slice(0, 10)}T12:00:00`).toLocaleDateString('es', { day: 'numeric', month: 'short', year: 'numeric' })}</span>}
+          </div>)}
+        </div>}
     </section>
   );
-}, (prev, next) => prev.title === next.title && prev.isLoading === next.isLoading && (prev.items || []).length === (next.items || []).length && (prev.items || []).every((it, i) => it?.id === next.items?.[i]?.id));
+});
 
 // HeroCard - Single large card
 const HeroCard = memo(({ item, onPlay, playbackPrefetch }) => {
@@ -336,7 +279,7 @@ const HeroCard = memo(({ item, onPlay, playbackPrefetch }) => {
       </div>
     </button>
   );
-}, (prev, next) => prev.item?.id === next.item?.id && prev.item?.image === next.item?.image);
+});
 
 // HeroRow - Horizontal scrollable row of hero cards
 const HeroRow = memo(({ items, onItemClick, isLoading, onActiveItemChange, playbackPrefetch }) => {
@@ -414,7 +357,7 @@ const HeroRow = memo(({ items, onItemClick, isLoading, onActiveItemChange, playb
       ))}
     </div>
   );
-}, (prev, next) => prev.isLoading === next.isLoading && (prev.items || []).length === (next.items || []).length && (prev.items || []).every((it, i) => it?.id === next.items?.[i]?.id));
+});
 
 // Helper: Build recently played from history
 const buildRecentlyPlayed = (history) => {
@@ -422,7 +365,7 @@ const buildRecentlyPlayed = (history) => {
   const seen = new Set(), recent = [];
   for (const h of history) {
     if (!h.name || !h.artist) continue;
-    const key = `${h.artist.toLowerCase()}-${h.name.toLowerCase()}`;
+    const key = `${toArtistName(h.artist).toLowerCase()}-${h.name.toLowerCase()}`;
     if (seen.has(key)) continue; seen.add(key);
     recent.push({ id: `recent-${key}-${h.timestamp}`, type: 'track', name: h.name, artist: h.artist, image: h.image || DEFAULT_IMAGE, duration: h.duration || 0, playedAt: h.timestamp });
     if (recent.length >= 12) break;
@@ -432,10 +375,16 @@ const buildRecentlyPlayed = (history) => {
 
 // Main Feed Component
 export default function Feed() {
+  const { user: feedUser } = useUser();
+  return <FeedContent key={feedUser?.uid || 'guest'} />;
+}
+
+function FeedContent() {
   const navigate = useNavigate();
   const { playTrack, appendToQueue, primeResolvedTrack } = usePlayerActions();
   const playerState = usePlayer();
   const { user, favorites, playlists, savedArtists, savedAlbums, loading: userLoading } = useUser();
+  const feedCacheKey = `feed:${user?.uid || 'guest'}`;
   const artistRadioRequestRef = useRef(0);
   const discoveryPrefetchKeysRef = useRef(new Set());
   const startupTracksRef = useRef(readStartupTracks());
@@ -463,49 +412,36 @@ export default function Feed() {
     prefetchOnVisible: true,
   }), [handleDiscoveryPrefetch, primeResolvedTrack]);
 
-  const discoveryInputsRef = useRef(screenStateCache.get('feed', 'discoveryInputs') || null);
-  if (!userLoading && !discoveryInputsRef.current) {
-    discoveryInputsRef.current = {
-      favorites: [...(favorites || [])],
-      playlists: [...(playlists || [])],
-      savedArtists: [...(savedArtists || [])],
-      savedAlbums: [...(savedAlbums || [])],
-      listeningHistory: [...(playerState.listeningHistory || [])],
-      engagement: { ...(playerState.tasteEngagement || { likedArtists: {}, skippedArtists: {} }) },
-    };
-    screenStateCache.set('feed', 'discoveryInputs', discoveryInputsRef.current);
-  }
-  const discoveryInputs = discoveryInputsRef.current;
-  const sessionFavorites = discoveryInputs?.favorites || EMPTY_DISCOVERY_LIST;
-  const sessionSavedArtists = discoveryInputs?.savedArtists || EMPTY_DISCOVERY_LIST;
-  const sessionSavedAlbums = discoveryInputs?.savedAlbums || EMPTY_DISCOVERY_LIST;
-
-  const listeningHistorySnapshotRef = useRef(discoveryInputs?.listeningHistory || playerState.listeningHistory || []);
-  const tasteEngagementSnapshotRef = useRef(discoveryInputs?.engagement || playerState.tasteEngagement || { likedArtists: {}, skippedArtists: {} });
-
-  const [recentlyPlayed] = useState(() => {
-    const cached = screenStateCache.get('feed', 'recentlyPlayed');
-    if (cached) return cached;
-    const snapshot = buildRecentlyPlayed(listeningHistorySnapshotRef.current);
-    screenStateCache.set('feed', 'recentlyPlayed', snapshot);
-    return snapshot;
-  });
+  const discoveryInputs = useMemo(() => ({
+    favorites: favorites || EMPTY_DISCOVERY_LIST,
+    playlists: playlists || EMPTY_DISCOVERY_LIST,
+    savedArtists: savedArtists || EMPTY_DISCOVERY_LIST,
+    savedAlbums: savedAlbums || EMPTY_DISCOVERY_LIST,
+    listeningHistory: playerState.listeningHistory || EMPTY_DISCOVERY_LIST,
+    engagement: playerState.tasteEngagement || {},
+  }), [favorites, playlists, savedArtists, savedAlbums, playerState.listeningHistory, playerState.tasteEngagement]);
+  const sessionFavorites = discoveryInputs.favorites;
+  const sessionSavedArtists = discoveryInputs.savedArtists;
+  const sessionSavedAlbums = discoveryInputs.savedAlbums;
+  const listeningHistorySnapshotRef = useRef([]);
+  listeningHistorySnapshotRef.current = discoveryInputs.listeningHistory;
+  const recentlyPlayed = useMemo(() => buildRecentlyPlayed(discoveryInputs.listeningHistory), [discoveryInputs.listeningHistory]);
 
   const feedContainerRef = useRef(null);
-  useScrollPersistence('feed', feedContainerRef);
-  const wasRestoredFromMemoryRef = useRef(Boolean(screenStateCache.get('feed', 'generationStarted')));
+  useScrollPersistence(feedCacheKey, feedContainerRef);
+  const wasRestoredFromMemoryRef = useRef(Boolean(screenStateCache.get(feedCacheKey, 'generationStarted')));
   const [error, setError] = useState(null);
-  const [hero, setHeroInternal] = useState(() => screenStateCache.get('feed', 'hero') || null);
+  const [hero, setHeroInternal] = useState(() => screenStateCache.get(feedCacheKey, 'hero') || null);
   const heroRef = useRef(hero);
   const setHero = useCallback((update) => {
     const value = typeof update === 'function' ? update(heroRef.current) : update;
     heroRef.current = value;
-    screenStateCache.set('feed', 'hero', value);
+    screenStateCache.set(feedCacheKey, 'hero', value);
     setHeroInternal(value);
-  }, []);
+  }, [feedCacheKey]);
 
   const [sections, setSectionsInternal] = useState(() => {
-    const cachedSections = screenStateCache.get('feed', 'sections') || {};
+    const cachedSections = screenStateCache.get(feedCacheKey, 'sections') || {};
     return {
       ...createEmptyFeedSections(),
       ...cachedSections,
@@ -518,11 +454,11 @@ export default function Feed() {
   const setSections = useCallback((update) => {
     const value = typeof update === 'function' ? update(sectionsRef.current) : update;
     sectionsRef.current = value;
-    screenStateCache.set('feed', 'sections', value);
+    screenStateCache.set(feedCacheKey, 'sections', value);
     setSectionsInternal(value);
-  }, []);
+  }, [feedCacheKey]);
 
-  useEffect(() => screenStateCache.subscribe('feed', (snapshot, changedKey) => {
+  useEffect(() => screenStateCache.subscribe(feedCacheKey, (snapshot, changedKey) => {
     if (changedKey === 'sections' && snapshot.sections !== sectionsRef.current) {
       sectionsRef.current = snapshot.sections;
       setSectionsInternal(snapshot.sections);
@@ -531,7 +467,7 @@ export default function Feed() {
       heroRef.current = snapshot.hero;
       setHeroInternal(snapshot.hero);
     }
-  }), []);
+  }), [feedCacheKey]);
 
   useEffect(() => {
     // Retirar datos que pudieron quedar guardados por el antiguo generador automático.
@@ -557,9 +493,9 @@ export default function Feed() {
   const [loading, setLoading] = useState(() => wasRestoredFromMemoryRef.current ? { critical: false, newReleases: false, forYou: false, playlists: false, party: false, recommendations: false, albums: false, mood: false, flashback: false, global: false, spotlight: false } : { critical: true, newReleases: true, forYou: true, playlists: true, party: true, recommendations: true, albums: true, mood: true, flashback: true, global: true, spotlight: true });
   const [todayText, setTodayText] = useState("");
   const [sessionSeed] = useState(() => {
-    const cached = screenStateCache.get('feed', 'sessionSeed');
+    const cached = screenStateCache.get(feedCacheKey, 'sessionSeed');
     if (cached) return cached;
-    screenStateCache.set('feed', 'sessionSeed', FALLBACK_SESSION_SEED);
+    screenStateCache.set(feedCacheKey, 'sessionSeed', FALLBACK_SESSION_SEED);
     return FALLBACK_SESSION_SEED;
   });
 
@@ -569,6 +505,7 @@ export default function Feed() {
   const abortRef = useRef({});
   const reqIdRef = useRef(0);
   const startupCatalogPromiseRef = useRef(null);
+  const startupCatalogFetchedAtRef = useRef(0);
   const showToast = useCallback((msg, image = null, loading = false) => {
     if (toastTimerRef.current) clearTimeout(toastTimerRef.current);
     setToast({ msg, image, loading });
@@ -585,11 +522,11 @@ export default function Feed() {
 
   // useMemo en lugar de useEffect+useState para evitar loops infinitos
   const rotatedSections = useMemo(() => {
-    const cached = screenStateCache.get('feed', 'rotatedSections');
+    const cached = screenStateCache.get(feedCacheKey, 'rotatedSections');
     const result = applySectionsRotation({ sections });
-    if (result.length > 0) screenStateCache.set('feed', 'rotatedSections', result);
+    if (result.length > 0) screenStateCache.set(feedCacheKey, 'rotatedSections', result);
     return result.length > 0 ? result : (cached || []);
-  }, [sections]);
+  }, [sections, feedCacheKey]);
 
   const cancelKey = useCallback((key) => { const c = abortRef.current[key]; if (c) { try { c.abort(); } catch { } delete abortRef.current[key]; } }, []);
   const makeController = useCallback((key) => { cancelKey(key); const c = new AbortController(); abortRef.current[key] = c; return c; }, [cancelKey]);
@@ -597,21 +534,30 @@ export default function Feed() {
   // Esta consulta empieza al montar la pantalla, sin esperar autenticación ni
   // Firestore. Se comparte con el resto del cargador para no duplicar tráfico.
   const loadStartupCatalog = useCallback(() => {
-    if (startupCatalogPromiseRef.current) return startupCatalogPromiseRef.current;
-    startupCatalogPromiseRef.current = chartGetTopTracks({ limit: 14 }).then((charts) => {
+    if (startupCatalogPromiseRef.current && Date.now() - startupCatalogFetchedAtRef.current < 5 * 60 * 1000) return startupCatalogPromiseRef.current;
+    startupCatalogFetchedAtRef.current = Date.now();
+    startupCatalogPromiseRef.current = chartGetTopTracks({ limit: 100 }).then((charts) => {
       const tracks = filterQualityTracks(
         uniqByKey((charts?.tracks?.track || []).map((track) => normalizeItem(track, 'track')), makeTrackKey),
-      ).filter((track) => track.image && track.image !== DEFAULT_IMAGE).slice(0, 12);
+      ).filter((track) => track.image && track.image !== DEFAULT_IMAGE).slice(0, 100);
+      if (!tracks.length) {
+        startupCatalogPromiseRef.current = null;
+        startupCatalogFetchedAtRef.current = 0;
+      }
       if (tracks.length) {
         startupTracksRef.current = tracks;
         saveStartupTracks(tracks);
-        setSections((previous) => ({ ...previous, trending: tracks.slice(0, 8) }));
+        // Publishing personalized chart order belongs to the current generation.
         if (!heroRef.current) setHero({ ...tracks[0], heroSource: 'trending' });
       }
       return tracks;
+    }).catch((error) => {
+      startupCatalogPromiseRef.current = null;
+      startupCatalogFetchedAtRef.current = 0;
+      throw error;
     });
     return startupCatalogPromiseRef.current;
-  }, [setHero, setSections]);
+  }, [setHero]);
 
   useEffect(() => {
     loadStartupCatalog().catch(() => {
@@ -656,7 +602,7 @@ export default function Feed() {
   }, [recentlyPlayed, sessionFavorites, sessionSeed]);
 
   const [heroMix, setHeroMixInternal] = useState(() => {
-    const cachedHero = screenStateCache.get('feed', 'heroMix');
+    const cachedHero = screenStateCache.get(feedCacheKey, 'heroMix');
     if (cachedHero?.length) return cachedHero;
     return uniqByKey([...recentlyPlayed, ...startupTracksRef.current], makeTrackKey)
       .filter((item) => item?.name && item?.artist && item?.image && item.image !== DEFAULT_IMAGE)
@@ -667,9 +613,9 @@ export default function Feed() {
     if (heroMixRef.current.length || !items?.length) return;
     const stableItems = items.slice(0, 8);
     heroMixRef.current = stableItems;
-    screenStateCache.set('feed', 'heroMix', stableItems);
+    screenStateCache.set(feedCacheKey, 'heroMix', stableItems);
     setHeroMixInternal(stableItems);
-  }, []);
+  }, [feedCacheKey]);
 
   useEffect(() => {
     if (!instantPlayTracks.length) return;
@@ -846,305 +792,67 @@ export default function Feed() {
   // =========================================================================
 
   const loadCritical = useCallback(async (requestId) => {
-    const controller = makeController("critical");
-    setLoading((p) => ({ ...p, critical: true, newReleases: true })); setError(null);
-    try {
-      // Una sola consulta pequeña desbloquea el catálogo para usuarios nuevos.
-      // Se publica apenas llega; las novedades no pueden retrasar el primer render.
-      const firstTrending = await loadStartupCatalog();
-      if (controller.signal.aborted || reqIdRef.current !== requestId) return;
-      setSections((previous) => ({ ...previous, trending: firstTrending.slice(0, 8) }));
-      if (!heroRef.current && firstTrending[0]) {
-        setHero({ ...firstTrending[0], heroSource: 'trending' });
-      }
-      setLoading((previous) => ({ ...previous, critical: false }));
-
-      // === NUEVOS LANZAMIENTOS PERSONALIZADOS ===
-      // Intentar recuperar artistas de varias fuentes para asegurar personalización
-      let finalUserArtists = [];
-
-      if (sessionSavedArtists.length > 0) {
-        finalUserArtists = sessionSavedArtists.map(getDiscoveryArtistName);
-      } else if (sessionFavorites.length > 0) {
-        // Si no hay artistas guardados, sacar de favoritos
-        const unique = new Set(sessionFavorites.map(f => getDiscoveryArtistName(f.artist)));
-        finalUserArtists = Array.from(unique).filter(Boolean).slice(0, 50);
-        console.log(`[NewReleases] Using ${finalUserArtists.length} artists from Favorites`);
-      } else if (tasteProfile?.topArtists?.length > 0) {
-        finalUserArtists = tasteProfile.topArtists;
-      } else {
-        // Fallback emergencia: Leer localStorage directamente si el hook aún no hidrató
+    const controller = makeController('critical');
+    setLoading(p => ({ ...p, critical: true, newReleases: true }));
+    setError(null);
+    const current = () => !controller.signal.aborted && reqIdRef.current === requestId;
+    const artists = [...new Set([...tasteProfile.topArtists, ...sessionSavedArtists.map(getDiscoveryArtistName)])].filter(Boolean).slice(0, 12);
+    await Promise.allSettled([
+      (async () => {
         try {
-          const stored = localStorage.getItem('library_artists');
-          if (stored) {
-            const parsed = JSON.parse(stored);
-            // Soporte ambos formatos de guardado (array simple o {artists: []})
-            const list = Array.isArray(parsed) ? parsed : (parsed.artists || []);
-            if (Array.isArray(list) && list.length > 0) {
-              finalUserArtists = list.map(a => typeof a === 'string' ? a : a.name).filter(Boolean);
-              console.log('[NewReleases] Recovered artists from localStorage:', finalUserArtists.length);
-            }
+          const [charts, relatedGroups] = await Promise.all([
+            loadStartupCatalog(),
+            Promise.all(artists.slice(0, 6).map(name => getRelatedArtists(name, 8).catch(() => []))),
+          ]);
+          const affinity = new Set([...artists, ...relatedGroups.flat().map(getDiscoveryArtistName)].map(normalizeDiscoveryText));
+          if (!charts.length && current()) setError('No pudimos obtener el catálogo actual. Intenta actualizar de nuevo.');
+          const ranked = charts.map((track, rank) => ({ track, rank, score: (affinity.has(normalizeDiscoveryText(track.artist)) ? 70 : 0) + 100 - rank }));
+          const aligned = ranked.filter(item => affinity.has(normalizeDiscoveryText(item.track.artist))).sort((a, b) => b.score - a.score);
+          const exploration = ranked.filter(item => !affinity.has(normalizeDiscoveryText(item.track.artist)));
+          const pool = [];
+          while (aligned.length || exploration.length) {
+            pool.push(...aligned.splice(0, 2), ...exploration.splice(0, 1));
           }
-        } catch (e) { console.warn('LS read error', e); }
-      }
+          const counts = new Map();
+          const trending = pool.filter(({ track }) => { const key = normalizeDiscoveryText(track.artist); const count = counts.get(key) || 0; counts.set(key, count + 1); return count < 2; }).slice(0, 15).map(item => item.track);
+          if (current()) setSections(previous => ({ ...previous, trending }));
+        } catch { if (current()) setError('No pudimos actualizar las tendencias. Intenta actualizar de nuevo.'); }
+        finally { if (current()) setLoading(p => ({ ...p, critical: false })); }
+      })(),
+      (async () => {
+        try {
+          const groups = await Promise.all(artists.map(name => getArtistAlbums(name, 30).catch(() => [])));
+          const now = Date.now();
+          const recent = groups.flat().filter(album => {
+            const raw = album.releaseDate || album.release_date;
+            if (!/^\d{4}-\d{2}-\d{2}$/.test(raw || '')) return false;
+            const date = Date.parse(`${raw}T00:00:00Z`);
+            return Number.isFinite(date) && new Date(date).toISOString().slice(0, 10) === raw && date <= now && now - date <= 60 * 86400000;
+          }).sort((a, b) => Date.parse(b.releaseDate || b.release_date) - Date.parse(a.releaseDate || a.release_date));
+          const counts = new Map();
+          const releases = uniqByKey(recent, album => `${normalizeDiscoveryText(toArtistName(album.artist))}::${normalizeDiscoveryText(album.name)}`).filter(album => {
+            const key = normalizeDiscoveryText(toArtistName(album.artist)); const count = counts.get(key) || 0; counts.set(key, count + 1); return count < 2;
+          }).slice(0, 18).map(album => normalizeItem(album, 'album'));
+          if (current()) setSections(previous => ({ ...previous, newReleases: releases }));
+        } finally { if (current()) setLoading(p => ({ ...p, newReleases: false })); }
+      })(),
+    ]);
+  }, [loadStartupCatalog, makeController, setSections, sessionSavedArtists, tasteProfile.topArtists]);
 
-      const userArtists = finalUserArtists;
-
-      const [resolvedCharts, personalizedNewReleases] = await Promise.all([
-        Promise.resolve({ tracks: { track: firstTrending } }),
-        (async () => {
-          // =================================================================
-          // ⚡ CACHE LAYER (24 HORAS)
-          // =================================================================
-          const CACHE_KEY = `feed_new_releases_cache_v2_${user?.uid || 'guest'}`;
-          const CACHE_DURATION = 24 * 60 * 60 * 1000; // 24 horas
-
-          try {
-            const cachedRaw = localStorage.getItem(CACHE_KEY);
-            if (cachedRaw) {
-              const cached = JSON.parse(cachedRaw);
-              const age = Date.now() - cached.timestamp;
-              if (age < CACHE_DURATION && Array.isArray(cached.data) && cached.data.length > 0) {
-                console.log(`[NewReleases] ⚡ Using cached data (${(age / 3600000).toFixed(1)}h old)`);
-                return cached.data;
-              }
-            }
-          } catch (e) {
-            console.warn('[NewReleases] Cache read error:', e);
-          }
-
-          if (userArtists.length === 0) {
-            console.log('[NewReleases] No user artists found (even in LS). Hiding section.');
-            return [];
-          }
-
-          console.log(`[NewReleases] 🎵 Finding new album releases from ${userArtists.length} favorite artists`);
-
-          // Seleccionar más artistas para aumentar las posibilidades de encontrar lanzamientos recientes.
-          const selectedArtists = pickRandomSample(
-            userArtists,
-            Math.min(userArtists.length, 4),
-            `newReleases-${sessionSeed}`
-          );
-
-          // Buscar álbumes realmente nuevos del año actual
-          const currentYear = new Date().getFullYear();
-
-          const albumPromises = selectedArtists.map(async (artistName) => {
-            try {
-              console.log(`[NewReleases] 🔍 Searching ${artistName} + 3 related artists...`);
-
-              // Dos consultas acotadas por artista. Las relaciones se reservan
-              // para el motor de recomendaciones y no se duplican aquí.
-              const [albums, topTracks] = await Promise.all([
-                getArtistAlbums(artistName, 10),
-                artistGetTopTracks({ artist: artistName, limit: 12 }),
-              ]);
-              const relatedArtists = [];
-
-              console.log(`[NewReleases] Found ${albums?.length || 0} albums, ${topTracks?.toptracks?.track?.length || 0} tracks, and ${relatedArtists?.length || 0} related artists for ${artistName}`);
-
-              // Filtrar álbumes y EPs del año actual
-              const recentAlbums = (albums || []).filter(album => {
-                const rDate = album.releaseDate || album.release_date;
-                const releaseYear = rDate ? parseInt(rDate.split('-')[0]) : null;
-
-                // Si hay fecha, verificar que sea del año actual
-                if (releaseYear) {
-                  return releaseYear === currentYear;
-                }
-
-                // Si NO hay fecha, asumir que es reciente (Last.fm a veces falla)
-                return true;
-              });
-
-              // Filtrar SINGLES/TRACKS del año actual con DETECCIÓN INTELIGENTE
-              const tracks = topTracks?.toptracks?.track || [];
-              const recentTracks = tracks
-                .map(t => normalizeItem(t, 'track'))
-                .filter(t => {
-                  if (!t.image || t.image === DEFAULT_IMAGE) return false;
-
-                  // 1. Fecha directa del año actual
-                  if (t.release_date) {
-                    const y = parseInt(t.release_date.split('-')[0]);
-                    return y === currentYear;
-                  }
-
-                  // 2. Coincide con un álbum verificado del año actual
-                  if (t.album && recentAlbums.some(album =>
-                    album.name.toLowerCase().trim() === t.album.toLowerCase().trim()
-                  )) {
-                    return true;
-                  }
-
-                  // 3. El nombre declara explícitamente el año actual
-                  if ((t.name && t.name.includes(String(currentYear))) || (t.album && t.album.includes(String(currentYear)))) {
-                    return true;
-                  }
-
-                  return false;
-                })
-                .slice(0, 8);
-
-
-              console.log(`[NewReleases] ${artistName}: ${recentAlbums.length} albums + ${recentTracks.length} tracks from ${currentYear}`);
-
-              // Combinar álbumes y singles
-              const allRecent = [
-                ...recentAlbums.map(album => normalizeItem(album, 'album')),
-                ...recentTracks
-              ];
-
-              // Si el artista tiene lanzamientos recientes, retornarlos
-              if (allRecent.length > 0) {
-                return allRecent.slice(0, 5); // Hasta 5 items por artista favorito
-              }
-
-              // Paso 2: Si NO tiene lanzamientos recientes, buscar artistas relacionados
-              console.log(`[NewReleases] No recent albums for ${artistName}, searching related artists...`);
-
-              try {
-                // Si no hay suficientes relacionados, usar los que hay
-                if (!relatedArtists?.length) return [];
-
-                // Buscar lanzamientos recientes de artistas relacionados (álbumes Y singles)
-                const relatedAlbumsPromises = relatedArtists.slice(0, 5).map(async (relatedArtist) => {
-                  try {
-                    const [relAlbums, relTracks] = await Promise.all([
-                      getArtistAlbums(relatedArtist.name, 10),
-                      artistGetTopTracks({ artist: relatedArtist.name, limit: 30 })
-                    ]);
-
-                    // Filtrar álbumes del año actual
-                    const relRecent = (relAlbums || []).filter(album => {
-                      const rDate = album.releaseDate || album.release_date;
-                      const releaseYear = rDate ? parseInt(rDate.split('-')[0]) : null;
-                      return releaseYear === currentYear;
-                    });
-
-                    // Tomar tracks del año actual.
-                    const relRecentTracks = (relTracks?.toptracks?.track || [])
-                      .map(t => normalizeItem(t, 'track'))
-                      .filter(t => {
-                        if (!t.image || t.image === DEFAULT_IMAGE) return false;
-                        if (t.release_date) {
-                          const y = parseInt(t.release_date.split('-')[0]);
-                          return y === currentYear;
-                        }
-                        if (t.album && relRecent.some(album => album.name.toLowerCase().trim() === t.album.toLowerCase().trim())) return true;
-                        if ((t.name && t.name.includes(String(currentYear))) || (t.album && t.album.includes(String(currentYear)))) return true;
-                        return false;
-                      })
-                      .slice(0, 5);
-
-                    const relAllRecent = [...relRecent.map(album => normalizeItem(album, 'album')), ...relRecentTracks];
-                    return relAllRecent.slice(0, 3);
-                  } catch { return []; }
-                });
-
-                const relatedAlbums = (await Promise.all(relatedAlbumsPromises)).flat();
-                return relatedAlbums;
-
-              } catch (err) {
-                return [];
-              }
-
-            } catch (err) {
-              return [];
-            }
-          });
-
-          const allNewAlbums = (await Promise.all(albumPromises)).flat();
-          const uniqueAlbums = uniqByKey(allNewAlbums, (album) => `${album.artist.toLowerCase()}-${album.name.toLowerCase()}`)
-            .filter(album => album.image && album.image !== DEFAULT_IMAGE);
-
-          // Si encontramos resultados, guardar en caché
-          if (uniqueAlbums.length > 0) {
-            const finalResults = pickRandomSample(uniqueAlbums, Math.min(uniqueAlbums.length, 10), `shuffle-newReleases-${sessionSeed}`);
-            try {
-              localStorage.setItem(CACHE_KEY, JSON.stringify({
-                timestamp: Date.now(),
-                data: finalResults
-              }));
-              console.log(`[NewReleases] 💾 Saved ${finalResults.length} items to cache`);
-            } catch (e) { console.warn('Cache write error', e); }
-            return finalResults;
-          }
-
-          return [];
-        })(),
-      ]);
-
-      if (controller.signal.aborted || reqIdRef.current !== requestId) return;
-
-      const trending = filterQualityTracks(uniqByKey((resolvedCharts?.tracks?.track || []).map((t) => normalizeItem(t, "track")), makeTrackKey)).filter((t) => t.image && t.image !== DEFAULT_IMAGE);
-
-      // Usar ref para evitar dependencia circular
-      const currentSections = sectionsRef.current;
-      let heroCandidate = null, heroSource = 'trending';
-
-      if (currentSections.smartRecommendations?.length > 0) {
-        heroCandidate = currentSections.smartRecommendations[0];
-        heroSource = 'smartRecommendations';
-      }
-      else if (currentSections.forYouTracks?.length > 0) {
-        heroCandidate = currentSections.forYouTracks[0];
-        heroSource = 'forYou';
-      }
-      else if (trending.length > 0) {
-        heroCandidate = trending[0];
-        heroSource = 'trending';
-      }
-
-      console.log(`[NewReleases] 🚨 FINAL RESULT: ${personalizedNewReleases?.length || 0} items to display`, personalizedNewReleases);
-      setSections((p) => ({ ...p, trending: p.trending?.length ? p.trending : trending.slice(0, 8), newReleases: personalizedNewReleases }));
-      if (heroCandidate && !heroRef.current) {
-        setHero({ ...heroCandidate, heroSource });
-      }
-      setLoading((p) => ({ ...p, critical: false, newReleases: false }));
-    } catch (e) { if (!controller.signal.aborted) { setLoading((p) => ({ ...p, critical: false, newReleases: false })); setError("No pudimos actualizar el catálogo. Tu música guardada sigue disponible."); } }
-  }, [loadStartupCatalog, makeController, sessionSeed, setHero, setSections, sessionSavedArtists, tasteProfile.topArtists, sessionFavorites, user?.uid]);
-
-  // Load ForYou
   const loadForYou = useCallback(async (requestId) => {
-    const controller = makeController("forYou");
-    setLoading((p) => ({ ...p, forYou: true }));
+    const controller = makeController('forYou');
+    setLoading(p => ({ ...p, forYou: true }));
     try {
-      if (!user) {
-        // Fallback para usuarios sin sesión real
-        throw new Error("No user for personalized feed");
-      }
-
-      // === GENERACIÓN DE TRACKS (Para completar la sección) ===
-      const topArtists = tasteProfile.topArtists?.length
-        ? tasteProfile.topArtists
-        : pickRandomSample(FALLBACK_ARTISTS, 1, `${sessionSeed}:for-you`);
-      const primary = topArtists[0];
-      const artistTracksRes = await artistGetTopTracks({ artist: primary, limit: 12 });
-      const tracks = filterQualityTracks((artistTracksRes?.toptracks?.track || []).map((t) => normalizeItem(t, "track")))
-        .filter((t) => t.image && t.image !== DEFAULT_IMAGE)
-        .slice(0, 10);
-
-      const artistsYouLike = topArtists.slice(0, 6).map((a) => normalizeItem({ id: `artist-${a}`, name: a, artist: a }, "artist"));
-
-      if (controller.signal.aborted || reqIdRef.current !== requestId) return;
-
-      setSections((prev) => ({
-        ...prev,
-        moodMixes: (prev.moodMixes || []).filter((item) => !String(item?.id || '').startsWith('feed-')),
-        // Lo que ya vio la persona no se sustituye cuando responde la red.
-        // Las sugerencias nuevas se añaden detrás y la fila permanece estable.
-        forYouTracks: uniqByKey([...(prev.forYouTracks || []), ...tracks], makeTrackKey).slice(0, 12),
-        artistsYouLike
-      }));
-
-    } catch (e) {
-      // Fallback silencioso
-    } finally {
-      if (!controller.signal.aborted) setLoading((p) => ({ ...p, forYou: false }));
-    }
-  }, [makeController, tasteProfile, user, setSections, sessionSeed]);
+      const artists = tasteProfile.topArtists.slice(0, 6);
+      const groups = await Promise.all(artists.map(artist => artistGetTopTracks({ artist, limit: 8 }).catch(() => null)));
+      const tracks = filterQualityTracks(groups.flatMap(group => (group?.toptracks?.track || []).map(track => normalizeItem(track, 'track'))));
+      const counts = new Map();
+      const selected = uniqByKey([...recentlyPlayed.slice(0, 3), ...tracks], makeTrackKey).filter(track => {
+        const key = normalizeDiscoveryText(track.artist); const count = counts.get(key) || 0; counts.set(key, count + 1); return count < 2;
+      }).slice(0, 12);
+      if (!controller.signal.aborted && reqIdRef.current === requestId) setSections(previous => ({ ...previous, forYouTracks: selected.length ? selected : startupTracksRef.current.slice(0, 12) }));
+    } finally { if (!controller.signal.aborted && reqIdRef.current === requestId) setLoading(p => ({ ...p, forYou: false })); }
+  }, [makeController, tasteProfile.topArtists, recentlyPlayed, setSections]);
 
   // Load Playlists
   const loadPlaylistsLazy = useCallback(async (requestId) => {
@@ -1161,24 +869,24 @@ export default function Feed() {
     const controller = makeController("recommendations");
     setLoading((p) => ({ ...p, recommendations: true }));
     try {
-      const personalizedSeeds = tasteProfile.seeds.slice(0, 3);
+      const personalizedSeeds = tasteProfile.seeds.slice(0, 8);
       const fallbackSeeds = pickRandomSample(
         FALLBACK_ARTISTS,
         Math.max(0, 3 - personalizedSeeds.length),
         `${sessionSeed}:fallback`,
       ).map((name, index) => ({ name, score: Math.max(1, 4 - index) }));
-      const seeds = [...personalizedSeeds, ...fallbackSeeds].slice(0, 3);
+      const seeds = [...personalizedSeeds, ...fallbackSeeds].slice(0, 8);
 
       // Cada semilla usa identidad exacta. Sus artistas relacionados aportan
       // descubrimiento real; sus propios temas solo completan una porción menor.
       const seedGroups = await Promise.all(seeds.map(async (seed) => {
         const [related, ownTracks] = await Promise.all([
-          getRelatedArtists(seed.name, 4).catch(() => []),
+          getRelatedArtists(seed.name, 8).catch(() => []),
           artistGetTopTracks({ artist: seed.name, limit: 6 }).catch(() => null),
         ]);
         return {
           seed,
-          related: (related || []).slice(0, 4),
+          related: (related || []).slice(0, 8),
           familiar: (ownTracks?.toptracks?.track || []).map((track) => ({
             track: normalizeItem(track, 'track'),
             source: 'familiar',
@@ -1192,12 +900,12 @@ export default function Feed() {
         const name = getDiscoveryArtistName(artist);
         const key = normalizeDiscoveryText(name);
         if (!key || relatedArtistMap.has(key)) return;
-        relatedArtistMap.set(key, { name, affinity: seed.score, rank });
+        relatedArtistMap.set(key, { name, affinity: seed.score, rank, seedArtist: seed.name });
       }));
 
       const relatedArtists = pickRandomSample(
         [...relatedArtistMap.values()],
-        6,
+        16,
         `${sessionSeed}:related-artists`,
       );
       const relatedGroups = await Promise.all(relatedArtists.map(async (artist) => {
@@ -1205,12 +913,13 @@ export default function Feed() {
         return (response?.toptracks?.track || []).map((track, rank) => ({
           track: normalizeItem(track, 'track'),
           source: 'related',
+          seedArtist: artist.seedArtist,
           affinity: artist.affinity,
           rank: artist.rank + rank,
         }));
       }));
 
-      const chartCandidates = (sectionsRef.current.trending || []).map((track, rank) => ({
+      const chartCandidates = (await loadStartupCatalog().catch(() => [])).map((track, rank) => ({
         track: normalizeItem(track, 'track'),
         source: 'chart',
         affinity: 0,
@@ -1238,25 +947,8 @@ export default function Feed() {
         sessionSeed,
         limit: 24,
       });
-      const qualityMode = getResolvedAudioQualityMode();
-      const validationLimit = Math.min(4, getPrefetchLimitForQuality(qualityMode, 'discovery'));
-      let rejectedRecommendationKeys = new Set();
-      if (getSmartPrefetchPreference() && validationLimit > 0) {
-        const tracksToValidate = rankedRecommendations.slice(0, validationLimit);
-        const validationResults = await playbackPrefetchService.prefetchMany(tracksToValidate, {
-          limit: validationLimit,
-          concurrency: 3,
-          qualityMode,
-          signal: controller.signal,
-        });
-        if (controller.signal.aborted || reqIdRef.current !== requestId) return;
-        rejectedRecommendationKeys = new Set(tracksToValidate
-          .filter((_, index) => !validationResults[index]?.audioUrl)
-          .map(makeTrackKey));
-      }
-      const recommendations = rankedRecommendations
-        .filter((track) => !rejectedRecommendationKeys.has(makeTrackKey(track)))
-        .slice(0, 18);
+      // Playback resolution happens on card intent; it must never gate discovery.
+      const recommendations = rankedRecommendations.slice(0, 18);
       const discoveredArtists = new Set(recommendations
         .map((track) => getDiscoveryArtistName(track.artist))
         .filter((artist) => artist && !tasteProfile.knownArtists.has(normalizeDiscoveryText(artist))));
@@ -1269,82 +961,49 @@ export default function Feed() {
           newArtistCount: discoveredArtists.size,
         },
       }));
+      if (recommendations.length) {
+        const refreshedHero = recommendations.slice(0, 8);
+        heroMixRef.current = refreshedHero;
+        screenStateCache.set(feedCacheKey, 'heroMix', refreshedHero);
+        setHeroMixInternal(refreshedHero);
+      }
       setLoading((p) => ({ ...p, recommendations: false }));
     } catch (error) {
       console.warn('[Discover] No se pudieron completar las recomendaciones:', error?.message);
       if (!controller.signal.aborted) setLoading((p) => ({ ...p, recommendations: false }));
     }
-  }, [makeController, sessionSeed, setSections, tasteProfile]);
+  }, [makeController, sessionSeed, setSections, tasteProfile, loadStartupCatalog, feedCacheKey]);
 
   // Load Recommended Albums
   const loadRecommendedAlbums = useCallback(async (requestId) => {
     const controller = makeController("albums"); setLoading((p) => ({ ...p, albums: true }));
     try {
-      const engagement = tasteEngagementSnapshotRef.current || {};
-      const followedArtistNames = sessionSavedArtists.map(getDiscoveryArtistName).filter(Boolean);
-      const likedArtistEntries = Object.entries(engagement.likedArtists || {}).sort((a, b) => b[1] - a[1]).slice(0, 8).map(([n]) => n);
-      const historyArtists = (listeningHistorySnapshotRef.current || []).slice(0, 20).map(h => getDiscoveryArtistName(h.artist)).filter(Boolean);
-      const artistsToAvoid = new Set(Object.entries(engagement.skippedArtists || {}).filter(([, c]) => c >= 2).map(([a]) => a.toLowerCase()));
       const savedAlbumKeys = new Set(sessionSavedAlbums.map(a => `${getDiscoveryArtistName(a.artist).toLowerCase()}::${(a.name || a.title || '').toLowerCase()}`));
-
-      const artistScores = new Map();
-      const WEIGHTS = { followed: 5, liked: 3, taste: 2, history: 1 };
-      followedArtistNames.forEach(a => artistScores.set(a, (artistScores.get(a) || 0) + WEIGHTS.followed));
-      likedArtistEntries.forEach(a => artistScores.set(a, (artistScores.get(a) || 0) + WEIGHTS.liked));
-      (tasteProfile.topArtists || []).forEach(a => artistScores.set(a, (artistScores.get(a) || 0) + WEIGHTS.taste));
-      historyArtists.forEach(a => artistScores.set(a, (artistScores.get(a) || 0) + WEIGHTS.history));
-
-      const rankedArtists = [...artistScores.entries()].filter(([n]) => !artistsToAvoid.has(n.toLowerCase())).sort((a, b) => b[1] - a[1]).map(([n]) => n);
-      const coreCount = 3, exploreCount = 1;
-      const rotatedCore = pickRandomSample(rankedArtists, rankedArtists.length, `${sessionSeed}:album-core`);
-      const coreArtists = rotatedCore.slice(0, coreCount);
-      const exploreArtists = pickRandomSample(FALLBACK_ARTISTS.filter(a => !coreArtists.some(c => c.toLowerCase() === a.toLowerCase()) && !artistsToAvoid.has(a.toLowerCase())), exploreCount, `albums-explore-${sessionSeed}`);
-      const artistsToQuery = coreArtists.length >= 2 ? [...coreArtists, ...exploreArtists] : pickRandomSample(FALLBACK_ARTISTS, 4, `albums-fb-${sessionSeed}`);
-
-      const albumGroups = await Promise.all(artistsToQuery.map(async (artistName) => { try { return ((await getArtistAlbums(artistName, 10)) || []).map(album => ({ ...album, artistQuery: artistName })); } catch { return []; } }));
+      const coreArtists = tasteProfile.topArtists.slice(0, 7);
+      const relatedGroups = await Promise.all(coreArtists.slice(0, 3).map(name => getRelatedArtists(name, 3).catch(() => [])));
+      const exploreArtists = [...new Set(relatedGroups.flat().map(getDiscoveryArtistName))].filter(name => !coreArtists.includes(name)).slice(0, 3);
+      const artistsToQuery = [...coreArtists, ...exploreArtists];
+      const albumGroups = await Promise.all(artistsToQuery.map(async (artistName) => { try { return ((await getArtistAlbums(artistName, 30)) || []).map(album => ({ ...album, artistQuery: artistName })); } catch { return []; } }));
       if (controller.signal.aborted || reqIdRef.current !== requestId) return;
 
       const seenAlbumKeys = new Set();
       const finalAlbums = albumGroups.flat()
         .filter(album => { if (!album.image) return false; const key = `${(album.artist || '').toLowerCase()}::${(album.name || '').toLowerCase()}`; if (savedAlbumKeys.has(key) || seenAlbumKeys.has(key)) return false; seenAlbumKeys.add(key); return true; })
         .sort((a, b) => { const typeOrder = { album: 0, ep: 1, single: 2 }; const tA = typeOrder[a.recordType] ?? 1, tB = typeOrder[b.recordType] ?? 1; if (tA !== tB) return tA - tB; return (b.releaseDate ? new Date(b.releaseDate).getTime() : 0) - (a.releaseDate ? new Date(a.releaseDate).getTime() : 0); });
-      const selectedAlbums = pickRandomSample(finalAlbums, 12, `${sessionSeed}:albums`)
-        .map(album => ({ id: album.id || `album-${album.name}-${album.artist}`, deezerId: album.deezerId || (/^\d+$/.test(String(album.id || '')) ? album.id : null), name: album.name, artist: album.artist || album.artistQuery, image: album.image, type: album.type || 'Álbum', recordType: album.recordType || 'album', releaseYear: album.releaseDate ? new Date(album.releaseDate).getFullYear() : null, trackCount: album.trackCount }));
+      const albumCounts = new Map();
+      const selectedAlbums = finalAlbums.filter(album => { const key = normalizeDiscoveryText(toArtistName(album.artist)); const count = albumCounts.get(key) || 0; albumCounts.set(key, count + 1); return count < 2; }).slice(0, 12)
+        .map(album => ({ id: album.id || `album-${album.name}-${album.artist}`, deezerId: album.deezerId || (/^\d+$/.test(String(album.id || '')) ? album.id : null), name: album.name, artist: album.artist || album.artistQuery, image: album.image, type: 'album', recordType: album.recordType || 'album', releaseYear: album.releaseDate ? new Date(album.releaseDate).getFullYear() : null, trackCount: album.trackCount }));
 
       setSections((prev) => ({ ...prev, recommendedAlbums: selectedAlbums })); setLoading((p) => ({ ...p, albums: false }));
     } catch { if (!controller.signal.aborted) setLoading((p) => ({ ...p, albums: false })); }
-  }, [makeController, sessionSavedArtists, sessionSavedAlbums, tasteProfile.topArtists, sessionSeed, setSections]);
+  }, [makeController, sessionSavedAlbums, tasteProfile.topArtists, setSections]);
 
   // Load Artist Spotlight
   // Load Artist Spotlight (Diverse User Favorites)
   const loadArtistSpotlight = useCallback(async (requestId) => {
     const controller = makeController("spotlight"); setLoading((p) => ({ ...p, spotlight: true }));
     try {
-      // 1. Build Diverse Candidate Pool
-      // Priorities: Favorites > Recent History > Fallback
-      const favorites = sessionSavedArtists.map(getDiscoveryArtistName).filter(Boolean);
-
-      const historyArtists = [];
-      const seenHistory = new Set();
-      (listeningHistorySnapshotRef.current || []).forEach(h => {
-        if (h.artist && !seenHistory.has(h.artist)) {
-          seenHistory.add(h.artist);
-          historyArtists.push(h.artist);
-        }
-      });
-
-      // Combine and Shuffle all unique artists the user likes
-      let candidateArtists = [...new Set([...favorites, ...historyArtists])];
-
-      // If user has few artists, mix in fallbacks but keep unique
-      if (candidateArtists.length < 15) {
-        candidateArtists = [...new Set([...candidateArtists, ...FALLBACK_ARTISTS])];
-      }
-
-      // 🎲 Shuffle completely to get different artists every time
-      const shuffledArtists = pickRandomSample(candidateArtists, 6, `spotlight-mix-${sessionSeed}`);
-
-      console.log(`[Feed] 🌟 Spotlight building mix from ${shuffledArtists.length} artists`);
+      const shuffledArtists = tasteProfile.topArtists.slice(0, 6);
 
       // 2. Fetch 1 Top Track per Artist (Parallel)
       // We limit concurrency to avoid overwhelming the API
@@ -1384,40 +1043,38 @@ export default function Feed() {
       console.warn("[Feed] Spotlight error:", err);
       if (!controller.signal.aborted) setLoading((p) => ({ ...p, spotlight: false }));
     }
-  }, [makeController, sessionSavedArtists, setSections, sessionSeed]);
+  }, [makeController, tasteProfile.topArtists, setSections]);
 
   // Revalidate All
   const revalidateAll = useCallback(async () => {
     const requestId = ++reqIdRef.current;
     ["critical", "forYou", "playlists", "party", "recommendations", "albums", "mood", "flashback", "global", "spotlight"].forEach(cancelKey);
+    if (Date.now() - startupCatalogFetchedAtRef.current >= 5 * 60 * 1000) startupCatalogPromiseRef.current = null;
     await Promise.allSettled([
-      loadCritical(requestId),
-      loadForYou(requestId),
-      loadSmartRecommendations(requestId),
+      loadCritical(requestId), loadForYou(requestId), loadSmartRecommendations(requestId),
+      loadPlaylistsLazy(requestId), loadRecommendedAlbums(requestId), loadArtistSpotlight(requestId),
     ]);
-    screenStateCache.set('feed', 'generationComplete', true);
     if (reqIdRef.current !== requestId) return;
+    screenStateCache.set(feedCacheKey, 'generationComplete', Date.now());
+  }, [cancelKey, loadCritical, loadForYou, loadPlaylistsLazy, loadSmartRecommendations, loadRecommendedAlbums, loadArtistSpotlight, feedCacheKey]);
 
-    // El contenido secundario no compite con el primer Play ni con las imágenes
-    // visibles. Se incorpora abajo, sin alterar la portada ya fijada.
-    window.setTimeout(() => {
-      Promise.allSettled([
-        loadPlaylistsLazy(requestId),
-        loadRecommendedAlbums(requestId),
-      ]);
-    }, 700);
-    window.setTimeout(() => {
-      loadArtistSpotlight(requestId);
-    }, 2200);
-  }, [cancelKey, loadCritical, loadForYou, loadPlaylistsLazy, loadSmartRecommendations, loadRecommendedAlbums, loadArtistSpotlight]);
-
-  const generationStartedRef = useRef(wasRestoredFromMemoryRef.current);
   useEffect(() => {
-    if (userLoading || generationStartedRef.current) return;
-    generationStartedRef.current = true;
-    screenStateCache.set('feed', 'generationStarted', true);
-    revalidateAll();
+    if (userLoading) return;
+    const controllers = abortRef.current;
+    const timer = window.setTimeout(() => { revalidateAll(); }, 350);
+    return () => {
+      window.clearTimeout(timer);
+      reqIdRef.current += 1;
+      Object.values(controllers).forEach(controller => controller.abort());
+    };
   }, [userLoading, revalidateAll]);
+
+  useEffect(() => {
+    const refresh = () => { if (!document.hidden && !userLoading) revalidateAll(); };
+    const timer = window.setInterval(refresh, 30 * 60 * 1000);
+    document.addEventListener('visibilitychange', refresh);
+    return () => { window.clearInterval(timer); document.removeEventListener('visibilitychange', refresh); };
+  }, [revalidateAll, userLoading]);
 
   // Stable callbacks
   // 🎵 handleNewReleasesClick: Ahora usa Radio Instantánea (no pasa contextQueue)
@@ -1440,16 +1097,14 @@ export default function Feed() {
       forYouTracks: instantPlayTracks.length > 0
         ? 'Tus favoritos y escuchas recientes, listos para sonar'
         : 'Una selección rápida para empezar',
-      newReleases: sessionSavedArtists.length > 0 || tasteProfile.topArtists?.length > 0
-        ? 'Nuevos lanzamientos de tus artistas favoritos'
-        : 'Los lanzamientos más recientes',
+      newReleases: 'Lanzamientos verificados de los últimos 60 días',
       smartRecommendations: sections.recommendationMeta?.seedNames?.length
         ? `Artistas relacionados con ${sections.recommendationMeta.seedNames.slice(0, 2).join(' y ')} · ${sections.recommendationMeta.newArtistCount || 0} artistas por descubrir`
         : 'Canciones parecidas a tus gustos, sin repetir lo de siempre',
       recentlyPlayed: 'De tu historial reciente',
       topPlaylists: tasteProfile.topArtists?.length > 0 ? `Con artistas como ${tasteProfile.topArtists.slice(0, 2).join(' y ')}` : 'Playlists populares',
-      partyPlaylists: 'Para tus momentos de fiesta', trending: 'Lo más escuchado ahora',
-      recommendedAlbums: sessionSavedArtists.length > 0 ? 'De artistas que sigues' : 'Álbumes que te pueden gustar',
+      partyPlaylists: 'Para tus momentos de fiesta', trending: 'Del chart de Deezer, seleccionado para tus gustos',
+      recommendedAlbums: 'Para explorar tus gustos recientes y artistas relacionados',
       moodMixes: tasteProfile.topArtists?.length > 0
         ? `Perfecto para ${timeOfDay === 'morning' ? 'empezar el día' : timeOfDay === 'night' ? 'cerrar el día' : 'este momento'} con ${tasteProfile.topArtists[0]}`
         : `Perfecto para ${timeOfDay === 'morning' ? 'empezar el día' : timeOfDay === 'night' ? 'cerrar el día' : 'este momento'}`,
@@ -1484,19 +1139,28 @@ export default function Feed() {
         />
         <div className="feed-hero-top">
           <div className="feed-hero-greeting">
-            <div className="feed-hero-date">{todayText}</div>
+            <div className="feed-hero-date">TU FEED <span aria-hidden="true"> / </span> {todayText}</div>
             <h1 className="feed-hero-title">Hola, {displayName}</h1>
-            <p className="feed-hero-sub">{tasteProfile.sampleSize >= 5 ? "Tu música lista. Elige una y toca play." : "Empieza con una canción; aprenderemos de tus gustos."}</p>
+            <p className="feed-hero-sub">{tasteProfile.sampleSize >= 5 ? "Lo que te gusta hoy. Y lo que te va a gustar mañana." : "Escucha lo que te mueve. Tu feed crecerá contigo."}</p>
           </div>
+          <button type="button" className="feed-refresh" onClick={() => { startupCatalogPromiseRef.current = null; startupCatalogFetchedAtRef.current = 0; revalidateAll(); }} disabled={loading.critical || loading.forYou || loading.recommendations}>
+            <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="1.8" aria-hidden="true"><path d="M20 7v5h-5M4 17v-5h5" /><path d="M6 7a7 7 0 0 1 12-1l2 6M4 12l2 6a7 7 0 0 0 12-1" /></svg>
+            {loading.critical || loading.forYou || loading.recommendations ? 'Actualizando' : 'Actualizar'}
+          </button>
         </div>
+        <div className="feed-hero-label">Tu próxima canción</div>
         <HeroRow
           items={heroMix}
           onItemClick={handlePlay}
           onActiveItemChange={handleHeroScrollChange}
           playbackPrefetch={playbackPrefetch}
-          isLoading={heroMix.length === 0}
+          isLoading={heroMix.length === 0 && (loading.critical || loading.forYou)}
         />
-        {error && <div className="feed-error">{error}</div>}
+        {!heroMix.length && !loading.critical && !loading.forYou && <p className="feed-empty">No pudimos preparar tu selección. Usa Actualizar para intentarlo de nuevo.</p>}
+        {error && <div className="feed-error" role="status">{error}</div>}
+        <nav className="feed-jump-links" aria-label="Explorar tu feed">
+          <a href="#feed-smartRecommendations">Descubrir</a><a href="#feed-newReleases">Novedades</a><a href="#feed-trending">Popular ahora</a><a href="#feed-recommendedAlbums">Álbumes</a>
+        </nav>
       </header>
 
       {/* RADIO SECTION - Artistas Favoritos con Radio Infinita */}
@@ -1557,7 +1221,7 @@ export default function Feed() {
         const subtitle = getSectionSubtitle(key);
         switch (key) {
           case 'forYouTracks': return <Row key={key} sectionKey="forYouTracks" title={title} subtitle={subtitle} items={sections.forYouTracks} onItemClick={handleForYouTracksClick} isLoading={loading.forYou && !sections.forYouTracks.length} playbackPrefetch={playbackPrefetch} />;
-          case 'newReleases': return <Row key={key} sectionKey="newReleases" title={title} subtitle={subtitle} items={sections.newReleases} onItemClick={handleNewReleasesClick} isLoading={loading.newReleases} playbackPrefetch={playbackPrefetch} />;
+          case 'newReleases': return <Row key={key} sectionKey="newReleases" title={title} subtitle={subtitle} items={sections.newReleases} onItemClick={handleNewReleasesClick} isLoading={loading.newReleases} emptyMessage="No encontramos lanzamientos verificados de los últimos 60 días. Vuelve pronto para descubrir novedades de tus artistas." playbackPrefetch={playbackPrefetch} />;
           case 'smartRecommendations':
             return <Row key={key} sectionKey="smartRecommendations" title={title} subtitle={subtitle} items={sections.smartRecommendations} onItemClick={handleRecommendationsClick} variant="recommended" isLoading={loading.recommendations} playbackPrefetch={playbackPrefetch} />;
           case 'recentlyPlayed': return recentlyPlayed.length > 0 ? <Row key={key} sectionKey="recentlyPlayed" title={title} subtitle={subtitle} items={recentlyPlayed} onItemClick={handleRecentlyPlayedClick} variant="recent" playbackPrefetch={playbackPrefetch} /> : null;
@@ -1576,7 +1240,7 @@ export default function Feed() {
 
       {/* Toast Notification */}
       {toast && (
-        <div className="feed-toast-container">
+        <div className="feed-toast-container" role="status" aria-live="polite">
           <div
             className="feed-toast"
             style={{ '--toast-img': `url(${toast.image || DEFAULT_IMAGE})` }}

@@ -50,3 +50,54 @@ describe('discoveryRecommendations', () => {
         expect(new Set(first.map((item) => item.artist)).size).toBeGreaterThanOrEqual(3);
     });
 });
+
+describe('recent taste and breadth regressions', () => {
+    const now = Date.UTC(2026, 8, 5);
+    it('makes a current listening shift outrank a large old collection', () => {
+        const profile = buildDiscoveryTasteProfile({
+            favorites: Array.from({ length: 100 }, (_, i) => track(`Old ${i}`, 'Old Artist')),
+            savedArtists: ['Old Artist'],
+            listeningHistory: [
+                { ...track('Fresh 1', 'New Artist'), timestamp: now },
+                { ...track('Fresh 2', 'New Artist'), timestamp: now - 86400000 },
+                { ...track('Old listen', 'Old Artist'), timestamp: now - 90 * 86400000 },
+            ], now,
+        });
+        expect(profile.seeds[0].name).toBe('New Artist');
+        expect(profile.seeds[0].recentScore).toBeGreaterThan(40);
+    });
+
+    it('uses timestamps even when history is unsorted and distinguishes changed listening', () => {
+        const old = { ...track('Past', 'Old'), timestamp: now - 180 * 86400000 };
+        const recent = { ...track('Current', 'New'), timestamp: now };
+        const first = buildDiscoveryTasteProfile({ listeningHistory: [old, recent], now });
+        const next = buildDiscoveryTasteProfile({ listeningHistory: [old, { ...recent, name: 'Different' }], now });
+        expect(first.seeds[0].name).toBe('New');
+        expect(first.signature).not.toBe(next.signature);
+    });
+
+    it('does not erase artist and title identities written in non-Latin scripts', () => {
+        expect(getDiscoveryTrackKey(track('봄날', '방탄소년단'))).toBe('방탄소년단::봄날');
+        expect(getDiscoveryTrackKey(track('봄날', '방탄소년단'))).not.toBe(getDiscoveryTrackKey(track('불타오르네', '방탄소년단')));
+    });
+
+    it('deduplicates by artist and title, and spreads related taste origins early', () => {
+        const candidates = Array.from({ length: 7 }, (_, i) => ({
+            track: track(`Song ${i}`, `Artist ${i}`), source: 'related', seedArtist: 'First Seed', affinity: 20,
+        }));
+        candidates.push({ track: track('New Style', 'Explorer'), source: 'related', seedArtist: 'Other Seed', affinity: 15 });
+        candidates.push({ ...candidates[0], affinity: 1 });
+        const result = selectDiscoveryTracks({ candidates, limit: 8 });
+        expect(result.slice(0, 3).some((item) => item.artist === 'Explorer')).toBe(true);
+        expect(new Set(result.map(getDiscoveryTrackKey)).size).toBe(result.length);
+    });
+
+    it('never uses a shared song title as artist affinity or identity', () => {
+        const profile = buildDiscoveryTasteProfile({ favorites: [track('Hello', 'Adele')], now });
+        const result = selectDiscoveryTracks({ profile, candidates: [
+            { track: track('Hello', 'Adele'), source: 'familiar' },
+            { track: track('Hello', 'Lionel Richie'), source: 'related' },
+        ] });
+        expect(result.map((item) => item.artist)).toEqual(['Lionel Richie']);
+    });
+});

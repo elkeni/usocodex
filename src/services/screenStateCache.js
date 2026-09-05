@@ -7,6 +7,7 @@ const listeners = new Map();
 // Clave para localStorage (persistencia entre recargas)
 const STORAGE_KEY = 'app_screen_state_v1';
 const VOLATILE_SCREENS = new Set(['feed']);
+const isVolatileScreen = (screen) => VOLATILE_SCREENS.has(screen) || screen.startsWith('feed:');
 
 // Cargar estado inicial del localStorage si existe
 try {
@@ -15,7 +16,7 @@ try {
         const restored = JSON.parse(stored);
         // Descubrir debe vivir sólo durante la ejecución actual: conservarlo
         // al navegar, pero generar una portada nueva al cerrar y abrir la app.
-        VOLATILE_SCREENS.forEach((screen) => delete restored[screen]);
+        Object.keys(restored).filter(isVolatileScreen).forEach((screen) => delete restored[screen]);
         Object.assign(cache, restored);
     }
 } catch (e) {
@@ -84,7 +85,7 @@ export const useAppShutdown = () => {
         const handleUnload = () => {
             try {
                 const persistentCache = Object.fromEntries(
-                    Object.entries(cache).filter(([screen]) => !VOLATILE_SCREENS.has(screen))
+                    Object.entries(cache).filter(([screen]) => !isVolatileScreen(screen))
                 );
                 localStorage.setItem(STORAGE_KEY, JSON.stringify(persistentCache));
             } catch (e) {
