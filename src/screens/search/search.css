@@ -1189,7 +1189,6 @@
 .search-page .recent-title { font-size: 18px; }
 .search-page button:focus-visible, .search-page [role="button"]:focus-visible { outline: 2px solid #ff94b8; outline-offset: 2px; }
 @media (max-width: 599px) {
-    .search-brandline > span:last-child { display: none; }
     .search-page .cards-grid, .search-page .cards-scroll { grid-template-columns: minmax(0, 1fr); }
     .search-page .search-content { padding-bottom: calc(160px + env(safe-area-inset-bottom)); }
     .search-page .search-results-heading h2 { font-size: 18px; }

@@ -1020,7 +1020,7 @@ export default function Search() {
                 className="search-page-header"
                 isScrolled={isScrolled}
             >
-                <div className="search-brandline"><span>DESCUBRE</span><span>Tu próximo favorito empieza aquí</span></div>
+                <div className="search-brandline"><span>DESCUBRE</span></div>
                 {/* Search Input */}
                 <form className="search-input-container" role="search" onSubmit={submitSearch}>
                     <div className="search-capsule">
