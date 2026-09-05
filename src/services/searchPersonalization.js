@@ -75,7 +75,8 @@ const getSearchFields = (item, type) => {
     if (type === 'artist') return { primary: item?.name, secondary: '' };
     if (type === 'album') return { primary: item?.name, secondary: item?.artist };
     if (type === 'playlist') return { primary: item?.name, secondary: item?.creator };
-    return { primary: item?.name || item?.title, secondary: `${getTrackArtist(item)} ${item?.album || ''}` };
+    const album = typeof item?.album === 'object' ? item.album.title || item.album.name || '' : item?.album || '';
+    return { primary: item?.name || item?.title, secondary: `${getTrackArtist(item)} ${album}` };
 };
 
 const getItemArtist = (item, type) => {
@@ -86,6 +87,7 @@ const getItemArtist = (item, type) => {
 
 const textRelevance = (item, query, type) => {
     const normalizedQuery = normalizeDiscoveryText(query);
+    if (!normalizedQuery) return 0;
     const tokens = normalizedQuery.split(' ').filter(Boolean);
     const { primary: rawPrimary, secondary: rawSecondary } = getSearchFields(item, type);
     const primary = normalizeDiscoveryText(rawPrimary);

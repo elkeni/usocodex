@@ -1,6 +1,6 @@
 // @vitest-environment jsdom
 import { afterEach, describe, expect, it, vi } from 'vitest';
-import { chartGetTopTracks, getArtistAlbums } from './unifiedService';
+import { chartGetTopTracks, getArtistAlbums, searchGlobal } from './unifiedService';
 
 afterEach(() => vi.restoreAllMocks());
 
@@ -37,4 +37,16 @@ describe('fresh discovery catalog', () => {
     expect((await chartGetTopTracks({ limit: 20 })).tracks.track[0].name).toBe('Recovered');
     expect(fetchMock).toHaveBeenCalledTimes(2);
   });
+  it('distinguishes search outages from empty matches and allows retry', async () => {
+    vi.spyOn(globalThis, 'fetch').mockResolvedValueOnce({ ok: false, status: 503 })
+      .mockResolvedValueOnce({ ok: true, json: async () => ({ data: [] }) });
+    await expect(searchGlobal('test', 'track', 12)).rejects.toThrow('503');
+    await expect(searchGlobal('test', 'track', 12)).resolves.toEqual([]);
+  });
+
+  it('reports catalog errors instead of caching an empty search', async () => {
+    vi.spyOn(globalThis, 'fetch').mockResolvedValue({ ok: true, json: async () => ({ error: { message: 'Quota exceeded' } }) });
+    await expect(searchGlobal('test', 'artist', 10)).rejects.toThrow('Quota exceeded');
+  });
+
 });

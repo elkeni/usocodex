@@ -91,13 +91,13 @@ const DeezerClient = {
         const timeoutId = setTimeout(() => controller.abort(), 10000);
         try {
             const res = await fetch(proxyUrl, { signal: controller.signal });
-            if (!res.ok) return { data: [] };
+            if (!res.ok) return { data: [], error: { message: `Catalog HTTP ${res.status}` } };
             const data = await res.json();
-            if (data.error) return { data: [] };
+            if (data.error) return { data: [], error: data.error };
             return data;
         } catch (e) {
             console.warn('[DeezerClient] Proxy error:', e.message);
-            return { data: [] };
+            return { data: [], error: { message: e.message } };
         } finally {
             clearTimeout(timeoutId);
         }
@@ -139,6 +139,7 @@ const DeezerClient = {
         // [MOD] NO CLEAN: Usar query cruda del usuario. El backend/Deezer sabe buscar.
         const q = query;
         const data = await this._fetch(`/search/${type}?q=${encodeURIComponent(q)}&limit=${limit}`);
+        if (data?.error) throw new Error(data.error.message || 'Catalog unavailable');
         return data?.data || [];
     },
 

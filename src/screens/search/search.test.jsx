@@ -227,4 +227,58 @@ describe('Búsqueda y reproducción esenciales', () => {
     expect(await screen.findByText('Luz de prueba', {}, { timeout: 2500 })).toBeInTheDocument();
     expect(screen.getByText(/Algunos tipos de resultado no pudieron cargarse/i)).toBeInTheDocument();
   });
+  it('muestra canciones sin esperar a una categoría lenta', async () => {
+    let finishArtists;
+    searchGlobalMock.mockImplementation((_query, type) => type === 'artist'
+      ? new Promise(resolve => { finishArtists = resolve; })
+      : Promise.resolve(type === 'track' ? [trackResult] : []));
+    const user = userEvent.setup();
+    render(<MemoryRouter><Search /></MemoryRouter>);
+    await user.type(screen.getByRole('searchbox'), 'Luz');
+    expect(await screen.findByText('Luz de prueba')).toBeInTheDocument();
+    expect(screen.getByText(/Buscando en todo el catálogo/)).toBeInTheDocument();
+    finishArtists([artistResult]);
+    await waitFor(() => expect(screen.queryByText(/Buscando en todo el catálogo/)).not.toBeInTheDocument());
+  });
+
+  it('descarta respuestas pendientes al borrar y no abre el teclado al entrar', async () => {
+    let finishTrack;
+    searchGlobalMock.mockImplementation((_query, type) => type === 'track'
+      ? new Promise(resolve => { finishTrack = resolve; }) : Promise.resolve([]));
+    const user = userEvent.setup();
+    render(<MemoryRouter><Search /></MemoryRouter>);
+    const input = screen.getByRole('searchbox');
+    expect(input).not.toHaveFocus();
+    await user.type(input, 'Luz');
+    await waitFor(() => expect(finishTrack).toBeTypeOf('function'));
+    await user.clear(input);
+    finishTrack([trackResult]);
+    await waitFor(() => expect(screen.getByText('Encuentra tu sonido')).toBeInTheDocument());
+    expect(screen.queryByText('Luz de prueba')).not.toBeInTheDocument();
+  });
+
+  it('distingue consultas de catálogos con escritura no latina', async () => {
+    const user = userEvent.setup();
+    render(<MemoryRouter><Search /></MemoryRouter>);
+    const input = screen.getByRole('searchbox');
+    await user.type(input, '東京');
+    await screen.findByText('Luz de prueba');
+    await user.clear(input);
+    await user.type(input, '大阪');
+    await waitFor(() => expect(searchGlobalMock).toHaveBeenCalledWith('大阪', 'track', 12));
+  });
+
+  it('amplía una categoría bajo demanda', async () => {
+    searchGlobalMock.mockImplementation(async (_query, type, limit) => type === 'track'
+      ? Array.from({ length: limit }, (_, i) => ({ ...trackResult, id: `track-${i}`, title: `Luz ${i}` })) : []);
+    const user = userEvent.setup();
+    render(<MemoryRouter><Search /></MemoryRouter>);
+    await user.type(screen.getByRole('searchbox'), 'Luz');
+    await screen.findByText('Luz 0');
+    await user.click(screen.getByRole('button', { name: 'Canciones', exact: true }));
+    await user.click(await screen.findByRole('button', { name: 'Ampliar resultados' }));
+    await waitFor(() => expect(searchGlobalMock).toHaveBeenCalledWith('Luz', 'track', 60));
+    expect(await screen.findByText('Luz 59')).toBeInTheDocument();
+  });
+
 });
