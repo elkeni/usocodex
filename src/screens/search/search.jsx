@@ -31,7 +31,6 @@ import { getAlbumPath } from '../../services/albumNavigation';
 import { getArtistPath } from '../../services/artistIdentity';
 import {
     buildSearchTasteProfile,
-    getPersonalizedSearchSuggestions,
     rankPersonalizedSearchResults,
 } from '../../services/searchPersonalization';
 import { getArtworkImageProps, getBestArtworkUrl, resizeArtworkUrl } from '../../services/imageQuality';
@@ -380,10 +379,6 @@ export default function Search() {
         }
     }, [getVibeMatchingData]);
     const searchTasteProfile = useMemo(() => buildSearchTasteProfile(tasteData), [tasteData]);
-    const personalizedSuggestions = useMemo(
-        () => getPersonalizedSearchSuggestions(searchTasteProfile, 6),
-        [searchTasteProfile]
-    );
 
     // Referencias
     const inputRef = useRef(null);
@@ -1102,32 +1097,6 @@ export default function Search() {
                         <span>{searchNotice}</span>
                         <button type="button" onClick={() => performSearch(query)}>Reintentar</button>
                     </div>
-                )}
-
-                {!isLoading && !hasSearched && !query.trim() && (
-                    <section className="taste-search-suggestions" aria-labelledby="taste-search-title">
-                        <div className="taste-search-heading">
-                            <div>
-                                <h2 id="taste-search-title">{personalizedSuggestions.length ? 'Según tus gustos' : 'Encuentra tu sonido'}</h2>
-                                <p>{personalizedSuggestions.length ? 'Una nueva búsqueda, con tus artistas como punto de partida.' : 'Explora un estilo. Tus favoritos y escuchas harán este espacio más tuyo.'}</p>
-                            </div>
-                            <FaHeart aria-hidden="true" />
-                        </div>
-                        <div className="taste-search-chips">
-                            {(personalizedSuggestions.length ? personalizedSuggestions : ['Indie pop', 'Rock alternativo', 'R&B', 'Electrónica', 'Salsa', 'Jazz']).map((artist, index) => (
-                                <button
-                                    type="button"
-                                    key={artist}
-                                    onClick={() => executeTasteSuggestion(artist)}
-                                    aria-label={`Buscar música de ${artist}`}
-                                >
-                                    <span className="taste-tile-icon" aria-hidden="true">{String(index + 1).padStart(2, '0')}</span>
-                                    <span className="taste-tile-name">{artist}<small>{personalizedSuggestions.length ? 'Tu punto de partida' : 'Explorar estilo'}</small></span>
-                                    <FaSearch aria-hidden="true" />
-                                </button>
-                            ))}
-                        </div>
-                    </section>
                 )}
 
                 {/* =====================================================

@@ -1034,106 +1034,6 @@
     cursor: pointer;
 }
 
-/* =============================================================================
-   SEARCH PERSONALIZATION — MOBILE FIRST
-   ============================================================================= */
-.taste-search-suggestions {
-    position: relative;
-    overflow: hidden;
-    margin: 8px 0 24px;
-    padding: 16px;
-    border: 1px solid rgba(255, 255, 255, 0.09);
-    border-radius: 18px;
-    background:
-        radial-gradient(circle at 92% 0%, rgba(233, 30, 99, 0.2), transparent 42%),
-        linear-gradient(145deg, rgba(255, 255, 255, 0.08), rgba(255, 255, 255, 0.035));
-    box-shadow: 0 16px 36px rgba(0, 0, 0, 0.18);
-}
-
-.taste-search-heading {
-    display: flex;
-    align-items: flex-start;
-    justify-content: space-between;
-    gap: 12px;
-    margin-bottom: 14px;
-}
-
-.taste-search-heading h2 {
-    margin: 0 0 4px;
-    color: white;
-    font-size: 17px;
-    line-height: 1.2;
-    letter-spacing: -0.02em;
-}
-
-.taste-search-heading p {
-    margin: 0;
-    max-width: 270px;
-    color: rgba(255, 255, 255, 0.58);
-    font-size: 12px;
-    line-height: 1.4;
-}
-
-.taste-search-heading > svg {
-    flex: 0 0 auto;
-    color: #ff3c7d;
-    filter: drop-shadow(0 0 10px rgba(255, 45, 120, 0.38));
-}
-
-.taste-search-chips {
-    display: flex;
-    gap: 8px;
-    margin: 0 -16px -2px;
-    padding: 0 16px 4px;
-    overflow-x: auto;
-    overscroll-behavior-inline: contain;
-    scroll-snap-type: inline proximity;
-    scrollbar-width: none;
-    -webkit-overflow-scrolling: touch;
-}
-
-.taste-search-chips::-webkit-scrollbar {
-    display: none;
-}
-
-.taste-search-chips button {
-    display: inline-flex;
-    align-items: center;
-    gap: 8px;
-    flex: 0 0 auto;
-    min-height: 42px;
-    max-width: 210px;
-    padding: 0 14px;
-    border: 1px solid rgba(255, 255, 255, 0.1);
-    border-radius: 999px;
-    background: rgba(7, 7, 9, 0.58);
-    color: rgba(255, 255, 255, 0.92);
-    font: inherit;
-    font-size: 13px;
-    font-weight: 650;
-    cursor: pointer;
-    scroll-snap-align: start;
-    transition: transform 0.15s ease, background 0.15s ease;
-}
-
-.taste-search-chips button span {
-    overflow: hidden;
-    text-overflow: ellipsis;
-    white-space: nowrap;
-}
-
-.taste-search-chips button svg {
-    flex: 0 0 auto;
-    color: #ff4b87;
-    font-size: 12px;
-}
-
-.taste-search-chips button:active {
-    transform: scale(0.97);
-    background: rgba(255, 255, 255, 0.12);
-}
-
-.taste-search-chips button:focus-visible,
 .search-card-wrapper:focus-within {
     outline: 2px solid #ff2d78;
     outline-offset: 2px;
@@ -1240,11 +1140,6 @@
         --search-padding: 12px;
     }
 
-    .taste-search-suggestions {
-        padding: 14px;
-        border-radius: 16px;
-    }
-
     .search-personalized-badge,
     .search-card-personalization {
         display: none;
@@ -1273,16 +1168,6 @@
 .search-intro h1 { color: #faf7ff; font-size: clamp(34px, 5vw, 60px); font-weight: 750; letter-spacing: -.055em; line-height: 1.08; margin: 12px 0; }
 .search-intro em { font-style: normal; color: #ff94b8; }
 .search-intro p { color: #b7b0c3; font-size: 14px; line-height: 1.6; margin: 0; }
-.search-page .taste-search-suggestions { padding: clamp(16px, 3vw, 28px); border-radius: 24px; margin-bottom: 28px; background: radial-gradient(ellipse at 100% 0%, #51203d80, transparent 65%), linear-gradient(130deg, #272334, #17151f); }
-.search-page .taste-search-heading { margin-bottom: 20px; }
-.search-page .taste-search-heading h2 { font-size: 20px; }
-.search-page .taste-search-heading p { max-width: 480px; font-size: 13px; color: #bfb6cb; line-height: 1.5; }
-.search-page .taste-search-chips { display: grid; grid-template-columns: repeat(3, minmax(0, 1fr)); gap: 10px; margin: 0; padding: 3px; overflow: visible; }
-.search-page .taste-search-chips button { max-width: none; min-width: 0; width: 100%; min-height: 84px; padding: 12px; border-radius: 14px; background: #ffffff08; text-align: left; }
-.search-page .taste-search-chips button:hover { background: #ffffff12; border-color: #ff94b855; }
-.search-page .taste-tile-icon { display: grid; place-items: center; flex: 0 0 36px; height: 40px; border-radius: 10px; background: linear-gradient(140deg, #9c496b55, #5c4d9755); color: #ffc4d8; font-size: 14px; }
-.search-page .taste-tile-name { flex: 1; min-width: 0; white-space: normal; overflow-wrap: anywhere; line-height: 1.35; }
-.taste-tile-name small { display: block; font-size: 10px; font-weight: 400; color: #bdb2c9; margin-top: 5px; }
 .search-page .search-results-heading { display: flex; flex-wrap: wrap; align-items: baseline; justify-content: space-between; gap: 8px; margin: 6px 0 18px; }
 .search-results-heading h2 { margin: 0; font-size: 20px; color: #fff; overflow-wrap: anywhere; }
 .search-results-heading > span, .search-hint { color: #bbb4c5; font-size: 12px; }
@@ -1305,11 +1190,6 @@
 .search-page button:focus-visible, .search-page [role="button"]:focus-visible { outline: 2px solid #ff94b8; outline-offset: 2px; }
 @media (max-width: 599px) {
     .search-brandline > span:last-child { display: none; }
-    .search-page .taste-search-chips { grid-template-columns: repeat(2, minmax(0, 1fr)); }
-    .search-page .taste-search-chips button { min-height: 94px; position: relative; align-items: flex-start; flex-direction: column; gap: 8px; }
-    .search-page .taste-tile-icon { display: none; }
-    .search-page .taste-search-chips button > svg { position: absolute; right: 12px; bottom: 12px; opacity: .65; }
-    .search-page .taste-tile-name { padding-right: 4px; font-size: 14px; }
     .search-page .cards-grid, .search-page .cards-scroll { grid-template-columns: minmax(0, 1fr); }
     .search-page .search-content { padding-bottom: calc(160px + env(safe-area-inset-bottom)); }
     .search-page .search-results-heading h2 { font-size: 18px; }

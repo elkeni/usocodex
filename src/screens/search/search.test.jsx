@@ -80,18 +80,16 @@ describe('Búsqueda y reproducción esenciales', () => {
     expect(screen.queryByText('Top Latinoamérica')).not.toBeInTheDocument();
   });
 
-  it('ofrece accesos de búsqueda basados en los gustos sin llenar la pantalla de tarjetas', async () => {
+  it('mantiene la portada limpia aunque exista un perfil de gustos', () => {
     userContextMock.getVibeMatchingData.mockReturnValue({
       savedArtists: [{ name: 'Twenty One Pilots' }],
       favorites: [{ name: 'SOMA', artist: 'Skrillex' }],
     });
-    const user = userEvent.setup();
     render(<MemoryRouter><Search /></MemoryRouter>);
 
-    expect(screen.getByText('Según tus gustos')).toBeInTheDocument();
-    await user.click(screen.getByRole('button', { name: 'Buscar música de Twenty One Pilots' }));
-    await waitFor(() => expect(searchGlobalMock).toHaveBeenCalledWith('Twenty One Pilots', 'track', 12));
-    expect(JSON.parse(localStorage.getItem('musicalol_recent_searches_v3'))).toEqual(['Twenty One Pilots']);
+    expect(screen.queryByText('Según tus gustos')).not.toBeInTheDocument();
+    expect(screen.queryByRole('button', { name: 'Buscar música de Twenty One Pilots' })).not.toBeInTheDocument();
+    expect(screen.getByText('Encuentra lo que')).toBeInTheDocument();
   });
 
   it('no oculta el historial cuando la barra pierde el foco', async () => {
@@ -253,7 +251,7 @@ describe('Búsqueda y reproducción esenciales', () => {
     await waitFor(() => expect(finishTrack).toBeTypeOf('function'));
     await user.clear(input);
     finishTrack([trackResult]);
-    await waitFor(() => expect(screen.getByText('Encuentra tu sonido')).toBeInTheDocument());
+    await waitFor(() => expect(screen.getByText('Encuentra lo que')).toBeInTheDocument());
     expect(screen.queryByText('Luz de prueba')).not.toBeInTheDocument();
   });
 
