@@ -1,3 +1,4 @@
+import { getTrackArtists } from './artistIdentity';
 const BAD_VARIANT = /\b(cover|karaoke|tribute|nightcore|slowed|reverb|8d|sped\s*up)\b/i;
 const DAY = 86400000;
 
@@ -42,11 +43,12 @@ export const buildDiscoveryTasteProfile = ({
     const recentScores = new Map();
     const displayNames = new Map();
     const add = (map, value, weight) => {
-        const name = getDiscoveryArtistName(value);
+        for (const { name } of getTrackArtists(value?.artist || value?.artists ? value : { artist: value })) {
         const key = normalizeDiscoveryText(name);
-        if (!key || !Number.isFinite(weight) || weight <= 0) return;
+        if (!key || !Number.isFinite(weight) || weight <= 0) continue;
         displayNames.set(key, name);
         map.set(key, (map.get(key) || 0) + weight);
+        }
     };
     const addCollection = (items, weight, cap) => {
         const counts = new Map();
@@ -55,9 +57,9 @@ export const buildDiscoveryTasteProfile = ({
             const key = getDiscoveryTrackKey(item) || normalizeDiscoveryText(getDiscoveryArtistName(item?.artist));
             if (!key || seen.has(key)) return;
             seen.add(key);
-            add(counts, item?.artist, 1);
+            add(counts, item, 1);
         });
-        counts.forEach((count, key) => add(scores, displayNames.get(key), Math.min(cap, weight * Math.sqrt(count))));
+        counts.forEach((count, key) => add(scores, { artists: [{ name: displayNames.get(key) }] }, Math.min(cap, weight * Math.sqrt(count))));
     };
     const explicitlySaved = new Set();
     savedArtists.forEach((artist) => {
@@ -79,12 +81,12 @@ export const buildDiscoveryTasteProfile = ({
         const key = getDiscoveryTrackKey(item);
         const repeats = (repeatCounts.get(key) || 0) + 1;
         repeatCounts.set(key, repeats);
-        add(recentScores, item?.artist, 24 * Math.pow(0.5, ageDays / 10) / Math.sqrt(repeats));
+        add(recentScores, item, 24 * Math.pow(0.5, ageDays / 10) / Math.sqrt(repeats));
     });
     recentScores.forEach((score, key) => {
         const bounded = Math.min(80, score);
         recentScores.set(key, bounded);
-        add(scores, displayNames.get(key), bounded);
+        add(scores, { artists: [{ name: displayNames.get(key) }] }, bounded);
     });
     Object.entries(engagement?.likedArtists || {}).forEach(([artist, count]) => {
         add(scores, artist, Math.min(12, Math.max(0, Number(count)) * 3));

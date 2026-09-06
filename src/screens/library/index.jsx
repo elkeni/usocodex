@@ -310,26 +310,6 @@ export default function Library() {
                     </div>
                 </section>
 
-                {/* CTA de Importación para nuevos usuarios */}
-                {favorites.length === 0 && playlists.length === 0 && savedAlbums.length === 0 && savedArtists.length === 0 && (
-                    <section className="library-import-cta">
-                        <div className="import-cta-content">
-                            <div className="import-cta-icon">
-                                <FaMusic />
-                            </div>
-                            <h3>¿Ya tienes música en otra plataforma?</h3>
-                            <p>Importa tu biblioteca de Spotify o YouTube en segundos</p>
-                            <button
-                                className="import-cta-btn"
-                                onClick={() => navigate('/import')}
-                            >
-                                <FaMusic />
-                                Importar mi música
-                            </button>
-                        </div>
-                    </section>
-                )}
-
                 {/* Main Access Buttons - Estilo Apple Music */}
                 <section className="library-main-buttons">
                     {/* Canciones (anteriormente Favorites) */}

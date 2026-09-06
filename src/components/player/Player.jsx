@@ -23,7 +23,8 @@ import { usePlayer } from '../../context/playerContext';
 import { useUser } from '../../context/userContext';
 import { useFeedback } from '../../context/feedbackContext';
 import { fetchLyrics, getArtistInfo, getAlbumDetails, artistGetTopTracks } from '../../services/unifiedService';
-import { getArtistPath } from '../../services/artistIdentity';
+import TrackArtistsModal from './TrackArtistsModal';
+import { getTrackArtists, getArtistPath } from '../../services/artistIdentity';
 import { getAlbumPath } from '../../services/albumNavigation';
 import { getSpotifyListeningUrl } from '../../services/externalListening';
 import useBodyScrollLock from '../../hooks/useBodyScrollLock';
@@ -352,6 +353,7 @@ export default function Player() {
     // ESTADO LOCAL
     // ========================================================================
     const [playerView, setPlayerView] = useState('dock'); // 'dock' | 'fullscreen'
+    const [isArtistsOpen, setIsArtistsOpen] = useState(false);
     const [isQueueOpen, setIsQueueOpen] = useState(false);
     const [isMenuOpen, setIsMenuOpen] = useState(false);
     const [menuView, setMenuView] = useState('main'); // 'main' | 'playlists'
@@ -377,6 +379,7 @@ export default function Player() {
     const [isLyricsOpen, setIsLyricsOpen] = useState(false);
     const dragStartY = useRef(0);
     const fullscreenRef = useRef(null);
+    const dockOpenRef = useRef(null);
     const lyricsContainerRef = useRef(null);
     const lyricsOverlayRef = useRef(null);
     useBodyScrollLock(
@@ -393,7 +396,7 @@ export default function Player() {
             else if (isArtistSheetOpen) setIsArtistSheetOpen(false);
             else if (isMenuOpen) setIsMenuOpen(false);
             else if (isQueueOpen) setIsQueueOpen(false);
-            else setPlayerView('dock');
+            else { dockOpenRef.current?.focus(); setPlayerView('dock'); }
         };
 
         document.addEventListener('keydown', closeTopLayer);
@@ -405,8 +408,9 @@ export default function Player() {
     // ========================================================================
     const trackImage = useMemo(() => getTrackImage(currentTrack), [currentTrack]);
     const trackTitle = getTrackTitle(currentTrack) || 'Sin título';
-    const trackArtistName = getTrackArtist(currentTrack);
-    const trackArtist = trackArtistName || 'Artista desconocido';
+    const trackArtists = useMemo(() => getTrackArtists(currentTrack), [currentTrack]);
+    const trackArtistName = trackArtists[0]?.name || '';
+    const trackArtist = trackArtists.map(artist => artist.name).join(', ') || 'Artista desconocido';
     const trackAlbum = getTrackAlbum(currentTrack);
     const spotifyListeningUrl = useMemo(
         () => getSpotifyListeningUrl(currentTrack),
@@ -463,19 +467,16 @@ export default function Player() {
         // eslint-disable-next-line react-hooks/exhaustive-deps
     }, [currentTrack?.id, currentTrack?.artist, currentTrack?.name, currentTrack?.title]);
 
-    // Cargar info del artista
+    // Cargar solo la identidad principal; los colaboradores se eligen en el modal.
     useEffect(() => {
-        const artistName = trackArtistName;
-        if (!artistName) {
-            setArtistInfo(null);
-            return;
+        let active = true;
+        setArtistInfo(null);
+        if (trackArtistName) {
+            getArtistInfo(trackArtistName)
+                .then(info => { if (active) setArtistInfo(info); })
+                .catch(() => {});
         }
-
-        getArtistInfo(artistName)
-            .then(info => {
-                if (info) setArtistInfo(info);
-            })
-            .catch(() => { });
+        return () => { active = false; };
     }, [trackArtistName]);
 
     // Cargar More About Artist (Top Tracks with Variety)
@@ -569,6 +570,7 @@ export default function Player() {
     }, []);
 
     const closeFullscreen = useCallback(() => {
+        dockOpenRef.current?.focus();
         setPlayerView('dock');
         setIsQueueOpen(false);
     }, []);
@@ -609,11 +611,11 @@ export default function Player() {
 
     const handleViewArtist = useCallback(() => {
         if (trackArtistName) {
-            navigate(getArtistPath({ id: currentTrack.artistId, name: trackArtistName }));
+            navigate(getArtistPath({ ...trackArtists[0], name: trackArtistName }));
             closeFullscreen();
             handleMenuClose();
         }
-    }, [currentTrack, trackArtistName, navigate, closeFullscreen, handleMenuClose]);
+    }, [trackArtists, trackArtistName, navigate, closeFullscreen, handleMenuClose]);
 
     const handleViewAlbum = useCallback(() => {
         if (trackArtistName && trackAlbum) {
@@ -771,11 +773,12 @@ export default function Player() {
 
     return (
         <>
+            {isArtistsOpen && <TrackArtistsModal artists={trackArtists} onClose={() => setIsArtistsOpen(false)} onSelect={(artist) => { setIsArtistsOpen(false); setIsArtistSheetOpen(false); closeFullscreen(); navigate(getArtistPath(artist)); }} />}
             {/* ============================================================
                 DOCK - Barra inferior minimizada
                 ============================================================ */}
             <div className="ytm-dock">
-                <button type="button" className="ytm-dock__open" onClick={openFullscreen} aria-label={`Abrir reproductor: ${trackTitle} de ${trackArtist}`}>
+                <button type="button" className="ytm-dock__open" ref={dockOpenRef} onClick={openFullscreen} aria-label={`Abrir reproductor: ${trackTitle} de ${trackArtist}`}>
                 <div className="ytm-dock__artwork">
                     {trackImage ? (
                         <img {...getArtworkImageProps({ image_xl: trackImage }, { size: 160, maxSize: 500, sizes: '48px' })} alt="" />
@@ -786,17 +789,18 @@ export default function Player() {
 
                 <div className="ytm-dock__info">
                     <div className="ytm-dock__title">{trackTitle}</div>
-                    <div className="ytm-dock__artist">{trackArtist}</div>
+
                 </div>
                 </button>
 
+                <button type="button" className="ytm-dock__artist" onClick={() => setIsArtistsOpen(true)}>{trackArtist}</button>
                 <div className="ytm-dock__controls">
                     <button
                         className="ytm-dock__btn"
                         onClick={handleTogglePlay}
                         aria-label={isPlaying ? 'Pausar' : 'Reproducir'}
                     >
-                        {isLoading ? (
+                        {(isLoading || isBuffering) ? (
                             <span className="ytm-dock__spinner" />
                         ) : isPlaying ? (
                             <Icons.Pause />
@@ -813,9 +817,9 @@ export default function Player() {
                         <Icons.Next />
                     </button>
                 </div>
-                {(isLoading || isBuffering || errorMsg) && (
-                    <div className={`ytm-dock__status${errorMsg ? ' is-error' : ''}`} role={errorMsg ? 'alert' : 'status'} aria-live="polite">
-                        {errorMsg || (isBuffering ? 'Recuperando conexión…' : 'Preparando audio…')}
+                {errorMsg && (
+                    <div className="ytm-dock__status is-error" role="alert" aria-live="polite">
+                        {errorMsg}
                     </div>
                 )}
             </div>
@@ -830,6 +834,7 @@ export default function Player() {
                 role="dialog"
                 aria-modal={playerView === 'fullscreen' ? 'true' : undefined}
                 aria-hidden={playerView !== 'fullscreen'}
+                inert={playerView !== 'fullscreen' ? '' : undefined}
                 aria-label="Reproductor en pantalla completa"
             >
                 {/* Header */}
@@ -885,7 +890,7 @@ export default function Player() {
                         <div className="ytm-meta">
                             <div className="ytm-meta__text">
                                 <h1 className="ytm-meta__title">{trackTitle}</h1>
-                                <button type="button" className="ytm-meta__artist" onClick={handleViewArtist}>
+                                <button type="button" className="ytm-meta__artist" onClick={() => setIsArtistsOpen(true)}>
                                     {trackArtist}
                                 </button>
                                 {trackAlbum && (
@@ -945,10 +950,10 @@ export default function Player() {
                         </div>
                     </div>
 
-                    {(isLoading || isBuffering || errorMsg) && (
-                        <div className={`ytm-playback-notice${errorMsg ? ' is-error' : ''}`} role={errorMsg ? 'alert' : 'status'} aria-live="polite">
-                            <span>{errorMsg || (isBuffering ? 'La conexión está lenta. Recuperando el audio…' : 'Preparando la canción…')}</span>
-                            {errorMsg && spotifyListeningUrl && (
+                    {errorMsg && (
+                        <div className="ytm-playback-notice is-error" role="alert" aria-live="polite">
+                            <span>{errorMsg}</span>
+                            {spotifyListeningUrl && (
                                 <a
                                     className="ytm-spotify-fallback"
                                     href={spotifyListeningUrl}
@@ -985,7 +990,7 @@ export default function Player() {
                             onClick={handleTogglePlay}
                             aria-label={isPlaying ? 'Pausar' : 'Reproducir'}
                         >
-                            {isLoading ? (
+                            {(isLoading || isBuffering) ? (
                                 <span className="ytm-spinner" />
                             ) : isPlaying ? (
                                 <Icons.Pause />
@@ -1110,7 +1115,7 @@ export default function Player() {
                     {/* More About Artist (Top Tracks) */}
                     {artistTracks.length > 0 && (
                         <section className="ytm-moreaboutartist">
-                            <h3 className="ytm-moreaboutartist__title">Más de {trackArtist}</h3>
+                            <h3 className="ytm-moreaboutartist__title">Más de {trackArtistName}</h3>
                             <div className="ytm-moreaboutartist__list">
                                 {artistTracks.map((track, i) => (
                                     <button
@@ -1291,7 +1296,7 @@ export default function Player() {
                             <div className="ytm-menu-item__text">Añadir a playlist</div>
                         </button>
 
-                        <button type="button" className="ytm-menu-item" onClick={handleViewArtist}>
+                        <button type="button" className="ytm-menu-item" onClick={() => { handleMenuClose(); setIsArtistsOpen(true); }}>
                             <div className="ytm-menu-item__icon"><Icons.Person /></div>
                             <div className="ytm-menu-item__text">Ver artista</div>
                         </button>

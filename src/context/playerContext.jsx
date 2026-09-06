@@ -15,6 +15,7 @@ import {
     getResolvedAudioQualityMode,
 } from "../services/audioQuality";
 import { playbackPrefetchService } from "../services/playbackPrefetchService";
+import { getRecordingCacheKey } from "../services/playbackTarget";
 import { getSmartPrefetchPreference } from "../services/experiencePreferences";
 import {
     appendUniqueTracks,
@@ -64,10 +65,7 @@ const makeTrackKey = (track) => {
 };
 
 const makeAudioCacheKey = (track, qualityMode = getResolvedAudioQualityMode()) => {
-    const name = getSafeString(track?.name || track?.title).toLowerCase();
-    const artist = getSafeString(track?.artistId || track?.artist).toLowerCase();
-    const duration = track?.duration || 0;
-    return `${artist}-${name}-${duration}-quality:${qualityMode}`.trim();
+    return getRecordingCacheKey(track, qualityMode);
 };
 
 const makeFailureKey = (track) => {
@@ -942,6 +940,7 @@ export const PlayerProvider = ({ children }) => {
 
             // Cache key incluye duración para evitar servir audio equivocado
             const cacheKey = makeAudioCacheKey({
+                ...track,
                 artist: artistName,
                 artistId: track?.artistId,
                 name: trackName,
@@ -978,6 +977,7 @@ export const PlayerProvider = ({ children }) => {
             const directUrlIsFresh = track?.urlSource === 'preview'
                 || (
                     track?.urlSource === 'resolved' &&
+                    (!track?.urlExpiresAt || Date.now() < track.urlExpiresAt) &&
                     directUrlAge < 20 * 60 * 1000 &&
                     track?.urlQualityMode === getResolvedAudioQualityMode()
                 );
@@ -1001,6 +1001,7 @@ export const PlayerProvider = ({ children }) => {
                 cachedAudioUrlRef.current &&
                 cachedAudioUrlRef.current.key === cacheKey &&
                 cachedAudioUrlRef.current.url &&
+                (!cachedAudioUrlRef.current.expiresAt || Date.now() < cachedAudioUrlRef.current.expiresAt) &&
                 (!cachedAudioUrlRef.current.timestamp || Date.now() - cachedAudioUrlRef.current.timestamp < TTL);
 
             if (cacheOk) {
@@ -1016,6 +1017,7 @@ export const PlayerProvider = ({ children }) => {
 
             // [CONTRATO] Llamar a UnifiedService - siempre devuelve objeto estructurado
             const result = await fetchAudioUrl({
+                ...track,
                 id: track?.id,
                 artist: artistName,
                 artistId: track?.artistId || null,
@@ -1066,6 +1068,7 @@ export const PlayerProvider = ({ children }) => {
                 url: audioUrl,
                 timestamp: Date.now(),
                 quality: result.audio?.quality || null,
+                expiresAt: result.audio?.expiresAt,
                 qualityMode: result.audio?.qualityMode || getResolvedAudioQualityMode(),
             };
             cachedAudioUrlRef.current = cacheEntry;
@@ -1083,6 +1086,7 @@ export const PlayerProvider = ({ children }) => {
                     source: result.audio?.source,
                 },
                 cacheStatus: result.audio?.cacheStatus,
+                expiresAt: result.audio?.expiresAt,
                 timings: result.audio?.timings,
             }, cacheEntry.qualityMode);
 

@@ -2,7 +2,6 @@
 import { beforeEach, describe, expect, it, vi } from 'vitest';
 import { buildRadioQueue } from './services/radioService';
 import { LibraryGenerator } from './services/libraryGenerator';
-import { YouTubeClient } from './services/importService';
 import {
     PRODUCT_EVENTS,
     clearProductMetrics,
@@ -93,20 +92,5 @@ describe('Fase 3: medición local no sensible', () => {
         expect(stored).not.toContain('Bad Bunny');
         expect(stored).not.toContain('example.com');
         expect(getSuccessSummary().playbackStarted).toBe(1);
-    });
-});
-
-describe('Fase 3: YouTube sólo mediante backend', () => {
-    it('se detiene con un mensaje honesto si falta el endpoint y no prueba terceros', async () => {
-        const fetchMock = vi.fn(async () => ({ ok: false, status: 404 }));
-        vi.stubGlobal('fetch', fetchMock);
-
-        await expect(YouTubeClient.getPlaylistTracks('PL_test')).rejects.toMatchObject({
-            code: 'YOUTUBE_BACKEND_UNAVAILABLE',
-        });
-        expect(fetchMock).toHaveBeenCalledTimes(1);
-        expect(fetchMock.mock.calls[0][0]).toContain('/api/youtube-playlist?id=PL_test');
-
-        vi.unstubAllGlobals();
     });
 });

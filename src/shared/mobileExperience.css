@@ -123,8 +123,6 @@
   .album-page-apple,
   .artist-page,
   .playlist-page,
-  .import-page,
-  .import-container,
   .profile-wrapper {
     overscroll-behavior-y: contain;
     -webkit-overflow-scrolling: touch;

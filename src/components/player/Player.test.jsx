@@ -151,4 +151,26 @@ describe('Favoritos y playlists desde el reproductor', () => {
     expect(screen.getByRole('dialog', { name: 'Cola de reproducción' })).toBeVisible();
     expect(container.querySelector('.ytm-queue-fab')).not.toBeInTheDocument();
   });
+  it('abre colaboradores desde la canción y restaura el foco al cerrar el reproductor', async () => {
+    HTMLDialogElement.prototype.showModal = function () { this.setAttribute('open', ''); };
+    HTMLDialogElement.prototype.close = function () { this.removeAttribute('open'); };
+    const original = currentTrack.artist;
+    currentTrack.artist = 'Brooks, GRX';
+    try {
+      const user = userEvent.setup();
+      renderPlayer();
+      const opener = screen.getByRole('button', { name: /Abrir reproductor/i });
+      await user.click(opener);
+      const fullscreen = screen.getByRole('dialog', { name: 'Reproductor en pantalla completa' });
+      await user.click(within(fullscreen).getByRole('button', { name: 'Brooks, GRX' }));
+      const modal = screen.getByRole('dialog', { name: 'Artistas en la canción' });
+      expect(within(modal).getByText('Brooks')).toBeVisible();
+      expect(within(modal).getByText('GRX')).toBeVisible();
+      await user.click(within(modal).getByRole('button', { name: 'Cerrar artistas' }));
+      await user.keyboard('{Escape}');
+      expect(opener).toHaveFocus();
+      expect(fullscreen).toHaveAttribute('inert');
+    } finally { currentTrack.artist = original; }
+  });
+
 });

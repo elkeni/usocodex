@@ -21,19 +21,17 @@ vi.mock('./screens/profile', () => ({ default: () => <h1>Perfil cargado</h1> }))
 vi.mock('./screens/playlist/playlist', () => ({ default: () => <h1>Playlist cargada</h1> }));
 vi.mock('./screens/artist/artistDetail', () => ({ default: () => <h1>Artista cargado</h1> }));
 vi.mock('./screens/album/albumDetail', () => ({ default: () => <h1>Álbum cargado</h1> }));
-vi.mock('./screens/import/import', () => ({ default: () => <h1>Importar cargado</h1> }));
 
 describe('Fase 2: navegación móvil y fluidez', () => {
   afterEach(() => cleanup());
 
-  it('expone cuatro destinos principales con nombres accesibles', async () => {
+  it('expone los tres destinos principales con nombres accesibles', async () => {
     render(<MemoryRouter initialEntries={['/feed']}><Home /></MemoryRouter>);
     const navigation = screen.getByRole('navigation', { name: 'Navegación principal' });
     expect(navigation).toBeInTheDocument();
     expect(screen.getByRole('link', { name: 'Descubrir' })).toBeInTheDocument();
     expect(screen.getByRole('link', { name: 'Buscar' })).toBeInTheDocument();
     expect(screen.getByRole('link', { name: 'Biblioteca' })).toBeInTheDocument();
-    expect(screen.getByRole('link', { name: 'Importar' })).toBeInTheDocument();
     expect(await screen.findByRole('heading', { name: 'Descubrir cargado' })).toBeInTheDocument();
   });
 

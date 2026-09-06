@@ -4,6 +4,8 @@ import { FaPlay, FaChevronRight, FaEllipsisH, FaArrowLeft, FaCheck, FaPlus, FaRa
 
 import { usePlayer } from '../../context/playerContext';
 import { useUser } from '../../context/userContext';
+import TrackArtistsModal from '../../components/player/TrackArtistsModal';
+import { getTrackArtists, getArtistPath } from '../../services/artistIdentity';
 import PageState from '../../components/shared/PageState';
 import { getAlbumPath } from '../../services/albumNavigation';
 import { getArtworkImageProps, getBestArtworkUrl } from '../../services/imageQuality';
@@ -45,6 +47,7 @@ export default function ArtistDetail() {
     const { isArtistSaved, toggleSaveArtist } = useUser();
     const containerRef = useRef(null);
 
+    const [collaborators, setCollaborators] = useState([]);
     const [artistInfo, setArtistInfo] = useState(null);
     const [topAlbums, setTopAlbums] = useState([]);
     const [topTracks, setTopTracks] = useState([]);
@@ -71,16 +74,19 @@ export default function ArtistDetail() {
         const fetchData = async () => {
             setLoading(true);
             setLoadError(null);
+            setCollaborators([]);
             setArtistInfo(null);
             setTopTracks([]);
             setTopAlbums([]);
-            const safeName = decodeURIComponent(name);
+            const safeName = name;
 
             try {
                 // Resolver la identidad una sola vez. Tracks y álbumes deben usar
                 // exactamente el mismo ID, nunca tres búsquedas independientes.
                 const resolvedArtist = await getArtistInfo(safeName);
                 if (!resolvedArtist) {
+                    const credits = getTrackArtists(safeName);
+                    if (credits.length > 1) setCollaborators(credits);
                     setArtistInfo(null);
                     setLoadError('No encontramos una coincidencia exacta para este artista.');
                     return;
@@ -153,6 +159,7 @@ export default function ArtistDetail() {
                     image: getBestImage(t.image) || getBestImage(artistInfo?.image) || DEFAULT_IMAGE,
                     duration: t.duration ? parseInt(t.duration) : 0,
                     preview: t.preview,
+                    explicit: t.explicit ?? t.explicit_lyrics ?? t.isExplicit,
                     album: t.album || 'Top Hits'
                 }));
 
@@ -166,6 +173,8 @@ export default function ArtistDetail() {
                     url: audioUrl,
                     urlSource: resolvedUrl ? 'resolved' : 'preview',
                     urlResolvedAt: resolvedUrl ? Date.now() : null,
+                    urlExpiresAt: resolution.audio?.expiresAt,
+                    explicit: track.explicit ?? track.explicit_lyrics ?? track.isExplicit,
                     urlQualityMode: resolvedUrl ? resolution.audio?.qualityMode : null,
                     audioQuality: resolvedUrl ? resolution.audio?.quality : null,
                     album: track.album || 'Top Hits'
@@ -192,6 +201,10 @@ export default function ArtistDetail() {
     // --- RENDERIZADO ---
 
     if (loading) return <PageState variant="loading" title="Cargando artista" />;
+
+    if (collaborators.length > 1) return <TrackArtistsModal artists={collaborators}
+        onClose={() => navigate('/feed', { replace: true })}
+        onSelect={artist => navigate(getArtistPath(artist), { replace: true })} />;
 
     if (!artistInfo) return <PageState variant="error" title="Artista no encontrado" message={loadError} actionLabel="Reintentar" onAction={() => setRetryKey(key => key + 1)} secondaryLabel="Volver" onSecondary={() => navigate(-1)} />;
 

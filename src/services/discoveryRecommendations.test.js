@@ -101,3 +101,8 @@ describe('recent taste and breadth regressions', () => {
         expect(result.map((item) => item.artist)).toEqual(['Lionel Richie']);
     });
 });
+
+it('separa artistas del historial para las consultas de descubrimiento', () => {
+    const profile = buildDiscoveryTasteProfile({ listeningHistory: [{ name: 'Canción', artist: 'Bad Bunny, Grupo Frontera', timestamp: Date.now() }] });
+    expect(profile.seeds.map(seed => seed.name).sort()).toEqual(['Bad Bunny', 'Grupo Frontera']);
+});

@@ -1,4 +1,5 @@
 import { CONFIG } from './config';
+import { appendPlaybackTarget, getRecordingCacheKey } from './playbackTarget';
 import {
     AUDIO_QUALITY_CHANGE_EVENT,
     getResolvedAudioQualityMode,
@@ -34,11 +35,9 @@ const getArtist = (track) => (
     typeof track?.artist === 'string' ? track.artist : track?.artist?.name || track?.creator || ''
 );
 
-const getTitle = (track) => track?.name || track?.title || '';
+const getTitle = (track) => track?.title || track?.name || '';
 
-export const getPlaybackPrefetchKey = (track, qualityMode = getResolvedAudioQualityMode()) => (
-    `${normalizeIdentityPart(getArtist(track))}::${normalizeIdentityPart(getTitle(track))}::quality:${qualityMode}`
-);
+export const getPlaybackPrefetchKey = (track, qualityMode = getResolvedAudioQualityMode()) => getRecordingCacheKey(track, qualityMode);
 
 export const getPrefetchLimitForQuality = (qualityMode, context = 'search') => {
     if (qualityMode !== 'data_saver') return context === 'discovery' ? 6 : 3;
@@ -50,14 +49,14 @@ const getPlaybackTtl = (playback) => (
 );
 
 const isFresh = (entry, now = Date.now()) => (
-    Boolean(entry?.playback?.audioUrl) && now - entry.resolvedAt < getPlaybackTtl(entry.playback)
+    Boolean(entry?.playback?.audioUrl) && now < entry.playback.expiresAt
 );
 
 const cachePlayback = (key, playback) => {
     const resolvedAt = Date.now();
     const cachedPlayback = {
         ...playback,
-        expiresAt: resolvedAt + getPlaybackTtl(playback),
+        expiresAt: Math.min(playback.expiresAt || Infinity, resolvedAt + getPlaybackTtl(playback)),
     };
     resolvedPlaybacks.set(key, { playback: cachedPlayback, resolvedAt });
     return cachedPlayback;
@@ -80,6 +79,7 @@ const normalizePlayback = (payload, fallbackQualityMode) => {
             source: playback.track?.source,
         },
         timings: playback.timings,
+        expiresAt: playback.expiresAt,
         ms: playback.ms ?? payload?.ms,
     };
 };
@@ -90,6 +90,7 @@ const buildRequestUrl = (track, qualityMode, endpoint) => {
         quality: qualityMode,
     });
     params.set(endpoint === 'prefetch' ? 'title' : 'track', getTitle(track));
+    appendPlaybackTarget(params, track);
     return `${CONFIG.MUSIC_API_URL}/api/${endpoint}?${params.toString()}`;
 };
 
@@ -142,6 +143,7 @@ const createInFlightEntry = (track, qualityMode, endpoint, priority) => {
         async start() {
             if (entry.started || entry.settled) return;
             entry.started = true;
+            const timeout = setTimeout(() => entry.controller.abort(), 25000);
             try {
                 const response = await fetch(buildRequestUrl(track, qualityMode, endpoint), {
                     signal: entry.controller.signal,
@@ -149,8 +151,8 @@ const createInFlightEntry = (track, qualityMode, endpoint, priority) => {
                 if (response.ok) clearTrackUnavailable(track);
                 const payload = await response.json().catch(() => null);
                 if (!response.ok || !payload?.success) {
-                    if (response.status === 404 || payload?.reason === 'NO_MATCH') {
-                        markTrackUnavailable(track, payload?.reason || 'NO_MATCH');
+                    if ((payload?.reason || payload?.code) === 'NO_MATCH') {
+                        markTrackUnavailable(track, 'NO_MATCH');
                     }
                     entry.finish(null);
                     return;
@@ -165,7 +167,7 @@ const createInFlightEntry = (track, qualityMode, endpoint, priority) => {
                 entry.finish(playback);
             } catch {
                 entry.finish(null);
-            }
+            } finally { clearTimeout(timeout); }
         },
     };
     inFlightEntries.set(key, entry);

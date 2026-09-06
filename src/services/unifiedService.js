@@ -8,8 +8,9 @@
 
 import { AuthService } from './authService';
 import { CONFIG } from './config';
-import { isArtistCreditMatch, normalizeArtistName } from './artistIdentity';
+import { getTrackArtists, isArtistCreditMatch, normalizeArtistName } from './artistIdentity';
 import { getResolvedAudioQualityMode } from './audioQuality';
+import { appendPlaybackTarget, getPlaybackTarget, getRecordingCacheKey } from './playbackTarget';
 import {
     clearTrackUnavailable,
     getTrackUnavailable,
@@ -91,13 +92,13 @@ const DeezerClient = {
         const timeoutId = setTimeout(() => controller.abort(), 10000);
         try {
             const res = await fetch(proxyUrl, { signal: controller.signal });
-            if (!res.ok) return { data: [], error: { message: `Catalog HTTP ${res.status}` } };
+            if (!res.ok) return { data: [] };
             const data = await res.json();
-            if (data.error) return { data: [], error: data.error };
+            if (data.error) return { data: [] };
             return data;
         } catch (e) {
             console.warn('[DeezerClient] Proxy error:', e.message);
-            return { data: [], error: { message: e.message } };
+            return { data: [] };
         } finally {
             clearTimeout(timeoutId);
         }
@@ -110,6 +111,7 @@ const DeezerClient = {
             name: dt.title,
             artist: dt.artist?.name || "Desconocido",
             artistId: dt.artist?.id || null,
+            artists: getTrackArtists(dt),
             album: dt.album?.title || "Sencillo",
             albumId: dt.album?.id || null,
             image: dt.album?.cover_medium || dt.album?.cover_big || dt.artist?.picture_medium,
@@ -139,7 +141,6 @@ const DeezerClient = {
         // [MOD] NO CLEAN: Usar query cruda del usuario. El backend/Deezer sabe buscar.
         const q = query;
         const data = await this._fetch(`/search/${type}?q=${encodeURIComponent(q)}&limit=${limit}`);
-        if (data?.error) throw new Error(data.error.message || 'Catalog unavailable');
         return data?.data || [];
     },
 
@@ -227,6 +228,11 @@ const DeezerClient = {
         if (isNaN(artistIdOrName)) {
             const artistInfo = await this.getArtistInfo(artistIdOrName);
             if (!artistInfo) {
+                const credits = getTrackArtists(String(artistIdOrName));
+                if (credits.length > 1) {
+                    const groups = await Promise.all(credits.map(artist => this.getArtistAlbums(artist.name, limit)));
+                    return [...new Map(groups.flat().map(album => [String(album.id), album])).values()].slice(0, limit);
+                }
                 console.warn(`[DeezerClient] Artist not found: "${artistIdOrName}"`);
                 return [];
             }
@@ -408,14 +414,12 @@ export const clearAudioUrlCache = () => {
 };
 const CACHE_TTL_MS = 20 * 60 * 1000; // Las URLs de streaming son temporales.
 
-export const buildInstantPlayUrl = (backend, trackInfo, qualityMode) => (
-    `${backend}/api/instant-play?artist=${encodeURIComponent(trackInfo.artist)}`
-    + `&track=${encodeURIComponent(trackInfo.title)}`
-    + (trackInfo.artistId ? `&artistId=${encodeURIComponent(trackInfo.artistId)}` : '')
-    + (trackInfo.id ? `&trackId=${encodeURIComponent(trackInfo.id)}` : '')
-    + (trackInfo.albumId ? `&albumId=${encodeURIComponent(trackInfo.albumId)}` : '')
-    + `&quality=${encodeURIComponent(qualityMode)}`
-);
+export const buildInstantPlayUrl = (backend, trackInfo, qualityMode) => {
+    const params = appendPlaybackTarget(new URLSearchParams({
+        artist: trackInfo.artist, track: trackInfo.title, quality: qualityMode,
+    }), trackInfo);
+    return `${backend}/api/instant-play?${params}`;
+};
 
 async function fetchAudioUrl(artistOrTrack, title, duration, legacyOptions = {}) {
     // Normalizar entrada
@@ -434,16 +438,18 @@ async function fetchAudioUrl(artistOrTrack, title, duration, legacyOptions = {})
         albumId: track.albumId || null,
         title: track.title || track.name || '',
         artist: typeof track.artist === 'string' ? track.artist : track.artist?.name || '',
-        duration: parseDurationToSeconds(track.duration)
+        duration: parseDurationToSeconds(track.duration),
+        album: getPlaybackTarget(track).album,
+        explicit: getPlaybackTarget(track).explicit,
     };
 
     // 0. CACHÉ EN MEMORIA (Instantánea)
     // Evita round-trips al servidor para tracks recientes
     const qualityMode = getResolvedAudioQualityMode();
-    const cacheKey = `${trackInfo.artistId || trackInfo.artist}|${trackInfo.albumId || ''}|${trackInfo.id || trackInfo.title}|${trackInfo.duration}|quality:${qualityMode}`.toLowerCase();
+    const cacheKey = getRecordingCacheKey(trackInfo, qualityMode);
     const cached = audioUrlCache.get(cacheKey);
     if (cached) {
-        if (Date.now() - cached.timestamp < CACHE_TTL_MS) {
+        if (Date.now() < cached.expiresAt) {
             console.log(`[UnifiedService] ⚡ MEMORY CACHE HIT: ${trackInfo.title}`);
             clearTrackUnavailable(trackInfo);
             return cached.data;
@@ -475,98 +481,26 @@ async function fetchAudioUrl(artistOrTrack, title, duration, legacyOptions = {})
     const saveData = qualityMode === 'data_saver' ? 'on' : 'off';
     if (saveData === 'on') console.log('[UnifiedService] 📱 Modo Ahorro de Datos detectado');
 
-    // ═══════════════════════════════════════════════════════════════
-    // 2. ESTRATEGIA PARALELA (Race) - El primero que responda GANA
-    //    Lanza Index e Instant-Play simultáneamente
-    // ═══════════════════════════════════════════════════════════════
-
-    // --- Promesa A: ÍNDICE (rápido si está cacheado) ---
-    const tryIndex = async () => {
-        const indexQuery = `${trackInfo.artist} ${trackInfo.title}`;
-        const indexUrl = `${BACKEND}/api/search?q=${encodeURIComponent(indexQuery)}&limit=1`;
-
-        const controller = new AbortController();
-        const timeout = setTimeout(() => controller.abort(), 1500); // 1.5s máximo
-
-        try {
-            const res = await fetch(indexUrl, { signal: controller.signal });
-            clearTimeout(timeout);
-
-            if (!res.ok) throw new Error('Index failed');
-
-            const data = await res.json();
-            if (!data.results?.length) throw new Error('No results');
-
-            const hit = data.results[0];
-            const song = hit.canonical ? hit.canonical.song : hit.song;
-
-            if (!song?.sourceId) throw new Error('No sourceId');
-            const indexedArtist = typeof song.artist === 'string'
-                ? song.artist
-                : song.artist?.name || song.author?.name;
-            if (indexedArtist && !isArtistCreditMatch(trackInfo.artist, indexedArtist)) {
-                throw new Error('Artist mismatch');
-            }
-
-            // Obtener stream para el videoId del índice
-            const streamUrl = `${BACKEND}/api/youtube-streams?videoId=${song.sourceId}&confidence=1.0`;
-            const streamCtrl = new AbortController();
-            const streamTimeout = setTimeout(() => streamCtrl.abort(), 2000); // 2s
-
-            const streamRes = await fetch(streamUrl, {
-                signal: streamCtrl.signal,
-                headers: { 'save-data': saveData }
-            });
-            clearTimeout(streamTimeout);
-
-            if (!streamRes.ok) throw new Error('Stream failed');
-
-            const streamData = await streamRes.json();
-            if (!streamData?.audioStreams?.length) throw new Error('No streams');
-
-            const bestStream = streamData.audioStreams[0];
-            const audioUrl = bestStream?.url || (typeof bestStream === 'string' ? bestStream : null);
-
-            if (!audioUrl) throw new Error('No URL');
-
-            console.log(`[UnifiedService] ⚡ INDEX WIN: "${song.title}"`);
-            return {
-                status: "ok",
-                track: trackInfo,
-                audio: {
-                    url: audioUrl,
-                    bitrate: bestStream.bitrate || 128,
-                    quality: `${bestStream.bitrate || 128}kbps`,
-                    qualityMode,
-                    source: "index"
-                },
-                confidence: 1.0
-            };
-        } catch (e) {
-            clearTimeout(timeout);
-            throw e; // Propagar para que Promise.any lo ignore
-        }
-    };
-
-    // --- Promesa B: INSTANT-PLAY (siempre disponible) ---
+    // The backend validates recording identity and handles provider fallbacks.
+    // A top search hit is a discovery result, not permission to play that recording.
     const tryInstantPlay = async () => {
         const instantPlayUrl = buildInstantPlayUrl(BACKEND, trackInfo, qualityMode);
 
         const controller = new AbortController();
-        // TURBO: Solo 4s para instant-play
-        const timeout = setTimeout(() => controller.abort(), 4000);
+        const timeout = setTimeout(() => controller.abort(), 25000);
 
         try {
             const res = await fetch(instantPlayUrl, {
                 signal: controller.signal,
                 headers: { 'save-data': saveData }
             });
-            clearTimeout(timeout);
-
-            if (!res.ok) throw new Error('Instant-play failed');
-            clearTrackUnavailable(trackInfo);
-
             const data = await res.json();
+            if (!res.ok || data.success === false) {
+                const code = data.code || data.reason || data.error;
+                const reason = ['NO_MATCH', 'AUDIO_SOURCE_UNAVAILABLE'].includes(code) ? code : 'BACKEND_ERROR';
+                throw Object.assign(new Error(reason), { reason });
+            }
+            clearTrackUnavailable(trackInfo);
             if (!data?.audioUrl) throw new Error('No audioUrl');
 
             const resolvedArtist = data.track?.artist || data.artist;
@@ -585,30 +519,27 @@ async function fetchAudioUrl(artistOrTrack, title, duration, legacyOptions = {})
                     qualityMode: data.qualityMode || qualityMode,
                     cacheStatus: data.cacheStatus,
                     timings: data.timings,
+                    expiresAt: data.expiresAt || Date.now() + (data.track?.source === 'saavn' ? CACHE_TTL_MS : 120000),
                     source: data.track?.source || "youtube"
                 },
-                confidence: data.confidence ?? 0.8
+                confidence: data.match?.confidence ?? data.confidence ?? 0.8
             };
-        } catch (e) {
-            clearTimeout(timeout);
-            throw e;
-        }
+        } finally { clearTimeout(timeout); }
     };
 
-    // --- CARRERA: El primero que tenga éxito gana ---
     try {
-        const result = await Promise.any([tryIndex(), tryInstantPlay()]);
+        const result = await tryInstantPlay();
 
         // Guardar en caché
-        audioUrlCache.set(cacheKey, { timestamp: Date.now(), data: result });
+        audioUrlCache.set(cacheKey, { expiresAt: Math.min(result.audio.expiresAt, Date.now() + CACHE_TTL_MS), data: result });
         clearTrackUnavailable(trackInfo);
 
         return result;
-    } catch (aggregateError) {
-        // Ambos fallaron
-        console.warn(`[UnifiedService] ⚠️ NO_MATCH: ${trackInfo.artist} - ${trackInfo.title}`);
-        markTrackUnavailable(trackInfo, 'NO_MATCH');
-        return unavailable(trackInfo, "NO_MATCH");
+    } catch (error) {
+        const reason = error.reason || (error.name === 'AbortError' ? 'TIMEOUT' : 'BACKEND_ERROR');
+        console.warn(`[UnifiedService] ${reason}: ${trackInfo.artist} - ${trackInfo.title}`);
+        if (reason === 'NO_MATCH') markTrackUnavailable(trackInfo, reason);
+        return unavailable(trackInfo, reason);
     }
 }
 

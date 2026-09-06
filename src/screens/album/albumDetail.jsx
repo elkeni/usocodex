@@ -236,6 +236,7 @@ export default function AlbumDetail() {
                     image: t.image || albumImg,
                     duration: t.duration ? parseInt(t.duration) : 0,
                     preview: t.preview,
+                    explicit: t.explicit ?? t.explicit_lyrics ?? t.isExplicit,
                     album: albumInfo?.name || name
                 }));
 
@@ -250,6 +251,8 @@ export default function AlbumDetail() {
                     url: audioUrl,
                     urlSource: resolvedUrl ? 'resolved' : 'preview',
                     urlResolvedAt: resolvedUrl ? Date.now() : null,
+                    urlExpiresAt: resolution.audio?.expiresAt,
+                    explicit: track.explicit ?? track.explicit_lyrics ?? track.isExplicit,
                     urlQualityMode: resolvedUrl ? resolution.audio?.qualityMode : null,
                     audioQuality: resolvedUrl ? resolution.audio?.quality : null,
                     album: albumInfo?.name || name

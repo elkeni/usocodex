@@ -3,7 +3,6 @@ import SidebarButton from './sidebarButton';
 import { MdLibraryMusic } from "react-icons/md";
 import { FaSearch } from 'react-icons/fa';
 import { MdSpaceDashboard } from "react-icons/md";
-import { HiCloudDownload } from "react-icons/hi";
 
 export default function Sidebar() {
   return (
@@ -17,7 +16,6 @@ export default function Sidebar() {
       <div className="sidebar-group">
         <div className="group-title">TU MÚSICA</div>
         <SidebarButton title="Biblioteca" to="/library" icon={<MdLibraryMusic />} />
-        <SidebarButton title="Importar" to="/import" icon={<HiCloudDownload />} />
       </div>
     </nav>
   );

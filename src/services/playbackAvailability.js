@@ -1,23 +1,9 @@
+import { getRecordingCacheKey } from './playbackTarget';
 export const NEGATIVE_PLAYBACK_TTL_MS = 45 * 1000;
 
 const unavailableTracks = new Map();
 
-const normalizePart = (value) => String(value || '')
-    .normalize('NFD')
-    .replace(/[\u0300-\u036f]/g, '')
-    .toLowerCase()
-    .replace(/[^a-z0-9]+/g, ' ')
-    .trim();
-
-const getArtist = (track) => (
-    typeof track?.artist === 'string' ? track.artist : track?.artist?.name || track?.creator || ''
-);
-
-const getTitle = (track) => track?.name || track?.title || '';
-
-export const getPlaybackAvailabilityKey = (track) => (
-    `${normalizePart(getArtist(track))}::${normalizePart(getTitle(track))}`
-);
+export const getPlaybackAvailabilityKey = (track) => getRecordingCacheKey(track, 'availability');
 
 export const markTrackUnavailable = (track, reason = 'NO_MATCH', now = Date.now()) => {
     const key = getPlaybackAvailabilityKey(track);

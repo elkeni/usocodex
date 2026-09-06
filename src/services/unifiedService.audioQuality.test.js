@@ -80,7 +80,7 @@ describe('instant-play audio quality', () => {
                 duration: 199,
             });
 
-            expect(result).toMatchObject({ status: 'unavailable', reason: 'NO_MATCH' });
+            expect(result).toMatchObject({ status: 'unavailable', reason: backendError });
         },
     );
 

@@ -49,3 +49,24 @@ export const isArtistCreditMatch = (requestedArtist, candidateCredit) => {
         .map(normalizeArtistName)
         .some((credit) => credit === requested);
 };
+
+// Prefer explicit credits: punctuation can be part of a band's real name.
+export const getTrackArtists = (track) => {
+    const explicit = [track?.artists, track?.contributors].find(value => Array.isArray(value) && value.length);
+    const raw = typeof track === 'string' ? track : getArtistName(track?.artist) || track?.artist?.['#text'] || track?.artistName || '';
+    const entries = explicit || (typeof track?.artist === 'object' && track.artist?.name
+        ? [track.artist]
+        : String(raw).split(/\s*(?:,|;)\s*|\s+(?:feat\.?|ft\.?|featuring|with|x)\s+/i));
+    const seen = new Set();
+    return entries.map((entry, index) => {
+        const name = typeof entry === 'string' ? entry.trim() : String(entry?.name || '').trim();
+        const source = entry?.source || track?.source;
+        const id = source === 'spotify' ? null : (typeof entry === 'object' ? getArtistId(entry) : index === 0 ? track?.artistId : null);
+        return { name, ...(id ? { id } : {}) };
+    }).filter(artist => {
+        const key = artist.name.normalize('NFC').toLocaleLowerCase();
+        if (!key || seen.has(key)) return false;
+        seen.add(key);
+        return true;
+    });
+};

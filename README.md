@@ -45,8 +45,6 @@ El workflow `firebase-hosting-merge.yml` instala dependencias, ejecuta las prueb
 
 La configuración web de Firebase es pública y está versionada con el cliente. Para habilitar el despliegue automático sólo hace falta el secreto de repositorio `FIREBASE_SERVICE_ACCOUNT_APPMUSICA_5C872`. Si no está configurado, el workflow valida el frontend y omite la publicación sin fallar.
 
-Nunca debe añadirse un Spotify Client Secret al frontend. La importación usa OAuth PKCE y sólo requiere el Client ID público.
-
 ## Estructura útil
 
 ```text
@@ -55,7 +53,7 @@ src/
 ├── context/        sesión, biblioteca, cola y reproducción
 ├── firebase/       inicialización de Firebase
 ├── screens/        rutas visibles de la aplicación
-├── services/       APIs, recomendaciones, importación y caché
+├── services/       APIs, recomendaciones y caché
 └── shared/         sistema visual global
 ```
 

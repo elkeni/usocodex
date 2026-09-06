@@ -28,7 +28,7 @@ import { getResolvedAudioQualityMode } from '../../services/audioQuality';
 import { buildRadioQueue } from '../../services/radioService';
 import { PRODUCT_EVENTS, recordProductEvent } from '../../services/productMetrics';
 import { getAlbumPath } from '../../services/albumNavigation';
-import { getArtistPath } from '../../services/artistIdentity';
+import { getArtistPath, isSameArtist } from '../../services/artistIdentity';
 import {
     buildSearchTasteProfile,
     rankPersonalizedSearchResults,
@@ -60,11 +60,25 @@ const getImageUrl = (item, highResolution = false) => {
     return resizeArtworkUrl(source, highResolution ? 1000 : 500);
 };
 
+/**
+ * ⭐ ORDENAR POR RANK (Popularidad de Deezer)
+ * Los items con rank más alto aparecen primero
+ */
+const sortByRank = (items) => {
+    if (!Array.isArray(items) || items.length === 0) return [];
+    return [...items].sort((a, b) => {
+        // rank es el campo de popularidad de Deezer (mayor = más popular)
+        const rankA = a.rank || a.popularity || a.nb_fan || 0;
+        const rankB = b.rank || b.popularity || b.nb_fan || 0;
+        return rankB - rankA;
+    });
+};
+
 const normalizeSearchText = (value) => String(value || '')
     .normalize('NFD')
     .replace(/[\u0300-\u036f]/g, '')
     .toLocaleLowerCase('es')
-    .replace(/[^\p{L}\p{N}]+/gu, ' ')
+    .replace(/[^a-z0-9]+/g, ' ')
     .trim();
 
 const getSearchCacheKey = (query, filter, profileSignature = 'neutral') => (
@@ -107,6 +121,160 @@ const formatDuration = (seconds) => {
     return `${mins}:${secs.toString().padStart(2, '0')}`;
 };
 
+/**
+ * ⭐ GENERAR COLA INTELIGENTE (Smart Queue)
+ * Crea una cola de reproducción tipo "radio" basada en:
+ * 1. Canciones del mismo artista (prioridad máxima)
+ * 2. Canciones de artistas similares/relacionados
+ * 3. Canciones populares del contexto de búsqueda
+ * 4. Mezcla para evitar repetición monótona
+ * 
+ * @param {Object} selectedTrack - La canción seleccionada para reproducir
+ * @param {Array} allTracks - Todos los resultados de búsqueda
+ * @param {string} searchQuery - El término de búsqueda original
+ * @returns {Array} Cola ordenada de forma inteligente
+ */
+// Conservado como referencia para una futura estrategia de cola alternativa.
+// eslint-disable-next-line no-unused-vars
+const generateSmartQueue = (selectedTrack, allTracks, searchQuery = '') => {
+    if (!selectedTrack || !Array.isArray(allTracks) || allTracks.length === 0) {
+        return [];
+    }
+
+    const selectedId = selectedTrack.id || selectedTrack.name;
+
+    // Separar tracks en categorías
+    const sameArtistTracks = [];
+    const relatedTracks = [];
+    const otherPopularTracks = [];
+
+    allTracks.forEach(track => {
+        const trackId = track.id || track.name;
+
+        // Excluir el track seleccionado
+        if (trackId === selectedId) return;
+
+        // 1. Mismo artista (máxima prioridad)
+        if (isSameArtist(track, selectedTrack)) {
+            sameArtistTracks.push(track);
+        }
+        // 3. Otros tracks populares
+        else {
+            otherPopularTracks.push(track);
+        }
+    });
+
+    // Ordenar cada categoría por popularidad
+    const sortedSameArtist = sortByRank(sameArtistTracks);
+    const sortedRelated = sortByRank(relatedTracks);
+    const sortedOthers = sortByRank(otherPopularTracks);
+
+    // ⭐ ALGORITMO DE MEZCLA INTELIGENTE CON DIVERSIDAD
+    // Evita más de 2 canciones consecutivas del mismo artista
+    const smartQueue = [];
+    // Indices are managed internally by the smart queue algorithm
+    let consecutiveCount = {}; // Track consecutive songs per artist
+
+    // Máximo de canciones en cola (evitar colas infinitas)
+    const MAX_QUEUE_SIZE = 30;
+    const MAX_CONSECUTIVE = 2; // Máximo de canciones consecutivas del mismo artista
+
+    // Función helper para verificar si podemos añadir un track
+    const canAddTrack = (track) => {
+        if (smartQueue.length === 0) return true;
+
+        const currentArtist = String(track.artistId || track.artist || '');
+        const lastArtist = String(smartQueue[smartQueue.length - 1].artistId || smartQueue[smartQueue.length - 1].artist || '');
+
+        if (currentArtist === lastArtist) {
+            consecutiveCount[currentArtist] = (consecutiveCount[currentArtist] || 0) + 1;
+            return consecutiveCount[currentArtist] <= MAX_CONSECUTIVE;
+        } else {
+            // Reset counter for new artist
+            consecutiveCount[currentArtist] = 1;
+            return true;
+        }
+    };
+
+    // Función helper para añadir tracks de una lista con verificación de diversidad
+    const addTracksFromList = (trackList, indexRef, maxToAdd = 2) => {
+        let added = 0;
+        while (added < maxToAdd && indexRef.value < trackList.length && smartQueue.length < MAX_QUEUE_SIZE) {
+            const candidateTrack = trackList[indexRef.value];
+            if (canAddTrack(candidateTrack)) {
+                smartQueue.push(candidateTrack);
+                indexRef.value++;
+                added++;
+            } else {
+                // Skip this track to avoid consecutive artists
+                indexRef.value++;
+                // If we've exhausted options, we might need to add anyway to avoid empty queue
+                if (indexRef.value >= trackList.length) break;
+            }
+        }
+        return added > 0;
+    };
+
+    // Usar objeto para referencias mutables
+    const indices = { same: 0, related: 0, other: 0 };
+
+    while (smartQueue.length < MAX_QUEUE_SIZE) {
+        let addedSomething = false;
+
+        // Añadir 1-2 del mismo artista (prioridad máxima)
+        if (indices.same < sortedSameArtist.length) {
+            addedSomething = addTracksFromList(sortedSameArtist, { value: indices.same }, 2) || addedSomething;
+        }
+
+        // Añadir 1 relacionado
+        if (indices.related < sortedRelated.length && smartQueue.length < MAX_QUEUE_SIZE) {
+            const candidateTrack = sortedRelated[indices.related];
+            if (canAddTrack(candidateTrack)) {
+                smartQueue.push(candidateTrack);
+                indices.related++;
+                addedSomething = true;
+            } else {
+                indices.related++; // Skip if would create consecutive
+            }
+        }
+
+        // Añadir 1-2 populares
+        if (indices.other < sortedOthers.length) {
+            addedSomething = addTracksFromList(sortedOthers, { value: indices.other }, 2) || addedSomething;
+        }
+
+        // Si no añadimos nada en esta iteración, salir para evitar loop infinito
+        if (!addedSomething) break;
+
+        // Si ya no hay más tracks disponibles, salir
+        if (indices.same >= sortedSameArtist.length &&
+            indices.related >= sortedRelated.length &&
+            indices.other >= sortedOthers.length) {
+            break;
+        }
+    }
+
+    if (import.meta.env.DEV) {
+        console.log(`[SmartQueue] 🎵 Cola generada: ${smartQueue.length} tracks`);
+        console.log(`  → Mismo artista: ${sameArtistTracks.length}`);
+        console.log(`  → Relacionados: ${relatedTracks.length}`);
+        console.log(`  → Populares: ${otherPopularTracks.length}`);
+    }
+
+    return smartQueue;
+};
+
+// =============================================================================
+// 🎵 RADIO INSTANTÁNEA PARA BÚSQUEDA
+// Genera cola de canciones similares basada en artistas relacionados
+// =============================================================================
+// =============================================================================
+// 🎵 RADIO INSTANTÁNEA PARA BÚSQUEDA (MEJORADA)
+// Lógica:
+// 1. Contexto (Resultados de búsqueda): Prioridad alta, es lo que el usuario pidió.
+// 2. Artista Principal: Familiaridad.
+// 3. Artistas Relacionados: Descubrimiento.
+// =============================================================================
 const buildInstantRadioForSearch = (seedTrack, localTracks = []) => (
     buildRadioQueue({
         seedTrack,
@@ -379,7 +547,6 @@ export default function Search() {
         }
     }, [getVibeMatchingData]);
     const searchTasteProfile = useMemo(() => buildSearchTasteProfile(tasteData), [tasteData]);
-
     // Referencias
     const inputRef = useRef(null);
     const searchContainerRef = useRef(null);
@@ -392,7 +559,6 @@ export default function Search() {
 
     // Estados
     const [query, setQuery] = useState('');
-    const [resultPage, setResultPage] = useState(1);
     const [filter, setFilter] = useState('all'); // all, artist, album, track, playlist
     const [results, setResults] = useState(createEmptyResults);
     const [resultsQuery, setResultsQuery] = useState('');
@@ -416,7 +582,7 @@ export default function Search() {
             const saved = localStorage.getItem(RECENT_STORAGE_KEY);
             if (saved) {
                 const parsed = JSON.parse(saved);
-                if (Array.isArray(parsed)) setRecentSearches(parsed.filter(term => typeof term === 'string' && term.trim().length >= 2).slice(0, MAX_RECENT_SEARCHES));
+                if (Array.isArray(parsed)) setRecentSearches(parsed.slice(0, MAX_RECENT_SEARCHES));
             }
         } catch (e) {
             console.warn('Error loading recent searches', e);
@@ -438,7 +604,7 @@ export default function Search() {
 
     // Recuperar estado desde Caché Global al montar (si volvemos de otra pantalla)
     useEffect(() => {
-        const cachedState = screenStateCache.get('search_state', 'snapshot');
+        const cachedState = screenStateCache.get('search_state');
         if (cachedState) {
             const profileMatches = !cachedState.profileSignature
                 || cachedState.profileSignature === initialSearchProfileSignatureRef.current;
@@ -453,7 +619,7 @@ export default function Search() {
                 searchCacheRef.current[getSearchCacheKey(
                     cachedState.query,
                     restoredFilter,
-                    `${cachedState.profileSignature || initialSearchProfileSignatureRef.current}::1`
+                    cachedState.profileSignature || initialSearchProfileSignatureRef.current
                 )] = cachedState.results;
             }
         }
@@ -461,14 +627,14 @@ export default function Search() {
 
     // Guardar estado en Caché Global al desmontar o cambiar
     useEffect(() => {
-        screenStateCache.set('search_state', 'snapshot', {
-            query: resultsQuery,
+        screenStateCache.set('search_state', {
+            query,
             results,
             hasSearched,
-            filter: resultsFilter,
+            filter,
             profileSignature: searchTasteProfile.signature
         });
-    }, [resultsQuery, results, hasSearched, resultsFilter, searchTasteProfile.signature]);
+    }, [query, results, hasSearched, filter, searchTasteProfile.signature]);
 
     // ========================================
     // LÓGICA DE BÚSQUEDA CENTRALIZADA
@@ -485,7 +651,7 @@ export default function Search() {
         }
 
         const cleanQuery = searchQuery.trim().replace(/\s+/g, ' ');
-        const cacheKey = getSearchCacheKey(cleanQuery, filter, `${searchTasteProfile.signature}::${resultPage}`);
+        const cacheKey = getSearchCacheKey(cleanQuery, filter, searchTasteProfile.signature);
         const requestId = ++searchRequestRef.current;
 
         if (searchCacheRef.current[cacheKey]) {
@@ -506,7 +672,24 @@ export default function Search() {
 
         try {
             const requestedTypes = filter === 'all' ? SEARCH_TYPES : [filter];
-            const limits = filter === 'all' ? SEARCH_LIMITS.all : Object.fromEntries(Object.entries(SEARCH_LIMITS.focused).map(([type, limit]) => [type, Math.min(100, limit * resultPage)]));
+            const limits = filter === 'all' ? SEARCH_LIMITS.all : SEARCH_LIMITS.focused;
+            const settled = await Promise.allSettled(
+                requestedTypes.map((type) => searchGlobal(cleanQuery, type, limits[type]))
+            );
+
+            if (requestId !== searchRequestRef.current) return;
+
+            const rawByType = { track: [], artist: [], album: [], playlist: [] };
+            let failedRequests = 0;
+            settled.forEach((result, index) => {
+                const type = requestedTypes[index];
+                if (result.status === 'fulfilled' && Array.isArray(result.value)) {
+                    rawByType[type] = result.value;
+                } else {
+                    failedRequests += 1;
+                }
+            });
+
             // Mappers locales para estandarizar resultados (Unified UI Contract)
             // Mantener una portada Retina para UI y una fuente XL para el reproductor.
             const mapTrack = t => ({
@@ -562,24 +745,19 @@ export default function Search() {
                     .map(mapper);
             };
 
-            const resultsData = createEmptyResults();
-            const mappers = { track: mapTrack, artist: mapArtist, album: mapAlbum, playlist: mapPlaylist };
-            const keys = { track: 'tracks', artist: 'artists', album: 'albums', playlist: 'playlists' };
-            let failedRequests = 0;
-            await Promise.allSettled(requestedTypes.map(async (type) => {
-                try {
-                    const raw = await searchGlobal(cleanQuery, type, limits[type]);
-                    if (!Array.isArray(raw)) throw new Error('Invalid search response');
-                    resultsData[keys[type]] = rankPersonalizedSearchResults(cleanAndMap(raw, mappers[type]), cleanQuery, type, searchTasteProfile);
-                    if (requestId !== searchRequestRef.current) return;
-                    setResults({ ...resultsData });
-                    setResultsQuery(cleanQuery);
-                    setResultsFilter(filter);
-                } catch {
-                    failedRequests += 1;
-                }
-            }));
-            if (requestId !== searchRequestRef.current) return;
+            const mappedTracks = cleanAndMap(rawByType.track, mapTrack);
+            const mappedArtists = cleanAndMap(rawByType.artist, mapArtist);
+            const mappedAlbums = cleanAndMap(rawByType.album, mapAlbum);
+            const mappedPlaylists = cleanAndMap(rawByType.playlist, mapPlaylist);
+
+            // La coincidencia textual manda; los gustos solo ordenan candidatos
+            // de relevancia comparable y la popularidad funciona como desempate.
+            const resultsData = {
+                tracks: rankPersonalizedSearchResults(mappedTracks, cleanQuery, 'track', searchTasteProfile),
+                artists: rankPersonalizedSearchResults(mappedArtists, cleanQuery, 'artist', searchTasteProfile),
+                albums: rankPersonalizedSearchResults(mappedAlbums, cleanQuery, 'album', searchTasteProfile),
+                playlists: rankPersonalizedSearchResults(mappedPlaylists, cleanQuery, 'playlist', searchTasteProfile)
+            };
 
             setResults(resultsData);
             setResultsQuery(cleanQuery);
@@ -604,7 +782,7 @@ export default function Search() {
         } finally {
             if (requestId === searchRequestRef.current) setIsLoading(false);
         }
-    }, [filter, searchTasteProfile, resultPage]);
+    }, [filter, searchTasteProfile]);
 
     // ========================================
     // GUARDAR BÚSQUEDA EN HISTORIAL
@@ -667,18 +845,9 @@ export default function Search() {
     // ========================================
     const executeRecentSearch = useCallback((term) => {
         setQuery(term);
-        setResultPage(1);
         performSearch(term);
         inputRef.current?.blur();
     }, [performSearch]);
-
-    const executeTasteSuggestion = useCallback((artist) => {
-        setQuery(artist);
-        setResultPage(1);
-        saveToRecentSearches(artist);
-        performSearch(artist);
-        inputRef.current?.blur();
-    }, [performSearch, saveToRecentSearches]);
 
     const submitSearch = useCallback((event) => {
         event.preventDefault();
@@ -700,7 +869,7 @@ export default function Search() {
                 setResultsQuery('');
                 setHasSearched(false);
             }
-        }, 250);
+        }, 400);
         return () => clearTimeout(timer);
     }, [query, performSearch]);
 
@@ -902,7 +1071,7 @@ export default function Search() {
                                         </button>
                                     )}
                                 </div>
-                                <div className="cards-grid">
+                                <div className="artists-horizontal-list">
                                     {artistsToShow.map((artist, i) => (
                                         <div className={`search-card-wrapper ${artist._searchMeta?.personalized ? 'is-personalized' : ''}`} key={`artist-${artist.id || i}`}>
                                             <Card
@@ -1005,7 +1174,7 @@ export default function Search() {
     ];
 
     return (
-        <div className="search-page">
+        <div className="search-page" ref={searchContainerRef}>
             {/* MENU DESPLEGABLE (LONG PRESS) */}
             {menuTrack && (
                 <LongPressMenu
@@ -1020,7 +1189,6 @@ export default function Search() {
                 className="search-page-header"
                 isScrolled={isScrolled}
             >
-                <div className="search-brandline"><span>DESCUBRE</span></div>
                 {/* Search Input */}
                 <form className="search-input-container" role="search" onSubmit={submitSearch}>
                     <div className="search-capsule">
@@ -1033,15 +1201,8 @@ export default function Search() {
                             autoComplete="off"
                             enterKeyHint="search"
                             value={query}
-                            onChange={(e) => {
-                                searchRequestRef.current += 1;
-                                setQuery(e.target.value);
-                                setResultPage(1);
-                                setResults(createEmptyResults());
-                                setIsLoading(e.target.value.trim().length >= 2);
-                                setHasSearched(false);
-                                setSearchNotice(null);
-                            }}
+                            onChange={(e) => setQuery(e.target.value)}
+                            autoFocus
                         />
                         <FaSearch className="search-icon" />
                         <button
@@ -1067,7 +1228,7 @@ export default function Search() {
                             className={`filter-glass-pill ${filter === f.id ? 'active' : ''}`}
                             aria-pressed={filter === f.id}
                             onClick={() => {
-                                if (f.id !== filter) { searchRequestRef.current += 1; setResultPage(1); setFilter(f.id); setResults(createEmptyResults()); setIsLoading(query.trim().length >= 2); }
+                                if (f.id !== filter) setFilter(f.id);
                             }}
                         >
                             {f.label}
@@ -1077,13 +1238,7 @@ export default function Search() {
             </PageHeader>
 
             {/* Content Area */}
-            <main className="search-content" ref={searchContainerRef}>
-                {!query.trim() && <section className="search-intro">
-                    <span className="search-eyebrow">TU UNIVERSO MUSICAL</span>
-                    <h1>Encuentra lo que<br /><em>va contigo.</em></h1>
-                    <p>Vuelve a tus favoritos. Descubre algo inesperado.</p>
-                </section>}
-                {query.trim().length === 1 && <p className="search-hint" role="status">Escribe al menos 2 caracteres para explorar el catálogo.</p>}
+            <main className="search-content">
                 {/* Loading State */}
                 {isLoading && (
                     <div className="search-loading" role="status" aria-live="polite">
@@ -1144,10 +1299,8 @@ export default function Search() {
                 {/* =====================================================
                     RESULTADOS DE BÚSQUEDA - Estructura Limpia
                 ===================================================== */}
-                {hasSearched && (!isLoading || hasResults) && (
+                {!isLoading && hasSearched && (
                     <div className="results-wrapper">
-                        {hasResults && <div className="search-results-heading"><h2>Resultados para “{resultsQuery}”</h2><span>{Object.values(results).reduce((sum, items) => sum + items.length, 0)} coincidencias{isLoading ? ' · buscando más' : ''}</span></div>}
-                        {filter === 'all' && results.artists.length > 0 && <div className="search-correlations" aria-label="Explorar artistas encontrados"><span>Explora también</span>{results.artists.slice(0, 4).map(artist => <button type="button" key={artist.id || artist.name} onClick={() => executeTasteSuggestion(artist.name)}>{artist.name}</button>)}</div>}
 
                         {/* ========================================== */}
                         {/* VISTA "TOP RESULTADOS" (filter === 'all') */}
@@ -1231,7 +1384,6 @@ export default function Search() {
                             </div>
                         )}
 
-                        {!isLoading && filter !== 'all' && resultPage < 4 && Object.values(results).some(items => items.length >= Math.min(100, SEARCH_LIMITS.focused[filter] * resultPage)) && <button type="button" className="search-expand" onClick={() => setResultPage(page => page + 1)}>Ampliar resultados</button>}
                         {/* No Results */}
                         {hasSearched && !hasResults && !searchNotice && (
                             <div className="no-results">

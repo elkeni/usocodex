@@ -36,7 +36,6 @@ jobs:
         run: npm run build
         env:
           VITE_BACKEND_URL: https://music-backend-tau.vercel.app
-          VITE_SPOTIFY_CLIENT_ID: 7de90d09b8a240e8bcb4ab468e68b24d
       - name: Deploy
         if: ${{ env.FIREBASE_SERVICE_ACCOUNT != '' }}
         uses: FirebaseExtended/action-hosting-deploy@v0
