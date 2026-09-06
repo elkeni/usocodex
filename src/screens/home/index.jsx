@@ -8,6 +8,7 @@ import { useUser } from '../../context/userContext';
 import { usePlayer } from '../../context/playerContext';
 import useAppViewport from '../../hooks/useAppViewport';
 import './home.css';
+import '../../shared/desktopExperience.css';
 
 const Feed = lazy(() => import('../feed/feed'));
 const Search = lazy(() => import('../search/search'));
