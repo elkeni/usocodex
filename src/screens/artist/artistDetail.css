@@ -598,24 +598,56 @@
    ============================================================================= */
 
 .discography-section {
-    margin-bottom: 32px;
+    margin-bottom: 40px;
 }
 
-.albums-scroll-row {
+.discography-header {
+    margin-bottom: 24px;
+}
+
+.discography-group + .discography-group {
+    margin-top: 32px;
+}
+
+.discography-group-heading {
     display: flex;
-    gap: 16px;
-    overflow-x: auto;
-    padding-bottom: 8px;
-    scrollbar-width: none;
+    align-items: center;
+    gap: 10px;
+    margin-bottom: 14px;
 }
 
-.albums-scroll-row::-webkit-scrollbar {
-    display: none;
+.discography-group-heading .section-title-apple {
+    font-size: 1.15rem;
+}
+
+.discography-count {
+    display: inline-flex;
+    align-items: center;
+    justify-content: center;
+    min-width: 24px;
+    height: 24px;
+    padding: 0 7px;
+    border-radius: 999px;
+    background: rgba(255, 255, 255, 0.1);
+    color: var(--text-secondary);
+    font-size: 0.78rem;
+    font-weight: 700;
+}
+
+.discography-grid {
+    display: grid;
+    grid-template-columns: repeat(auto-fill, minmax(150px, 1fr));
+    gap: 20px 16px;
 }
 
 .album-card-apple {
-    flex-shrink: 0;
-    width: 150px;
+    width: 100%;
+    min-width: 0;
+    padding: 0;
+    border: 0;
+    background: transparent;
+    color: inherit;
+    text-align: left;
     cursor: pointer;
     transition: var(--transition-smooth);
 }
@@ -625,8 +657,9 @@
 }
 
 .album-cover-apple {
-    width: 150px;
-    height: 150px;
+    display: block;
+    width: 100%;
+    aspect-ratio: 1;
     border-radius: 8px;
     overflow: hidden;
     margin-bottom: 10px;
@@ -779,17 +812,27 @@
         height: 48px;
     }
 
-    .albums-scroll-row {
+    .discography-grid {
+        display: grid;
+        grid-auto-flow: column;
+        grid-auto-columns: minmax(130px, 42vw);
+        grid-template-columns: none;
         gap: 12px;
+        overflow-x: auto;
+        padding: 0 1px 10px;
+        scrollbar-width: none;
     }
 
-    .album-card-apple {
-        width: 130px;
+    .discography-grid::-webkit-scrollbar {
+        display: none;
     }
 
     .album-cover-apple {
-        width: 130px;
-        height: 130px;
+        width: 100%;
+    }
+
+    .discography-group + .discography-group {
+        margin-top: 28px;
     }
 
     /* Navigation buttons - larger for touch */
@@ -862,12 +905,11 @@
         padding: 12px 8px;
     }
 
-    .album-card-apple {
-        width: 180px;
+    .discography-grid {
+        grid-template-columns: repeat(auto-fill, minmax(180px, 1fr));
     }
 
     .album-cover-apple {
-        width: 180px;
-        height: 180px;
+        width: 100%;
     }
 }

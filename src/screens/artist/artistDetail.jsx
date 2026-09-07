@@ -17,6 +17,7 @@ import {
     fetchAudioUrl
 } from '../../services/unifiedService';
 import { buildRadioQueue, getRadioTrackKey, selectArtistRadioSeed } from '../../services/radioService';
+import { groupDiscography } from '../../services/discography';
 
 import '../../shared/globalStyles.css';
 import './artistDetail.css';
@@ -39,6 +40,44 @@ const formatCompactNumber = (num) => {
 };
 
 const DEFAULT_IMAGE = 'https://images.unsplash.com/photo-1470225620780-dba8ba36b745?auto=format&fit=crop&w=500&q=60';
+
+const DiscographyGroup = ({ title, releases, onSelect }) => {
+    if (!releases.length) return null;
+
+    return (
+        <section className="discography-group" aria-label={title}>
+            <div className="discography-group-heading">
+                <h2 className="section-title-apple">{title}</h2>
+                <span className="discography-count">{releases.length}</span>
+            </div>
+            <div className="discography-grid">
+                {releases.map((release, index) => {
+                    const artwork = getBestArtworkUrl(release);
+                    if (!artwork) return null;
+                    const year = release.releaseDate ? new Date(release.releaseDate).getFullYear() : null;
+                    const trackCount = Number(release.trackCount || release.nb_tracks || 0);
+
+                    return (
+                        <button
+                            type="button"
+                            key={release.id || `${release.name}-${index}`}
+                            className="album-card-apple"
+                            onClick={() => onSelect(release)}
+                        >
+                            <span className="album-cover-apple">
+                                <img {...getArtworkImageProps(release, { size: 500, sizes: '(max-width: 768px) 42vw, 180px' })} alt={release.name} loading="lazy" />
+                            </span>
+                            <span className="album-title-apple">{release.name}</span>
+                            <span className="album-type-apple">
+                                {[year, trackCount ? `${trackCount} canciones` : null].filter(Boolean).join(' · ')}
+                            </span>
+                        </button>
+                    );
+                })}
+            </div>
+        </section>
+    );
+};
 
 // --- COMPONENTE PRINCIPAL ---
 
@@ -289,6 +328,9 @@ export default function ArtistDetail() {
     if (!artistInfo) return <PageState variant="error" title="Artista no encontrado" message={loadError} actionLabel="Reintentar" onAction={() => setRetryKey(key => key + 1)} secondaryLabel="Volver" onSecondary={() => navigate(-1)} />;
 
     const latestAlbum = topAlbums[0];
+    // El último lanzamiento ya tiene una tarjeta propia; el resto se presenta
+    // separado por formato y conserva el orden por fecha de la consulta.
+    const discography = groupDiscography(topAlbums.slice(1));
 
     return (
         <div className="artist-detail-apple" ref={containerRef}>
@@ -463,34 +505,13 @@ export default function ArtistDetail() {
 
                 {/* Discografía */}
                 {topAlbums.length > 1 && (
-                    <section className="discography-section">
-                        <div className="section-header-row">
+                    <section className="discography-section" aria-label="Discografía">
+                        <div className="section-header-row discography-header">
                             <h2 className="section-title-apple">Discografía</h2>
-                            <FaChevronRight className="section-chevron" />
                         </div>
-
-                        <div className="albums-scroll-row">
-                            {topAlbums.slice(1).map((album, i) => {
-                                const albSrc = getBestArtworkUrl(album);
-                                if (!albSrc) return null;
-                                return (
-                                    <div
-                                        key={album.id || i}
-                                        className="album-card-apple"
-                                        onClick={() => navigate(getAlbumPath(album, artistInfo.name))}
-                                    >
-                                        <div className="album-cover-apple">
-                                            <img {...getArtworkImageProps(album, { size: 500, sizes: '(max-width: 600px) 42vw, 180px' })} alt={album.name} loading="lazy" />
-                                        </div>
-                                        <span className="album-title-apple">{album.name}</span>
-                                        <span className="album-type-apple">
-                                            {album.type || 'Álbum'}
-                                            {album.releaseDate && ` · ${new Date(album.releaseDate).getFullYear()}`}
-                                        </span>
-                                    </div>
-                                );
-                            })}
-                        </div>
+                        <DiscographyGroup title="Álbumes" releases={discography.album} onSelect={(release) => navigate(getAlbumPath(release, artistInfo.name))} />
+                        <DiscographyGroup title="EPs" releases={discography.ep} onSelect={(release) => navigate(getAlbumPath(release, artistInfo.name))} />
+                        <DiscographyGroup title="Singles" releases={discography.single} onSelect={(release) => navigate(getAlbumPath(release, artistInfo.name))} />
                     </section>
                 )}
 
