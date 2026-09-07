@@ -42,7 +42,7 @@ describe('Fase 1: recorridos esenciales', () => {
     render(<MemoryRouter><Login /></MemoryRouter>);
     await user.type(screen.getByLabelText('Correo electrónico'), 'correo-invalido');
     await user.type(screen.getByLabelText('Contraseña'), 'secreto123');
-    fireEvent.submit(screen.getByRole('button', { name: 'INICIAR SESIÓN' }).closest('form'));
+    fireEvent.submit(screen.getByRole('button', { name: /iniciar sesión/i }).closest('form'));
     expect(await screen.findByRole('alert')).toHaveTextContent('correo electrónico válido');
   });
 
