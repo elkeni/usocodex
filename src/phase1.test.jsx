@@ -5,12 +5,14 @@ import userEvent from '@testing-library/user-event';
 import { MemoryRouter, Route, Routes } from 'react-router-dom';
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest';
 import Login from './screens/auth/login';
+import ForgotPassword from './screens/auth/forgotPassword';
 import Card from './components/shared/Card';
 import { FeedbackProvider, useFeedback } from './context/feedbackContext';
 
 vi.mock('./services/authService', () => ({
   AuthService: {
     login: vi.fn(),
+    requestPasswordReset: vi.fn(),
   },
 }));
 
@@ -58,6 +60,14 @@ describe('Fase 1: recorridos esenciales', () => {
     );
     await user.click(screen.getByRole('button', { name: /Regístrate aquí/i }));
     expect(screen.getByRole('heading', { name: 'Registro de prueba' })).toBeInTheDocument();
+  });
+
+  it('valida el correo antes de solicitar la recuperación de contraseña', async () => {
+    const user = userEvent.setup();
+    render(<MemoryRouter><ForgotPassword /></MemoryRouter>);
+    await user.type(screen.getByLabelText('Correo electrónico'), 'correo-invalido');
+    await user.click(screen.getByRole('button', { name: 'Enviar enlace' }));
+    expect(await screen.findByRole('alert')).toHaveTextContent('correo electrónico válido');
   });
 
   it('activa una tarjeta con el teclado', async () => {

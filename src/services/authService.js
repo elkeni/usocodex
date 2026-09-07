@@ -1,6 +1,7 @@
 // src/services/authService.js
 import {
     createUserWithEmailAndPassword,
+    sendPasswordResetEmail,
     signInWithEmailAndPassword,
     signOut,
     updateProfile
@@ -59,7 +60,17 @@ export const AuthService = {
         }
     },
 
-    // 3. Cerrar Sesión
+    // 3. Firebase envía el enlace solo a cuentas de autenticación existentes.
+    requestPasswordReset: async (email) => {
+        try {
+            auth.languageCode = 'es';
+            await sendPasswordResetEmail(auth, email);
+        } catch (error) {
+            throw translateError(error);
+        }
+    },
+
+    // 4. Cerrar Sesión
     logout: async () => {
         await signOut(auth);
     }
@@ -85,6 +96,12 @@ const translateError = (error) => {
             break;
         case 'auth/too-many-requests':
             message = 'Demasiados intentos. Espera unos minutos antes de volver a intentarlo.';
+            break;
+        case 'auth/network-request-failed':
+            message = 'No se pudo conectar. Revisa tu conexión e inténtalo nuevamente.';
+            break;
+        case 'auth/operation-not-allowed':
+            message = 'La recuperación de contraseña no está disponible en este momento.';
             break;
         default:
             message = 'Ocurrió un error inesperado. Intenta de nuevo.';

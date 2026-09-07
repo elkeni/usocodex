@@ -35,6 +35,7 @@ export default function Login() {
         {error && <div id="login-error" className="auth-message auth-message--error" role="alert"><FaTimes aria-hidden="true" />{error}</div>}
         <div className="auth-field"><label htmlFor="login-email">Correo electrónico</label><input id="login-email" type="email" name="email" placeholder="nombre@correo.com" value={formData.email} onChange={handleChange} disabled={isLoading} autoComplete="email" aria-invalid={Boolean(error)} aria-describedby={error ? 'login-error' : undefined} /></div>
         <div className="auth-field"><label htmlFor="login-password">Contraseña</label><div className="auth-password-input"><input id="login-password" type={showPassword ? 'text' : 'password'} name="password" placeholder="Tu contraseña" value={formData.password} onChange={handleChange} disabled={isLoading} autoComplete="current-password" aria-invalid={Boolean(error)} aria-describedby={error ? 'login-error' : undefined} /><button type="button" onClick={() => setShowPassword((visible) => !visible)} aria-label={showPassword ? 'Ocultar contraseña' : 'Mostrar contraseña'} disabled={isLoading}>{showPassword ? <FaEyeSlash /> : <FaEye />}</button></div></div>
+        <button type="button" className="auth-recovery-link" onClick={() => navigate('/recover-password')} disabled={isLoading}>¿Olvidaste tu contraseña?</button>
         <button className="auth-submit" type="submit" disabled={isLoading}><span>{isLoading ? 'Accediendo…' : 'Iniciar sesión'}</span><FaArrowRight aria-hidden="true" /></button>
       </form>
     </AuthLayout>

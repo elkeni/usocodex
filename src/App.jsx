@@ -4,6 +4,7 @@ import { ProtectedRoute } from './screens/auth/ProtectedRoute';
 
 const Login = lazy(() => import('./screens/auth/login.jsx'));
 const Register = lazy(() => import('./screens/auth/register.jsx'));
+const ForgotPassword = lazy(() => import('./screens/auth/forgotPassword.jsx'));
 const Onboarding = lazy(() => import('./screens/auth/onboarding.jsx'));
 const PrivateApp = lazy(() => import('./PrivateApp.jsx'));
 
@@ -26,6 +27,7 @@ function AppRoutes() {
       <Routes>
         <Route path="/login" element={<Login />} />
         <Route path="/register" element={<Register />} />
+        <Route path="/recover-password" element={<ForgotPassword />} />
         <Route path="/onboarding" element={
           <ProtectedRoute allowIncomplete>
             <Onboarding />
