@@ -57,6 +57,31 @@ const shuffled = (items, random) => {
     return copy;
 };
 
+/**
+ * Selecciona una semilla distinta para una radio de artista.
+ * La API devuelve los éxitos en un orden fijo; no usar siempre el índice 0
+ * evita que la estación empiece invariablemente con el tema más popular.
+ */
+export const selectArtistRadioSeed = (tracks, { recentKeys = [], random = Math.random } = {}) => {
+    const candidates = uniqueTracks(tracks);
+    if (!candidates.length) return null;
+
+    const recent = recentKeys.filter(Boolean);
+    const recentSet = new Set(recent);
+    let pool = candidates.filter((track) => !recentSet.has(getRadioTrackKey(track)));
+
+    // Tras recorrer el catálogo disponible, empieza un ciclo nuevo sin repetir
+    // de inmediato el último tema que abrió la estación.
+    if (!pool.length) {
+        const lastKey = recent[0];
+        pool = candidates.filter((track) => getRadioTrackKey(track) !== lastKey);
+    }
+
+    const selectionPool = pool.length ? pool : candidates;
+    const index = Math.min(selectionPool.length - 1, Math.floor(random() * selectionPool.length));
+    return selectionPool[index];
+};
+
 const interleaveWithArtistSpacing = (pools, targetSize) => {
     const queue = [];
     let lastArtist = '';

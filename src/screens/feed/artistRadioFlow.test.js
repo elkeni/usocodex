@@ -19,6 +19,12 @@ describe('Feed: radio de artistas favoritos', () => {
             .toBeLessThan(handler.indexOf('await buildRadioQueue'));
     });
 
+    it('elige una semilla variable de un lote amplio, no el primer éxito fijo', () => {
+        expect(handler).toContain('artistGetTopTracks({ artist: artist.name, limit: 25 })');
+        expect(handler).toContain('selectArtistRadioSeed(');
+        expect(handler).not.toContain('toptracks?.track?.[0]');
+    });
+
     it('descarta solicitudes antiguas y agrega la cola silenciosamente', () => {
         expect(handler).toContain('requestId !== artistRadioRequestRef.current');
         expect(handler).toContain('sessionId: queueSessionId');

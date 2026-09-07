@@ -1,6 +1,6 @@
 // @vitest-environment jsdom
 import { beforeEach, describe, expect, it, vi } from 'vitest';
-import { buildRadioQueue } from './services/radioService';
+import { buildRadioQueue, selectArtistRadioSeed } from './services/radioService';
 import { LibraryGenerator } from './services/libraryGenerator';
 import {
     PRODUCT_EVENTS,
@@ -11,6 +11,21 @@ import {
 } from './services/productMetrics';
 
 describe('Fase 3: radio unificada', () => {
+    it('rota la semilla de un artista antes de repetir su canción más popular', () => {
+        const tracks = [
+            { name: 'Pink + White', artist: 'Frank Ocean' },
+            { name: 'Nikes', artist: 'Frank Ocean' },
+            { name: 'Ivy', artist: 'Frank Ocean' },
+        ];
+
+        const seed = selectArtistRadioSeed(tracks, {
+            recentKeys: ['frank ocean::pink + white', 'frank ocean::nikes'],
+            random: () => 0,
+        });
+
+        expect(seed).toMatchObject({ name: 'Ivy', artist: 'Frank Ocean' });
+    });
+
     it('combina contexto, artista y relacionados sin duplicar canciones', async () => {
         const services = {
             artistGetTopTracks: vi.fn(async ({ artist }) => ({

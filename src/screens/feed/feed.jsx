@@ -10,7 +10,7 @@ import {
 import { useUser } from "../../context/userContext";
 import { usePlayerActions, usePlayer } from "../../context/playerContext";
 import screenStateCache, { useScrollPersistence } from "../../services/screenStateCache";
-import { buildRadioQueue } from "../../services/radioService";
+import { buildRadioQueue, getRadioTrackKey, selectArtistRadioSeed } from "../../services/radioService";
 import { PRODUCT_EVENTS, recordProductEvent } from "../../services/productMetrics";
 import { getAlbumPath } from "../../services/albumNavigation";
 import { getArtistPath } from "../../services/artistIdentity";
@@ -386,6 +386,7 @@ function FeedContent() {
   const { user, favorites, playlists, savedArtists, savedAlbums, loading: userLoading } = useUser();
   const feedCacheKey = `feed:${user?.uid || 'guest'}`;
   const artistRadioRequestRef = useRef(0);
+  const artistRadioSeedHistoryRef = useRef(new Map());
   const discoveryPrefetchKeysRef = useRef(new Set());
   const startupTracksRef = useRef(readStartupTracks());
 
@@ -733,10 +734,16 @@ function FeedContent() {
 
     const requestId = ++artistRadioRequestRef.current;
     showToast(`Buscando música de ${artist.name}...`, artist.image, true);
-    const seedResponse = await artistGetTopTracks({ artist: artist.name, limit: 1 }).catch(() => null);
+    // Pedimos un conjunto amplio. Deezer lo ordena por popularidad, por lo que
+    // usar siempre el primer resultado hacía que cada radio empezara igual.
+    const seedResponse = await artistGetTopTracks({ artist: artist.name, limit: 25 }).catch(() => null);
     if (requestId !== artistRadioRequestRef.current) return;
 
-    const seedTrack = seedResponse?.toptracks?.track?.[0];
+    const historyKey = artist.name.toLocaleLowerCase('es');
+    const recentSeeds = artistRadioSeedHistoryRef.current.get(historyKey) || [];
+    const seedTrack = selectArtistRadioSeed(seedResponse?.toptracks?.track || [], {
+      recentKeys: recentSeeds,
+    });
 
     if (!seedTrack) {
       showToast('No encontramos canciones disponibles para esta estación.', artist.image);
@@ -745,6 +752,11 @@ function FeedContent() {
 
     // La canción semilla empieza primero; ampliar la radio nunca bloquea la reproducción.
     const trackToPlay = normalizeItem(seedTrack, 'track') || seedTrack;
+    const seedKey = getRadioTrackKey(trackToPlay);
+    artistRadioSeedHistoryRef.current.set(
+      historyKey,
+      [seedKey, ...recentSeeds.filter((key) => key !== seedKey)].slice(0, 24),
+    );
     recordProductEvent(PRODUCT_EVENTS.RADIO_STARTED);
     const queueSessionId = playTrack(trackToPlay, [trackToPlay], {
       id: `radio-${makeTrackKey(trackToPlay)}`,
