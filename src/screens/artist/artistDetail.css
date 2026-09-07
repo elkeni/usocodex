@@ -281,6 +281,29 @@
     /* Visual centering for play icon */
 }
 
+/* Radio del artista: una estación separada de reproducir y aleatorio. */
+.artist-action-btn.radio-btn {
+    min-height: 50px;
+    padding: 14px 20px;
+    color: white;
+    background: rgba(15, 15, 18, 0.58);
+    border: 1px solid rgba(255, 255, 255, 0.24);
+    backdrop-filter: blur(12px);
+    -webkit-backdrop-filter: blur(12px);
+    box-shadow: 0 6px 24px rgba(0, 0, 0, 0.24);
+    font-size: 15px;
+}
+
+.artist-action-btn.radio-btn:hover:not(:disabled) {
+    background: rgba(255, 255, 255, 0.2);
+    border-color: rgba(255, 255, 255, 0.42);
+    transform: scale(1.03);
+}
+
+.artist-action-btn.radio-btn:active:not(:disabled) {
+    transform: scale(0.97);
+}
+
 /* Botones Secundarios (Shuffle, Library) */
 .artist-action-btn.secondary {
     width: 50px;
@@ -708,6 +731,12 @@
     .artist-action-btn.primary {
         padding: 12px 24px;
         min-height: 46px;
+        font-size: 14px;
+    }
+
+    .artist-action-btn.radio-btn {
+        min-height: 46px;
+        padding: 12px 16px;
         font-size: 14px;
     }
 

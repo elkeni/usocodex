@@ -1,9 +1,10 @@
 import { useState, useEffect, useCallback, useRef } from 'react';
 import { useParams, useNavigate } from 'react-router-dom';
-import { FaPlay, FaChevronRight, FaEllipsisH, FaArrowLeft, FaCheck, FaPlus, FaRandom } from 'react-icons/fa';
+import { FaPlay, FaChevronRight, FaEllipsisH, FaArrowLeft, FaCheck, FaPlus, FaRandom, FaBroadcastTower } from 'react-icons/fa';
 
-import { usePlayer } from '../../context/playerContext';
+import { usePlayerActions } from '../../context/playerContext';
 import { useUser } from '../../context/userContext';
+import { useFeedback } from '../../context/feedbackContext';
 import TrackArtistsModal from '../../components/player/TrackArtistsModal';
 import { getTrackArtists, getArtistPath } from '../../services/artistIdentity';
 import PageState from '../../components/shared/PageState';
@@ -15,6 +16,7 @@ import {
     artistGetTopTracks,
     fetchAudioUrl
 } from '../../services/unifiedService';
+import { buildRadioQueue, getRadioTrackKey, selectArtistRadioSeed } from '../../services/radioService';
 
 import '../../shared/globalStyles.css';
 import './artistDetail.css';
@@ -43,9 +45,12 @@ const DEFAULT_IMAGE = 'https://images.unsplash.com/photo-1470225620780-dba8ba36b
 export default function ArtistDetail() {
     const { name } = useParams();
     const navigate = useNavigate();
-    const { playTrack } = usePlayer();
+    const { playTrack, appendToQueue } = usePlayerActions();
     const { isArtistSaved, toggleSaveArtist } = useUser();
+    const { notify } = useFeedback();
     const containerRef = useRef(null);
+    const artistRadioRequestRef = useRef(0);
+    const artistRadioSeedHistoryRef = useRef(new Map());
 
     const [collaborators, setCollaborators] = useState([]);
     const [artistInfo, setArtistInfo] = useState(null);
@@ -56,6 +61,7 @@ export default function ArtistDetail() {
     const [retryKey, setRetryKey] = useState(0);
     const [playingTrackId, setPlayingTrackId] = useState(null);
     const [isScrolled, setIsScrolled] = useState(false);
+    const [isStartingRadio, setIsStartingRadio] = useState(false);
 
     // Detectar scroll para el header sticky
     useEffect(() => {
@@ -130,6 +136,7 @@ export default function ArtistDetail() {
 
     // ⭐ Función para reproducir una canción
     const handlePlayTrack = useCallback(async (track, forceShuffle = false) => {
+        artistRadioRequestRef.current += 1;
         if (playingTrackId) return;
 
         const trackId = track.id || track.name;
@@ -197,6 +204,79 @@ export default function ArtistDetail() {
             handlePlayTrack(topTracks[0]);
         }
     }, [topTracks, handlePlayTrack]);
+
+    const handlePlayArtistRadio = useCallback(async () => {
+        const artistName = artistInfo?.name || name;
+        if (!artistName || isStartingRadio) return;
+
+        const requestId = ++artistRadioRequestRef.current;
+        setIsStartingRadio(true);
+
+        try {
+            // Pedir más temas que los diez mostrados evita que la estación siempre
+            // arranque con el mismo éxito popular del artista.
+            const seedResponse = await artistGetTopTracks({
+                artist: artistInfo?.id || artistName,
+                limit: 25,
+            }).catch(() => null);
+            if (requestId !== artistRadioRequestRef.current) return;
+
+            const historyKey = artistName.toLocaleLowerCase('es');
+            const recentSeeds = artistRadioSeedHistoryRef.current.get(historyKey) || [];
+            const seedTrack = selectArtistRadioSeed(
+                seedResponse?.toptracks?.track?.length ? seedResponse.toptracks.track : topTracks,
+                { recentKeys: recentSeeds },
+            );
+
+            if (!seedTrack) {
+                notify('No encontramos canciones disponibles para esta radio.', { type: 'error' });
+                return;
+            }
+
+            const seedKey = getRadioTrackKey(seedTrack);
+            artistRadioSeedHistoryRef.current.set(
+                historyKey,
+                [seedKey, ...recentSeeds.filter((key) => key !== seedKey)].slice(0, 24),
+            );
+
+            // La reproducción empieza antes de buscar artistas relacionados.
+            const queueSessionId = playTrack(seedTrack, [seedTrack], {
+                id: `artist-radio-${artistInfo?.id || artistName}`,
+                type: 'radio',
+                name: `Radio de ${artistName}`,
+                autoExtend: true,
+                seedTrack,
+                stationArtist: artistName,
+            });
+            setIsStartingRadio(false);
+            notify(`Radio de ${artistName} iniciada. Completando la estación...`);
+
+            try {
+                const additionalTracks = await buildRadioQueue({
+                    seedTrack,
+                    artistName,
+                    contextTracks: [],
+                    existingQueue: [seedTrack],
+                    targetSize: 31,
+                    includeSeed: false,
+                });
+                if (requestId !== artistRadioRequestRef.current) return;
+
+                appendToQueue(additionalTracks, {
+                    sessionId: queueSessionId,
+                    silent: true,
+                    maxSize: 200,
+                });
+            } catch (error) {
+                console.warn('[ArtistDetail] No se pudo ampliar la radio:', error?.message);
+                if (requestId === artistRadioRequestRef.current) {
+                    notify(`Radio de ${artistName} iniciada con la música disponible.`, { type: 'warning' });
+                }
+            }
+        } finally {
+            if (requestId === artistRadioRequestRef.current) setIsStartingRadio(false);
+        }
+    }, [artistInfo, name, isStartingRadio, topTracks, playTrack, appendToQueue, notify]);
 
     // --- RENDERIZADO ---
 
@@ -269,6 +349,17 @@ export default function ArtistDetail() {
                         >
                             <FaPlay size={16} />
                             <span>Reproducir</span>
+                        </button>
+
+                        {/* Radio: mezcla canciones del artista y artistas relacionados. */}
+                        <button
+                            className="artist-action-btn radio-btn"
+                            onClick={handlePlayArtistRadio}
+                            disabled={topTracks.length === 0 || isStartingRadio}
+                            aria-label={`Reproducir radio de ${artistInfo.name}`}
+                        >
+                            <FaBroadcastTower size={15} />
+                            <span>{isStartingRadio ? 'Creando radio…' : 'Radio'}</span>
                         </button>
 
                         {/* Botón Shuffle */}
