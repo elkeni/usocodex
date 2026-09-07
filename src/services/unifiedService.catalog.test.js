@@ -1,6 +1,6 @@
 // @vitest-environment jsdom
 import { afterEach, describe, expect, it, vi } from 'vitest';
-import { chartGetTopTracks, getArtistAlbums } from './unifiedService';
+import { chartGetTopTracks, getAlbumDetails, getArtistAlbums } from './unifiedService';
 
 afterEach(() => vi.restoreAllMocks());
 
@@ -35,6 +35,36 @@ describe('fresh discovery catalog', () => {
       .mockResolvedValueOnce({ ok: true, json: async () => ({ data: [{ id: 2, title: 'Recovered' }] }) });
     expect((await chartGetTopTracks({ limit: 20 })).tracks.track).toEqual([]);
     expect((await chartGetTopTracks({ limit: 20 })).tracks.track[0].name).toBe('Recovered');
+    expect(fetchMock).toHaveBeenCalledTimes(2);
+  });
+
+  it('carga el tracklist completo cuando el detalle inicial sólo trae 25 canciones', async () => {
+    const makeTrack = (id) => ({ id, title: `Tema ${id}`, track_position: id, artist: { name: 'Skrillex' } });
+    const fullTracklist = Array.from({ length: 34 }, (_, index) => makeTrack(index + 1));
+    const fetchMock = vi.spyOn(globalThis, 'fetch').mockImplementation(async (url) => {
+      const endpoint = new URL(url).searchParams.get('endpoint');
+      if (endpoint === '/album/34') {
+        return {
+          ok: true,
+          json: async () => ({
+            id: 34,
+            title: 'Álbum largo',
+            nb_tracks: 34,
+            artist: { id: 1, name: 'Skrillex' },
+            tracks: { data: fullTracklist.slice(0, 25) },
+          }),
+        };
+      }
+      if (endpoint === '/album/34/tracks?limit=100') {
+        return { ok: true, json: async () => ({ data: fullTracklist }) };
+      }
+      throw new Error(`Endpoint inesperado: ${endpoint}`);
+    });
+
+    const album = await getAlbumDetails(34);
+
+    expect(album.tracks).toHaveLength(34);
+    expect(album.tracks.at(-1)).toMatchObject({ id: 34, trackNumber: 34 });
     expect(fetchMock).toHaveBeenCalledTimes(2);
   });
 });

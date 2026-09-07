@@ -43,6 +43,9 @@ describe('Navegación y resolución de álbumes', () => {
     it('carga Breach directamente mediante el Deezer ID 819534781', async () => {
         const fetchMock = vi.fn(async (url) => {
             const endpoint = decodeURIComponent(String(url).split('endpoint=')[1] || '');
+            if (endpoint === '/album/819534781/tracks?limit=100') {
+                return { ok: true, json: async () => ({ data: [] }) };
+            }
             expect(endpoint).toBe('/album/819534781');
             return {
                 ok: true,
@@ -63,7 +66,7 @@ describe('Navegación y resolución de álbumes', () => {
         const album = await loadAlbumDetailsDeduped(identity, getAlbumDetails);
 
         expect(album).toMatchObject({ id: 819534781, deezerId: 819534781, name: 'Breach' });
-        expect(fetchMock).toHaveBeenCalledTimes(1);
+        expect(fetchMock).toHaveBeenCalledTimes(2);
     });
 
     it('mantiene título y artista separados para un álbum normal', async () => {
@@ -133,6 +136,15 @@ describe('Navegación y resolución de álbumes', () => {
                 };
             }
 
+            if (endpoint === '/album/987654/tracks?limit=100') {
+                return {
+                    ok: true,
+                    json: async () => ({
+                        data: [{ id: 1, title: 'Overcompensate', artist: { name: 'Twenty One Pilots' } }],
+                    }),
+                };
+            }
+
             throw new Error(`Endpoint inesperado: ${endpoint}`);
         });
         vi.stubGlobal('fetch', fetchMock);
@@ -144,6 +156,6 @@ describe('Navegación y resolución de álbumes', () => {
             name: albumTitle,
             artist: 'Twenty One Pilots',
         });
-        expect(fetchMock).toHaveBeenCalledTimes(2);
+        expect(fetchMock).toHaveBeenCalledTimes(3);
     });
 });

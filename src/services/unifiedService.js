@@ -319,7 +319,31 @@ const DeezerClient = {
             return null;
         }
 
-        const tracks = (albumData.tracks?.data || [])
+        // El payload /album sólo incluye la primera página (normalmente 25
+        // canciones). Pedir el tracklist por separado evita cortar álbumes
+        // extensos como recopilatorios, mixtapes o ediciones deluxe.
+        const initialTracks = albumData.tracks?.data || [];
+        const expectedTrackCount = Number(albumData.nb_tracks || initialTracks.length);
+        const completeTracklist = await this._fetch(`/album/${albumData.id}/tracks?limit=100`);
+        const allTracks = [...(completeTracklist?.data?.length ? completeTracklist.data : initialTracks)];
+        const knownTrackIds = new Set(allTracks.map((track) => String(track.id)));
+
+        // Deezer limita cada página; seguir consultando hasta que el contador
+        // del álbum esté completo o la API no entregue canciones nuevas.
+        for (let index = allTracks.length; index < expectedTrackCount; index += 100) {
+            const page = await this._fetch(`/album/${albumData.id}/tracks?index=${index}&limit=100`);
+            const pageTracks = page?.data || [];
+            const newTracks = pageTracks.filter((track) => {
+                const key = String(track.id);
+                if (knownTrackIds.has(key)) return false;
+                knownTrackIds.add(key);
+                return true;
+            });
+            if (!newTracks.length) break;
+            allTracks.push(...newTracks);
+        }
+
+        const tracks = allTracks
             .sort((a, b) => (a.track_position || 0) - (b.track_position || 0))
             .map((track, index) => ({
                 id: track.id,
