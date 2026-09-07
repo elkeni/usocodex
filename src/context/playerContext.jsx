@@ -1864,7 +1864,7 @@ export const PlayerProvider = ({ children }) => {
     const RADIO_THRESHOLD = 3; // Generar más cuando quedan 3 o menos tracks
     const RADIO_DEBOUNCE_MS = 5000; // No generar más seguido que cada 5 segundos
 
-    const generateMoreRadioTracks = useCallback(async (seedTrack, sessionId) => {
+    const generateMoreRadioTracks = useCallback(async (seedTrack, stationArtist, sessionId) => {
         // Evitar múltiples generaciones simultáneas
         if (sessionId !== queueSessionRef.current) return [];
         if (isGeneratingRadioRef.current) return [];
@@ -1876,6 +1876,7 @@ export const PlayerProvider = ({ children }) => {
         try {
             const newTracks = await buildRadioQueue({
                 seedTrack,
+                artistName: stationArtist,
                 existingQueue: queueRef.current,
                 targetSize: 10,
                 includeSeed: false,
@@ -1904,7 +1905,8 @@ export const PlayerProvider = ({ children }) => {
         if (remainingTracks <= RADIO_THRESHOLD && remainingTracks >= 0) {
             const sessionId = queueSessionRef.current;
             const stationSeed = playbackContext.seedTrack || currentTrack;
-            generateMoreRadioTracks(stationSeed, sessionId).then((newTracks) => {
+            const stationArtist = playbackContext.stationArtist || stationSeed.artist;
+            generateMoreRadioTracks(stationSeed, stationArtist, sessionId).then((newTracks) => {
                 if (newTracks.length > 0) {
                     appendToQueue(newTracks, { sessionId, silent: true, maxSize: 200 });
                     console.log(`[RadioInfinita] 📻 Added ${newTracks.length} tracks to queue. New total: ${queueRef.current.length + newTracks.length}`);

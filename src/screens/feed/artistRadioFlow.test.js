@@ -25,6 +25,12 @@ describe('Feed: radio de artistas favoritos', () => {
         expect(handler).not.toContain('toptracks?.track?.[0]');
     });
 
+    it('conserva al artista elegido como origen de toda la estación', () => {
+        expect(handler).toContain('stationArtist: artist.name');
+        expect(handler).toContain('artistName: artist.name');
+        expect(handler).toContain('name: `Radio de ${artist.name}`');
+    });
+
     it('descarta solicitudes antiguas y agrega la cola silenciosamente', () => {
         expect(handler).toContain('requestId !== artistRadioRequestRef.current');
         expect(handler).toContain('sessionId: queueSessionId');

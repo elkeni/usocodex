@@ -40,6 +40,7 @@ describe('Player: reproducción en segundo plano', () => {
         expect(playerSource).toContain('sessionId !== queueSessionRef.current');
         expect(playerSource).toContain('runId !== prefetchRunRef.current');
         expect(playerSource).toContain('playbackContext?.autoExtend !== true');
+        expect(playerSource).toContain('playbackContext.stationArtist || stationSeed.artist');
     });
 
     it('no sustituye la cola canónica por el orden aleatorio al reproducir', () => {

@@ -761,15 +761,17 @@ function FeedContent() {
     const queueSessionId = playTrack(trackToPlay, [trackToPlay], {
       id: `radio-${makeTrackKey(trackToPlay)}`,
       type: 'radio',
-      name: `Radio de ${trackToPlay.artist || trackToPlay.name}`,
+      name: `Radio de ${artist.name}`,
       autoExtend: true,
       seedTrack: trackToPlay,
+      stationArtist: artist.name,
     });
     showToast(`Reproduciendo ${artist.name}. Completando la radio...`, artist.image, true);
 
     try {
       const additionalTracks = await buildRadioQueue({
         seedTrack: trackToPlay,
+        artistName: artist.name,
         // Una radio de artista no debe contaminarse con recomendaciones
         // generales del inicio, que pueden pertenecer a otros artistas.
         contextTracks: [],

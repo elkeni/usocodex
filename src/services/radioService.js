@@ -118,6 +118,7 @@ const interleaveWithArtistSpacing = (pools, targetSize) => {
  */
 export const buildRadioQueue = async ({
     seedTrack,
+    artistName = '',
     contextTracks = [],
     existingQueue = [],
     targetSize = 24,
@@ -128,13 +129,17 @@ export const buildRadioQueue = async ({
     const seed = normalizeTrack(seedTrack);
     if (!seed) return [];
 
-    const seedArtist = getArtistName(seed);
+    // En una radio de artista, la estación se ancla al artista elegido y no a
+    // los créditos de la primera pista. Esto importa en colaboraciones o
+    // cuando la pista inicial llega normalizada con otro crédito principal.
+    const stationArtist = String(artistName || getArtistName(seed)).trim();
+    if (!stationArtist) return [];
     const existingKeys = new Set(existingQueue.map(getRadioTrackKey));
     existingKeys.add(getRadioTrackKey(seed));
 
     const [mainResponse, relatedArtists] = await Promise.all([
-        services.artistGetTopTracks({ artist: seedArtist, limit: 18 }).catch(() => null),
-        services.getRelatedArtists(seedArtist, 8).catch(() => []),
+        services.artistGetTopTracks({ artist: stationArtist, limit: 18 }).catch(() => null),
+        services.getRelatedArtists(stationArtist, 8).catch(() => []),
     ]);
 
     const related = (relatedArtists || []).slice(0, 6);

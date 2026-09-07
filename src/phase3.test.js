@@ -76,6 +76,25 @@ describe('Fase 3: radio unificada', () => {
         });
         expect(queue.map((track) => track.name)).toEqual(['Fresh']);
     });
+
+    it('usa el artista de la estación aunque la canción semilla tenga otro crédito', async () => {
+        const services = {
+            artistGetTopTracks: vi.fn(async ({ artist }) => ({
+                toptracks: { track: [{ name: 'Canción del artista', artist }] },
+            })),
+            getRelatedArtists: vi.fn(async () => []),
+        };
+
+        await buildRadioQueue({
+            seedTrack: { name: 'Colaboración', artist: 'Artista invitado' },
+            artistName: 'Artista principal',
+            includeSeed: false,
+            services,
+        });
+
+        expect(services.artistGetTopTracks).toHaveBeenCalledWith({ artist: 'Artista principal', limit: 18 });
+        expect(services.getRelatedArtists).toHaveBeenCalledWith('Artista principal', 8);
+    });
 });
 
 describe('Fase 3: playlist mágica con contexto real', () => {
