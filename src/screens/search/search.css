@@ -1153,3 +1153,187 @@
     }
 }
 
+/* =============================================================================
+   BUSCADOR: RITMO VISUAL COMPACTO
+   ============================================================================= */
+.search-input-container {
+    max-width: 880px;
+    padding-top: 10px;
+    padding-bottom: 2px;
+}
+
+.search-capsule-input {
+    min-height: 46px;
+    padding-top: 11px;
+    padding-bottom: 11px;
+    border-radius: 14px;
+}
+
+.search-filters {
+    gap: 6px;
+    padding-top: 8px;
+    padding-bottom: 10px;
+}
+
+.filter-glass-pill {
+    min-height: 36px;
+    padding: 7px 13px;
+    font-size: 12px;
+}
+
+.search-content {
+    padding-top: 4px;
+    padding-bottom: 140px;
+}
+
+.results-wrapper {
+    max-width: 880px;
+}
+
+.result-section {
+    margin-bottom: 24px;
+}
+
+.section-header {
+    min-height: 32px;
+    margin-bottom: 6px;
+    padding: 0 0 6px;
+    border-bottom: 1px solid rgba(255, 255, 255, 0.08);
+}
+
+.section-title {
+    font-size: 16px;
+    font-weight: 700;
+    letter-spacing: -0.015em;
+}
+
+.section-see-all {
+    padding: 6px 4px 6px 10px;
+    margin-right: 0;
+    transform: none;
+    font-size: 12px;
+}
+
+.search-page .app-card,
+.search-card-wrapper .app-card,
+.results-wrapper .app-card {
+    min-height: 56px;
+    gap: 10px;
+    padding: 8px 0;
+}
+
+.search-page .app-card-img-wrapper,
+.search-card-wrapper .app-card-img-wrapper {
+    width: 44px !important;
+    height: 44px !important;
+    min-width: 44px;
+    border-radius: 7px;
+}
+
+.search-page .app-card-title,
+.search-card-wrapper .app-card-title,
+.search-page .track-name {
+    font-size: 15px;
+}
+
+.search-page .app-card-subtitle,
+.search-card-wrapper .app-card-subtitle,
+.search-page .track-artist {
+    font-size: 13px;
+}
+
+.search-page .track-row {
+    min-height: 60px;
+    gap: 10px;
+    padding: 8px 0;
+}
+
+.search-page .track-artwork {
+    width: 44px;
+    height: 44px;
+    border-radius: 7px;
+    box-shadow: none;
+}
+
+.search-page .track-duration {
+    margin-left: 8px;
+    min-width: 34px;
+    font-size: 12px;
+}
+
+.artists-horizontal-list {
+    gap: 12px;
+    padding: 4px 0 2px;
+}
+
+.artists-horizontal-list .search-card-wrapper {
+    width: 72px !important;
+}
+
+.artists-horizontal-list .app-card {
+    min-height: 0;
+    gap: 6px !important;
+}
+
+.artists-horizontal-list .app-card-img-wrapper {
+    width: 64px !important;
+    height: 64px !important;
+    min-width: 64px;
+    margin-bottom: 0 !important;
+}
+
+.artists-horizontal-list .app-card-title {
+    font-size: 11px !important;
+    line-height: 1.25;
+}
+
+@media (min-width: 600px) {
+    .search-content {
+        padding-top: 10px;
+    }
+
+    .result-section {
+        margin-bottom: 28px;
+    }
+
+    .search-page .app-card-img-wrapper,
+    .search-card-wrapper .app-card-img-wrapper,
+    .search-page .track-artwork {
+        width: 46px !important;
+        height: 46px !important;
+        min-width: 46px;
+    }
+
+    .search-page .track-row {
+        min-height: 62px;
+    }
+}
+
+@media (max-width: 599px) {
+    .search-input-container {
+        padding-top: 8px;
+    }
+
+    .search-capsule-input {
+        min-height: 46px;
+    }
+
+    .search-content {
+        padding-bottom: calc(142px + env(safe-area-inset-bottom));
+    }
+
+    .result-section {
+        margin-bottom: 22px;
+    }
+
+    .search-page .track-row {
+        min-height: 60px;
+        gap: 10px;
+    }
+
+    .search-page .track-artwork {
+        width: 44px !important;
+        height: 44px !important;
+    }
+}
+

@@ -512,7 +512,6 @@ const TrackRow = ({ track, isLoading, onPlay, showRank = false, index = 0, onLon
             <div className="track-info">
                 <div className="track-title-line">
                     <div className="track-name">{track.name}</div>
-                    {track._searchMeta?.personalized && <span className="search-personalized-badge">Para ti</span>}
                 </div>
                 <div className="track-artist">
                     {track.artist}
@@ -1024,7 +1023,7 @@ export default function Search() {
                                 <div className="section-header">
                                     <h3 className="section-title">
                                         <FaMusic className="section-title-icon" />
-                                        {tracksToShow.some((track) => track._searchMeta?.personalized) ? 'Canciones para ti' : 'Canciones'}
+                                        Canciones
                                     </h3>
                                     {results.tracks.length > 5 && (
                                         <button
@@ -1073,13 +1072,12 @@ export default function Search() {
                                 </div>
                                 <div className="artists-horizontal-list">
                                     {artistsToShow.map((artist, i) => (
-                                        <div className={`search-card-wrapper ${artist._searchMeta?.personalized ? 'is-personalized' : ''}`} key={`artist-${artist.id || i}`}>
+                                        <div className="search-card-wrapper" key={`artist-${artist.id || i}`}>
                                             <Card
                                                 item={artist}
                                                 variant="vertical" // Force vertical for bubbles style
                                                 onClick={() => navigate(getArtistPath(artist))}
                                             />
-                                            {artist._searchMeta?.personalized && <span className="search-card-personalization">Afinidad</span>}
                                         </div>
                                     ))}
                                 </div>
@@ -1100,14 +1098,13 @@ export default function Search() {
                                 </div>
                                 <div className="cards-scroll">
                                     {albumsToShow.map((album, i) => (
-                                        <div className={`search-card-wrapper ${album._searchMeta?.personalized ? 'is-personalized' : ''}`} key={`album-${album.id || i}`}>
+                                        <div className="search-card-wrapper" key={`album-${album.id || i}`}>
                                             <Card
                                                 item={album}
                                                 variant="vertical"
                                                 onClick={() => navigate(getAlbumPath(album))}
                                                 subtitle={album.artist}
                                             />
-                                            {album._searchMeta?.personalized && <span className="search-card-personalization">Para ti</span>}
                                         </div>
                                     ))}
                                 </div>
@@ -1318,13 +1315,12 @@ export default function Search() {
                         {filter === 'artist' && (
                             <div className="cards-grid">
                                 {results.artists.map((artist, i) => (
-                                    <div className={`search-card-wrapper ${artist._searchMeta?.personalized ? 'is-personalized' : ''}`} key={`artist-${artist.id || i}`}>
+                                    <div className="search-card-wrapper" key={`artist-${artist.id || i}`}>
                                         <Card
                                             item={artist}
                                             variant="circle"
                                             onClick={() => navigate(getArtistPath(artist))}
                                         />
-                                        {artist._searchMeta?.personalized && <span className="search-card-personalization">Afinidad</span>}
                                     </div>
                                 ))}
                             </div>
@@ -1336,13 +1332,12 @@ export default function Search() {
                         {filter === 'album' && (
                             <div className="cards-grid">
                                 {results.albums.map((album, i) => (
-                                    <div className={`search-card-wrapper ${album._searchMeta?.personalized ? 'is-personalized' : ''}`} key={`album-${album.id || i}`}>
+                                    <div className="search-card-wrapper" key={`album-${album.id || i}`}>
                                         <Card
                                             item={album}
                                             variant="vertical"
                                             onClick={() => navigate(getAlbumPath(album))}
                                         />
-                                        {album._searchMeta?.personalized && <span className="search-card-personalization">Para ti</span>}
                                     </div>
                                 ))}
                             </div>
