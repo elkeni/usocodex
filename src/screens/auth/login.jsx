@@ -30,7 +30,7 @@ export default function Login() {
   };
 
   return (
-    <AuthLayout mode="login" eyebrow="Bienvenido de vuelta" title="Tu música te estaba esperando." description="Inicia sesión para volver a tu biblioteca y seguir escuchando donde lo dejaste." footer={<button type="button" className="auth-switch" onClick={() => navigate('/register')} disabled={isLoading}>¿Aún no tienes cuenta? <strong>Regístrate aquí</strong></button>}>
+    <AuthLayout mode="login" eyebrow="Acceso" title="Inicia sesión" footer={<button type="button" className="auth-switch" onClick={() => navigate('/register')} disabled={isLoading}>¿Aún no tienes cuenta? <strong>Regístrate aquí</strong></button>}>
       <form className="auth-form" onSubmit={handleLogin} noValidate>
         {error && <div id="login-error" className="auth-message auth-message--error" role="alert"><FaTimes aria-hidden="true" />{error}</div>}
         <div className="auth-field"><label htmlFor="login-email">Correo electrónico</label><input id="login-email" type="email" name="email" placeholder="nombre@correo.com" value={formData.email} onChange={handleChange} disabled={isLoading} autoComplete="email" aria-invalid={Boolean(error)} aria-describedby={error ? 'login-error' : undefined} /></div>
