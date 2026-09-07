@@ -733,6 +733,7 @@
     font-family: var(--ytm-font-family);
     font-size: var(--ytm-font-size-lg);
     font-weight: var(--ytm-font-weight-regular);
+    background: transparent;
     color: var(--ytm-text-tertiary);
     line-height: var(--ytm-line-height-relaxed);
     padding: var(--ytm-space-sm) 0;
