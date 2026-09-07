@@ -13,4 +13,10 @@ describe('Buscador en iPhone', () => {
     it('no añade etiquetas visuales de personalización a los resultados', () => {
         expect(searchSource).not.toContain('Para ti');
     });
+
+    it('mantiene transparentes las filas de canciones sobre el fondo negro', () => {
+        const trackRowRule = searchStyles.match(/\.search-page \.track-row\s*\{[\s\S]*?\}/)?.[0] || '';
+        expect(trackRowRule).toContain('background: transparent');
+        expect(trackRowRule).toContain('appearance: none');
+    });
 });
