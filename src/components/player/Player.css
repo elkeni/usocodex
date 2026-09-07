@@ -1777,7 +1777,7 @@
     position: fixed;
     inset: 0;
     z-index: 11000;
-    background: #000;
+    background: #0a080b;
     display: flex;
     flex-direction: column;
     opacity: 0;
@@ -1804,16 +1804,16 @@
 .ytm-lyrics-overlay__backdrop {
     position: absolute;
     inset: 0;
-    background: rgba(0, 0, 0, 0.4);
+    background: linear-gradient(110deg, rgba(7, 6, 8, 0.94), rgba(26, 16, 18, 0.82));
     z-index: -1;
 }
 
 .ytm-lyrics-overlay__header {
-    height: 80px;
+    min-height: 72px;
     display: flex;
     align-items: center;
     justify-content: space-between;
-    padding: 0 var(--ytm-space-lg);
+    padding: max(14px, var(--ytm-safe-top)) clamp(18px, 4vw, 42px) 12px;
     flex-shrink: 0;
 }
 
@@ -1865,7 +1865,10 @@
 .ytm-lyrics-overlay__content {
     flex: 1;
     overflow-y: auto;
-    padding: var(--ytm-space-xl) var(--ytm-space-lg);
+    width: min(100%, 920px);
+    box-sizing: border-box;
+    align-self: center;
+    padding: clamp(20px, 5vh, 56px) clamp(20px, 5vw, 72px);
     text-align: left;
     mask-image: linear-gradient(to bottom, transparent, black 10%, black 90%, transparent);
     /* Fade edges */
@@ -1876,12 +1879,18 @@
 }
 
 .ytm-lyrics-overlay__line {
+    display: block;
+    width: 100%;
+    padding: 0;
+    border: 0;
+    background: transparent;
+    text-align: left;
     font-family: var(--ytm-font-family);
-    font-size: 2rem;
+    font-size: clamp(1.55rem, 3.3vw, 3rem);
     font-weight: 700;
     line-height: 1.4;
     color: rgba(255, 255, 255, 0.4);
-    margin-bottom: var(--ytm-space-lg);
+    margin: 0 0 clamp(20px, 3vh, 34px);
     cursor: pointer;
     transition: color 0.3s ease, transform 0.3s ease;
     transform-origin: left center;
@@ -1893,7 +1902,7 @@
 
 .ytm-lyrics-overlay__line.active {
     color: #fff;
-    transform: scale(1.05);
+    transform: scale(1.025);
 }
 
 .ytm-lyrics-overlay__line.past {
@@ -1909,13 +1918,65 @@
 }
 
 .ytm-lyrics-overlay__controls {
-    height: 100px;
+    padding: 10px clamp(20px, 4vw, 42px) calc(12px + var(--ytm-safe-bottom));
+    flex-shrink: 0;
+    background: linear-gradient(to top, rgba(6, 5, 7, 0.96), rgba(6, 5, 7, 0.7), transparent);
+}
+
+.ytm-lyrics-overlay__tools,
+.ytm-lyrics-overlay__transport {
+    width: min(100%, 920px);
+    margin: 0 auto;
     display: flex;
     align-items: center;
-    padding: 0 var(--ytm-space-xl);
-    gap: var(--ytm-space-md);
-    flex-shrink: 0;
-    margin-bottom: var(--ytm-safe-bottom);
+}
+
+.ytm-lyrics-overlay__tools {
+    justify-content: space-between;
+    gap: 12px;
+    margin-bottom: 12px;
+}
+
+.ytm-lyrics-overlay__language {
+    color: rgba(255, 255, 255, 0.65);
+    font-size: 12px;
+    font-weight: 650;
+}
+
+.ytm-lyrics-overlay__translate {
+    min-height: 36px;
+    display: inline-flex;
+    align-items: center;
+    gap: 7px;
+    padding: 0 13px;
+    border: 1px solid rgba(255, 255, 255, 0.18);
+    border-radius: 999px;
+    background: rgba(255, 255, 255, 0.09);
+    color: #fff;
+    font: inherit;
+    font-size: 12px;
+    font-weight: 700;
+    cursor: pointer;
+}
+
+.ytm-lyrics-overlay__translate svg {
+    width: 16px;
+    height: 16px;
+    fill: currentColor;
+}
+
+.ytm-lyrics-overlay__translate.active {
+    border-color: rgba(255, 61, 127, 0.5);
+    background: rgba(255, 61, 127, 0.2);
+}
+
+.ytm-lyrics-overlay__translate:disabled {
+    opacity: 0.6;
+    cursor: wait;
+}
+
+.ytm-lyrics-overlay__transport {
+    gap: 16px;
 }
 
 .ytm-lyrics-overlay__ctrl {
@@ -1940,7 +2001,7 @@
 
 .ytm-lyrics-overlay__progress {
     flex: 1;
-    height: 4px;
+    height: 3px;
     background: rgba(255, 255, 255, 0.2);
     border-radius: 2px;
     overflow: hidden;
@@ -1950,6 +2011,34 @@
     height: 100%;
     background: #fff;
     border-radius: 2px;
+}
+
+@media (max-width: 600px) {
+    .ytm-lyrics-overlay__header {
+        min-height: 64px;
+        padding-inline: 18px;
+    }
+
+    .ytm-lyrics-overlay__content {
+        padding-inline: 20px;
+        mask-image: linear-gradient(to bottom, transparent, black 6%, black 94%, transparent);
+    }
+
+    .ytm-lyrics-overlay__line {
+        font-size: clamp(1.45rem, 7vw, 2.1rem);
+        line-height: 1.28;
+    }
+
+    .ytm-lyrics-overlay__controls {
+        padding-inline: 20px;
+    }
+}
+
+@media (prefers-reduced-motion: reduce) {
+    .ytm-lyrics-overlay,
+    .ytm-lyrics-overlay__line {
+        transition: none;
+    }
 }
 
 .ytm-queue-item__remove {

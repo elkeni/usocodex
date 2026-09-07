@@ -29,6 +29,7 @@ import { getAlbumPath } from '../../services/albumNavigation';
 import { getSpotifyListeningUrl } from '../../services/externalListening';
 import useBodyScrollLock from '../../hooks/useBodyScrollLock';
 import { getArtworkImageProps, getBestArtworkUrl, resizeArtworkUrl } from '../../services/imageQuality';
+import { translateLyricsToSpanish } from '../../services/lyricsTranslation';
 
 import './Player.css';
 
@@ -365,6 +366,9 @@ export default function Player() {
     const [lyrics, setLyrics] = useState(null);
     const [lyricsLoading, setLyricsLoading] = useState(false);
     const [activeLyricIndex, setActiveLyricIndex] = useState(-1);
+    const [translatedLyrics, setTranslatedLyrics] = useState(null);
+    const [showTranslatedLyrics, setShowTranslatedLyrics] = useState(false);
+    const [isTranslatingLyrics, setIsTranslatingLyrics] = useState(false);
 
     // Artista
     const [artistInfo, setArtistInfo] = useState(null);
@@ -437,6 +441,11 @@ export default function Player() {
     }, [lyrics]);
 
     const hasSyncedLyrics = parsedLyrics.length > 0 && !parsedLyrics[0]?.isPlain;
+    const displayedLyrics = useMemo(() => (
+        showTranslatedLyrics && translatedLyrics?.length === parsedLyrics.length
+            ? parsedLyrics.map((line, index) => ({ ...line, text: translatedLyrics[index] || line.text }))
+            : parsedLyrics
+    ), [parsedLyrics, showTranslatedLyrics, translatedLyrics]);
 
     // ========================================================================
     // EFECTOS
@@ -457,6 +466,8 @@ export default function Player() {
         setLyricsLoading(true);
         setLyrics(null);
         setActiveLyricIndex(-1);
+        setTranslatedLyrics(null);
+        setShowTranslatedLyrics(false);
 
         fetchLyrics(artist, title)
             .then(data => {
@@ -756,6 +767,29 @@ export default function Player() {
     const handleLyricsOpen = useCallback(() => {
         if (parsedLyrics.length > 0) setIsLyricsOpen(true);
     }, [parsedLyrics.length]);
+
+    const handleLyricsTranslation = useCallback(async () => {
+        if (!parsedLyrics.length || isTranslatingLyrics) return;
+        if (showTranslatedLyrics) {
+            setShowTranslatedLyrics(false);
+            return;
+        }
+        if (translatedLyrics?.length === parsedLyrics.length) {
+            setShowTranslatedLyrics(true);
+            return;
+        }
+
+        setIsTranslatingLyrics(true);
+        try {
+            const translation = await translateLyricsToSpanish(parsedLyrics.map((line) => line.text));
+            setTranslatedLyrics(translation);
+            setShowTranslatedLyrics(true);
+        } catch {
+            notify('No pudimos traducir esta letra en este momento.', { type: 'warning' });
+        } finally {
+            setIsTranslatingLyrics(false);
+        }
+    }, [parsedLyrics, isTranslatingLyrics, showTranslatedLyrics, translatedLyrics, notify]);
 
     // ========================================================================
     // RENDER CONDITIONS
@@ -1447,26 +1481,26 @@ export default function Player() {
                             <div className="ytm-lyrics-overlay__artist">{trackArtist}</div>
                         </div>
                         <button
+                            type="button"
                             className="ytm-lyrics-overlay__close"
                             onClick={() => setIsLyricsOpen(false)}
+                            aria-label="Cerrar letra a pantalla completa"
                         >
                             <Icons.Close />
                         </button>
                     </div>
 
                     <div className="ytm-lyrics-overlay__content" ref={lyricsOverlayRef}>
-                        {parsedLyrics.length > 0 ? (
-                            parsedLyrics.map((line, index) => (
-                                <p
+                        {displayedLyrics.length > 0 ? (
+                            displayedLyrics.map((line, index) => (
+                                <button
+                                    type="button"
                                     key={index}
                                     className={`ytm-lyrics-overlay__line${index === activeLyricIndex ? ' active' : ''}${index < activeLyricIndex ? ' past' : ''}`}
-                                    onClick={() => {
-                                        handleLyricClick(line.time);
-                                        // Optional: Auto close on click? No, keep it open.
-                                    }}
+                                    onClick={() => handleLyricClick(line.time)}
                                 >
                                     {line.text}
-                                </p>
+                                </button>
                             ))
                         ) : (
                             <p className="ytm-lyrics-overlay__empty">Letra no disponible</p>
@@ -1475,11 +1509,28 @@ export default function Player() {
 
                     {/* Mini Controls for Lyrics Screen */}
                     <div className="ytm-lyrics-overlay__controls">
-                        <button className="ytm-lyrics-overlay__ctrl" onClick={handleTogglePlay}>
-                            {isPlaying ? <Icons.Pause /> : <Icons.Play />}
-                        </button>
-                        <div className="ytm-lyrics-overlay__progress">
-                            <div className="ytm-lyrics-overlay__fill" style={{ width: `${displayProgress}%` }} />
+                        <div className="ytm-lyrics-overlay__tools">
+                            <span className="ytm-lyrics-overlay__language" aria-live="polite">
+                                {showTranslatedLyrics ? 'Español · automática' : 'Original'}
+                            </span>
+                            <button
+                                type="button"
+                                className={`ytm-lyrics-overlay__translate${showTranslatedLyrics ? ' active' : ''}`}
+                                onClick={handleLyricsTranslation}
+                                disabled={isTranslatingLyrics}
+                                aria-pressed={showTranslatedLyrics}
+                            >
+                                <Icons.Globe />
+                                <span>{isTranslatingLyrics ? 'Traduciendo…' : showTranslatedLyrics ? 'Ver original' : 'Traducir'}</span>
+                            </button>
+                        </div>
+                        <div className="ytm-lyrics-overlay__transport">
+                            <button type="button" className="ytm-lyrics-overlay__ctrl" onClick={handleTogglePlay} aria-label={isPlaying ? 'Pausar' : 'Reproducir'}>
+                                {isPlaying ? <Icons.Pause /> : <Icons.Play />}
+                            </button>
+                            <div className="ytm-lyrics-overlay__progress" aria-label="Progreso de reproducción">
+                                <div className="ytm-lyrics-overlay__fill" style={{ width: `${displayProgress}%` }} />
+                            </div>
                         </div>
                     </div>
                 </div>
